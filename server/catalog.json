@@ -1,0 +1,679 @@
+{
+  "version": 1,
+  "startBudgetKrw": 300000,
+  "shippingKrw": 3500,
+  "freeShippingOverKrw": 50000,
+  "items": [
+    {
+      "sku": "AL-2020",
+      "nameKo": "알루미늄 프로파일 2020",
+      "category": "알루미늄 프로파일",
+      "priceKrw": 6000,
+      "packQty": 0,
+      "physical": true,
+      "cutToLength": {
+        "min": 50,
+        "max": 3000,
+        "cutFeeKrw": 1000
+      },
+      "fictional": false
+    },
+    {
+      "sku": "AL-4040",
+      "nameKo": "알루미늄 프로파일 4040",
+      "category": "알루미늄 프로파일",
+      "priceKrw": 17000,
+      "packQty": 0,
+      "physical": true,
+      "cutToLength": {
+        "min": 50,
+        "max": 3000,
+        "cutFeeKrw": 1000
+      },
+      "fictional": false
+    },
+    {
+      "sku": "PL-SS400-3",
+      "nameKo": "강판 SS400 3t",
+      "category": "판재",
+      "priceKrw": 2800,
+      "packQty": 0,
+      "physical": true,
+      "cutToSize": {
+        "minW": 20,
+        "maxW": 1200,
+        "minD": 20,
+        "maxD": 1200,
+        "cutFeeKrw": 5000
+      },
+      "plate": {
+        "thicknessMm": 3,
+        "densityKgM3": 7850
+      },
+      "fictional": false
+    },
+    {
+      "sku": "PL-AL6061-5",
+      "nameKo": "알루미늄 판 6061 5t",
+      "category": "판재",
+      "priceKrw": 14000,
+      "packQty": 0,
+      "physical": true,
+      "cutToSize": {
+        "minW": 20,
+        "maxW": 1200,
+        "minD": 20,
+        "maxD": 1200,
+        "cutFeeKrw": 5000
+      },
+      "plate": {
+        "thicknessMm": 5,
+        "densityKgM3": 2700
+      },
+      "fictional": false
+    },
+    {
+      "sku": "PL-PLY-12",
+      "nameKo": "자작 합판 12t",
+      "category": "판재",
+      "priceKrw": 4000,
+      "packQty": 0,
+      "physical": true,
+      "cutToSize": {
+        "minW": 20,
+        "maxW": 1200,
+        "minD": 20,
+        "maxD": 1200,
+        "cutFeeKrw": 5000
+      },
+      "plate": {
+        "thicknessMm": 12,
+        "densityKgM3": 500
+      },
+      "fictional": false
+    },
+    {
+      "sku": "SH-SUJ2-8",
+      "nameKo": "리니어 샤프트 Ø8",
+      "category": "축·환봉",
+      "priceKrw": 9000,
+      "packQty": 0,
+      "physical": true,
+      "cutToLength": {
+        "min": 30,
+        "max": 2000,
+        "cutFeeKrw": 1000
+      },
+      "fictional": false
+    },
+    {
+      "sku": "SH-SUJ2-12",
+      "nameKo": "리니어 샤프트 Ø12",
+      "category": "축·환봉",
+      "priceKrw": 15000,
+      "packQty": 0,
+      "physical": true,
+      "cutToLength": {
+        "min": 30,
+        "max": 2000,
+        "cutFeeKrw": 1000
+      },
+      "fictional": false
+    },
+    {
+      "sku": "SH-S45C-20",
+      "nameKo": "S45C 환봉 Ø20",
+      "category": "축·환봉",
+      "priceKrw": 12000,
+      "packQty": 0,
+      "physical": true,
+      "cutToLength": {
+        "min": 30,
+        "max": 2000,
+        "cutFeeKrw": 1000
+      },
+      "fictional": false
+    },
+    {
+      "sku": "WD-2X4",
+      "nameKo": "구조목 2×4",
+      "category": "목재",
+      "priceKrw": 2800,
+      "packQty": 0,
+      "physical": true,
+      "cutToLength": {
+        "min": 100,
+        "max": 3600,
+        "cutFeeKrw": 500
+      },
+      "fictional": false
+    },
+    {
+      "sku": "BRG-608ZZ",
+      "nameKo": "볼베어링 608ZZ",
+      "category": "베어링",
+      "priceKrw": 1200,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "BRG-6001ZZ",
+      "nameKo": "볼베어링 6001ZZ",
+      "category": "베어링",
+      "priceKrw": 2000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "BRG-UCP204",
+      "nameKo": "필로우 블록 UCP204",
+      "category": "베어링",
+      "priceKrw": 12000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "WH-65-D6",
+      "nameKo": "고무 바퀴 65 mm (6 mm D축 허브)",
+      "category": "바퀴",
+      "priceKrw": 3500,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "WH-100-B8",
+      "nameKo": "우레탄 바퀴 100 mm (608 베어링 내장)",
+      "category": "바퀴",
+      "priceKrw": 6500,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "WH-CASTER-51",
+      "nameKo": "볼 캐스터 (설치 높이 51 mm)",
+      "category": "바퀴",
+      "priceKrw": 4500,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "WH-260-B20",
+      "nameKo": "공기압 타이어 260 mm (내경 20 mm)",
+      "category": "바퀴",
+      "priceKrw": 24000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "MT-JGB37-100",
+      "nameKo": "DC 기어드 모터 12V 100RPM",
+      "category": "모터",
+      "priceKrw": 16000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "MT-NEMA17",
+      "nameKo": "스테퍼 모터 NEMA17",
+      "category": "모터",
+      "priceKrw": 15000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "BT-SLA-12-7",
+      "nameKo": "납축전지 12V 7Ah",
+      "category": "전원",
+      "priceKrw": 28000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "BT-LFP-12-10",
+      "nameKo": "리튬인산철 배터리 12.8V 10Ah",
+      "category": "전원",
+      "priceKrw": 85000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "FS-TNUT-M5",
+      "nameKo": "T너트 + 볼트 M5 세트 (2020용)",
+      "category": "체결",
+      "priceKrw": 6000,
+      "packQty": 20,
+      "physical": false,
+      "fictional": false
+    },
+    {
+      "sku": "FS-BOLT-M8",
+      "nameKo": "육각볼트·너트 M8 세트",
+      "category": "체결",
+      "priceKrw": 3000,
+      "packQty": 10,
+      "physical": false,
+      "fictional": false
+    },
+    {
+      "sku": "FS-WOOD-4X40",
+      "nameKo": "목재 나사 4×40",
+      "category": "체결",
+      "priceKrw": 2500,
+      "packQty": 50,
+      "physical": false,
+      "fictional": false
+    },
+    {
+      "sku": "MC-HINGE-75",
+      "nameKo": "강철 경첩 75 mm",
+      "category": "기구",
+      "priceKrw": 2000,
+      "packQty": 1,
+      "physical": false,
+      "fictional": false
+    },
+    {
+      "sku": "MC-LM8UU",
+      "nameKo": "리니어 부싱 LM8UU",
+      "category": "기구",
+      "priceKrw": 1500,
+      "packQty": 1,
+      "physical": false,
+      "fictional": false
+    },
+    {
+      "sku": "MC-RODEND-M8",
+      "nameKo": "로드엔드 볼조인트 M8",
+      "category": "기구",
+      "priceKrw": 4000,
+      "packQty": 1,
+      "physical": false,
+      "fictional": false
+    }
+  ],
+  "examples": [
+    {
+      "sku": "AL-2020",
+      "lengthMm": 50,
+      "widthMm": 0,
+      "unitKrw": 1300
+    },
+    {
+      "sku": "AL-2020",
+      "lengthMm": 3000,
+      "widthMm": 0,
+      "unitKrw": 19000
+    },
+    {
+      "sku": "AL-2020",
+      "lengthMm": 333,
+      "widthMm": 0,
+      "unitKrw": 2998
+    },
+    {
+      "sku": "AL-2020",
+      "lengthMm": 750,
+      "widthMm": 0,
+      "unitKrw": 5500
+    },
+    {
+      "sku": "AL-2020",
+      "lengthMm": 1001,
+      "widthMm": 0,
+      "unitKrw": 7006
+    },
+    {
+      "sku": "AL-4040",
+      "lengthMm": 50,
+      "widthMm": 0,
+      "unitKrw": 1850
+    },
+    {
+      "sku": "AL-4040",
+      "lengthMm": 3000,
+      "widthMm": 0,
+      "unitKrw": 52000
+    },
+    {
+      "sku": "AL-4040",
+      "lengthMm": 333,
+      "widthMm": 0,
+      "unitKrw": 6661
+    },
+    {
+      "sku": "AL-4040",
+      "lengthMm": 750,
+      "widthMm": 0,
+      "unitKrw": 13750
+    },
+    {
+      "sku": "AL-4040",
+      "lengthMm": 1001,
+      "widthMm": 0,
+      "unitKrw": 18017
+    },
+    {
+      "sku": "PL-SS400-3",
+      "lengthMm": 20,
+      "widthMm": 20,
+      "unitKrw": 5026
+    },
+    {
+      "sku": "PL-SS400-3",
+      "lengthMm": 1200,
+      "widthMm": 1200,
+      "unitKrw": 99954
+    },
+    {
+      "sku": "PL-SS400-3",
+      "lengthMm": 220,
+      "widthMm": 200,
+      "unitKrw": 7901
+    },
+    {
+      "sku": "PL-SS400-3",
+      "lengthMm": 333,
+      "widthMm": 77,
+      "unitKrw": 6691
+    },
+    {
+      "sku": "PL-SS400-3",
+      "lengthMm": 501,
+      "widthMm": 499,
+      "unitKrw": 21485
+    },
+    {
+      "sku": "PL-AL6061-5",
+      "lengthMm": 20,
+      "widthMm": 20,
+      "unitKrw": 5076
+    },
+    {
+      "sku": "PL-AL6061-5",
+      "lengthMm": 1200,
+      "widthMm": 1200,
+      "unitKrw": 277160
+    },
+    {
+      "sku": "PL-AL6061-5",
+      "lengthMm": 220,
+      "widthMm": 200,
+      "unitKrw": 13316
+    },
+    {
+      "sku": "PL-AL6061-5",
+      "lengthMm": 333,
+      "widthMm": 77,
+      "unitKrw": 9846
+    },
+    {
+      "sku": "PL-AL6061-5",
+      "lengthMm": 501,
+      "widthMm": 499,
+      "unitKrw": 52250
+    },
+    {
+      "sku": "PL-PLY-12",
+      "lengthMm": 20,
+      "widthMm": 20,
+      "unitKrw": 5010
+    },
+    {
+      "sku": "PL-PLY-12",
+      "lengthMm": 1200,
+      "widthMm": 1200,
+      "unitKrw": 39560
+    },
+    {
+      "sku": "PL-PLY-12",
+      "lengthMm": 220,
+      "widthMm": 200,
+      "unitKrw": 6056
+    },
+    {
+      "sku": "PL-PLY-12",
+      "lengthMm": 333,
+      "widthMm": 77,
+      "unitKrw": 5615
+    },
+    {
+      "sku": "PL-PLY-12",
+      "lengthMm": 501,
+      "widthMm": 499,
+      "unitKrw": 11000
+    },
+    {
+      "sku": "SH-SUJ2-8",
+      "lengthMm": 30,
+      "widthMm": 0,
+      "unitKrw": 1270
+    },
+    {
+      "sku": "SH-SUJ2-8",
+      "lengthMm": 2000,
+      "widthMm": 0,
+      "unitKrw": 19000
+    },
+    {
+      "sku": "SH-SUJ2-8",
+      "lengthMm": 333,
+      "widthMm": 0,
+      "unitKrw": 3997
+    },
+    {
+      "sku": "SH-SUJ2-8",
+      "lengthMm": 750,
+      "widthMm": 0,
+      "unitKrw": 7750
+    },
+    {
+      "sku": "SH-SUJ2-8",
+      "lengthMm": 1001,
+      "widthMm": 0,
+      "unitKrw": 10009
+    },
+    {
+      "sku": "SH-SUJ2-12",
+      "lengthMm": 30,
+      "widthMm": 0,
+      "unitKrw": 1450
+    },
+    {
+      "sku": "SH-SUJ2-12",
+      "lengthMm": 2000,
+      "widthMm": 0,
+      "unitKrw": 31000
+    },
+    {
+      "sku": "SH-SUJ2-12",
+      "lengthMm": 333,
+      "widthMm": 0,
+      "unitKrw": 5995
+    },
+    {
+      "sku": "SH-SUJ2-12",
+      "lengthMm": 750,
+      "widthMm": 0,
+      "unitKrw": 12250
+    },
+    {
+      "sku": "SH-SUJ2-12",
+      "lengthMm": 1001,
+      "widthMm": 0,
+      "unitKrw": 16015
+    },
+    {
+      "sku": "SH-S45C-20",
+      "lengthMm": 30,
+      "widthMm": 0,
+      "unitKrw": 1360
+    },
+    {
+      "sku": "SH-S45C-20",
+      "lengthMm": 2000,
+      "widthMm": 0,
+      "unitKrw": 25000
+    },
+    {
+      "sku": "SH-S45C-20",
+      "lengthMm": 333,
+      "widthMm": 0,
+      "unitKrw": 4996
+    },
+    {
+      "sku": "SH-S45C-20",
+      "lengthMm": 750,
+      "widthMm": 0,
+      "unitKrw": 10000
+    },
+    {
+      "sku": "SH-S45C-20",
+      "lengthMm": 1001,
+      "widthMm": 0,
+      "unitKrw": 13012
+    },
+    {
+      "sku": "WD-2X4",
+      "lengthMm": 100,
+      "widthMm": 0,
+      "unitKrw": 780
+    },
+    {
+      "sku": "WD-2X4",
+      "lengthMm": 3600,
+      "widthMm": 0,
+      "unitKrw": 10580
+    },
+    {
+      "sku": "WD-2X4",
+      "lengthMm": 333,
+      "widthMm": 0,
+      "unitKrw": 1432
+    },
+    {
+      "sku": "WD-2X4",
+      "lengthMm": 750,
+      "widthMm": 0,
+      "unitKrw": 2600
+    },
+    {
+      "sku": "WD-2X4",
+      "lengthMm": 1001,
+      "widthMm": 0,
+      "unitKrw": 3303
+    },
+    {
+      "sku": "BRG-608ZZ",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1200
+    },
+    {
+      "sku": "BRG-6001ZZ",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 2000
+    },
+    {
+      "sku": "BRG-UCP204",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 12000
+    },
+    {
+      "sku": "WH-65-D6",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 3500
+    },
+    {
+      "sku": "WH-100-B8",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 6500
+    },
+    {
+      "sku": "WH-CASTER-51",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 4500
+    },
+    {
+      "sku": "WH-260-B20",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 24000
+    },
+    {
+      "sku": "MT-JGB37-100",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 16000
+    },
+    {
+      "sku": "MT-NEMA17",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 15000
+    },
+    {
+      "sku": "BT-SLA-12-7",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 28000
+    },
+    {
+      "sku": "BT-LFP-12-10",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 85000
+    },
+    {
+      "sku": "FS-TNUT-M5",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 6000
+    },
+    {
+      "sku": "FS-BOLT-M8",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 3000
+    },
+    {
+      "sku": "FS-WOOD-4X40",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 2500
+    },
+    {
+      "sku": "MC-HINGE-75",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 2000
+    },
+    {
+      "sku": "MC-LM8UU",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1500
+    },
+    {
+      "sku": "MC-RODEND-M8",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 4000
+    }
+  ]
+}

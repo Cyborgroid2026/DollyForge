@@ -50,9 +50,50 @@ public class ShopTests
     }
 }
 
+public class SerializationTests
+{
+    static string Repo([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
+
+    [Fact]
+    public void ServerCatalogJsonIsUpToDate()
+    {
+        // 서버는 server/catalog.json 으로 가격을 다시 계산한다. C# 카탈로그를 바꾸면 이 파일도 다시 만들어야 한다.
+        var path = Path.Combine(Repo(), "server", "catalog.json");
+        var json = Serialization.CatalogJson();
+        if (Environment.GetEnvironmentVariable("DOLLY_UPDATE_CATALOG") == "1") File.WriteAllText(path, json);
+        Assert.True(File.Exists(path) && File.ReadAllText(path) == json,
+            "server/catalog.json 이 C# 카탈로그와 다릅니다. DOLLY_UPDATE_CATALOG=1 dotnet test 로 다시 만드세요.");
+    }
+
+    [Fact]
+    public void DeviceJsonRoundTrips()
+    {
+        var (robot, _) = Samples.RobotCart();
+        var json = Serialization.DeviceJson(robot);
+        var back = Serialization.ParseDevice(json);
+        Assert.Equal(robot.Parts.Count, back.Parts.Count);
+        Assert.Equal(robot.Joints.Count, back.Joints.Count);
+        Assert.Equal(robot.TotalMass, back.TotalMass, 5);
+        Assert.Equal(Export.Bom(robot).TotalKrw, Export.Bom(back).TotalKrw);
+        Assert.Equal(Export.Urdf(robot), Export.Urdf(back));
+        Assert.Equal(json, Serialization.DeviceJson(back));
+    }
+
+    [Fact]
+    public void CustomPartsSurviveRoundTrip()
+    {
+        var a = new Assembly("custom");
+        a.AddPart(Templates.Wheel.Make(Materials.Oak), new Pose(new(1, 2, 3), System.Numerics.Quaternion.Identity));
+        var back = Serialization.ParseDevice(Serialization.DeviceJson(a));
+        Assert.Equal(a.Parts[0].Def.Mass, back.Parts[0].Def.Mass, 5);
+        Assert.Equal(a.Parts[0].Def.NameKo, back.Parts[0].Def.NameKo);
+    }
+}
+
 public class RuleTests
 {
-    static PartDef P(string sku, float l = 0, float w = 0) => Catalog.Get(sku).Build(l, w)!;
+    static PartDef P(string sku, int l = 0, int w = 0) => Catalog.Get(sku).Build(l, w)!;
 
     [Fact]
     public void AxleRequiresMatchingDiameter()

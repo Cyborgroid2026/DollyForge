@@ -3,7 +3,8 @@ namespace DollyForge.Core;
 /// <summary>
 /// 현실에서 실제로 살 수 있는 원자재·부품 카탈로그. 사양은 시판 표준품 기준이고,
 /// 가격은 2026년 국내 소매가를 대략 반영한 원(₩) 단위 값이다.
-/// 길이 재단품은 미터당 가격 × 길이 + 재단비로 계산한다.
+/// 길이 재단품은 미터당 가격 × 길이 + 재단비, 판재는 kg 당 가격 × 무게 + 재단비.
+/// 가격 계산은 정수(원, mm)로만 한다 — Rust 서버가 같은 금액을 독립적으로 계산해 결제를 검증한다.
 /// </summary>
 public sealed record CatalogItem(
     string Sku,
@@ -14,9 +15,11 @@ public sealed record CatalogItem(
     string UnitKo)
 {
     /// <summary>재단 주문 가능 여부와 길이 범위 (mm). 가격은 PriceKrw 가 미터당.</summary>
-    public (float Min, float Max, int CutFeeKrw)? CutToLength { get; init; }
+    public (int Min, int Max, int CutFeeKrw)? CutToLength { get; init; }
     /// <summary>판재처럼 가로×세로로 재단 (mm). 가격은 PriceKrw 가 kg 당.</summary>
-    public (float MinW, float MaxW, float MinD, float MaxD, int CutFeeKrw)? CutToSize { get; init; }
+    public (int MinW, int MaxW, int MinD, int MaxD, int CutFeeKrw)? CutToSize { get; init; }
+    /// <summary>판재 가격 계산용: 두께 mm, 밀도 kg/m³</summary>
+    public (int ThicknessMm, int DensityKgM3)? Plate { get; init; }
     /// <summary>물리적 부품으로 배송되는 품목의 형상 생성기. 소모품이면 null.</summary>
     public Func<float, float, PartDef>? Make { get; init; }
     /// <summary>소모품 묶음 수량 (볼트 세트 등). 0 이면 물리 부품.</summary>
@@ -24,23 +27,32 @@ public sealed record CatalogItem(
 
     public bool IsConsumable => PackQty > 0;
 
-    /// <summary>주문 단가. length·width·depth 는 mm.</summary>
-    public int UnitPrice(float lengthMm = 0, float widthMm = 0)
+    /// <summary>
+    /// 주문 단가 (원). 길이·폭은 정수 mm. 반올림은 0.5 에서 올림.
+    /// 프로파일·축: 미터당 가격 × 길이 / 1000 + 재단비.
+    /// 판재: kg 당 가격 × 밀도 × 가로 × 세로 × 두께 / 10⁹ + 재단비.
+    /// </summary>
+    public int UnitPrice(int lengthMm = 0, int widthMm = 0)
     {
-        if (CutToLength is { } c) return (int)Math.Round(PriceKrw * lengthMm / 1000f) + c.CutFeeKrw;
-        if (CutToSize is { } s && Make is not null)
-            return (int)Math.Round(PriceKrw * Make(lengthMm, widthMm).Mass) + s.CutFeeKrw;
+        if (CutToLength is { } c) return (int)RoundDiv((long)PriceKrw * lengthMm, 1000) + c.CutFeeKrw;
+        if (CutToSize is { } s && Plate is { } p)
+            return (int)RoundDiv((long)PriceKrw * p.DensityKgM3 * lengthMm * widthMm * p.ThicknessMm, 1_000_000_000) + s.CutFeeKrw;
         return PriceKrw;
     }
 
-    public PartDef? Build(float lengthMm = 0, float widthMm = 0)
+    static long RoundDiv(long num, long den) => (num + den / 2) / den;
+
+    public PartDef? Build(int lengthMm = 0, int widthMm = 0)
     {
         if (Make is null) return null;
         if (CutToLength is { } c && (lengthMm < c.Min || lengthMm > c.Max))
             throw new ArgumentOutOfRangeException(nameof(lengthMm), $"{NameKo} 재단 길이는 {c.Min}–{c.Max} mm 입니다.");
         if (CutToSize is { } s && (lengthMm < s.MinW || lengthMm > s.MaxW || widthMm < s.MinD || widthMm > s.MaxD))
             throw new ArgumentOutOfRangeException(nameof(lengthMm), $"{NameKo} 재단 크기는 {s.MinW}–{s.MaxW} × {s.MinD}–{s.MaxD} mm 입니다.");
-        return Make(lengthMm, widthMm) with { Sku = Sku, PriceKrw = UnitPrice(lengthMm, widthMm) };
+        return Make(lengthMm, widthMm) with
+        {
+            Sku = Sku, PriceKrw = UnitPrice(lengthMm, widthMm), CutLengthMm = lengthMm, CutWidthMm = widthMm,
+        };
     }
 }
 
@@ -67,10 +79,11 @@ public static class Catalog
             "원형 축. 같은 지름 구멍의 바퀴·베어링과 회전 관절을 이룬다.") with { Role = PartRole.Shaft, ShaftMm = d },
     };
 
-    static CatalogItem Plate(string sku, string name, MaterialDef mat, float t, int pricePerKg) => new(
+    static CatalogItem PlateItem(string sku, string name, MaterialDef mat, int t, int pricePerKg) => new(
         sku, "판재", name, $"두께 {t} mm, {mat.NameKo}, 레이저 재단", pricePerKg, "kg")
     {
         CutToSize = (20, 1200, 20, 1200, 5000),
+        Plate = (t, (int)mat.Density),
         Make = (w, d) => Def($"{sku.ToLowerInvariant()}_{w:0}x{d:0}", $"{name} {w:0}×{d:0} mm", Shape.Box(w / 1000f, t / 1000f, d / 1000f), mat,
             "재단 판재. 볼트·용접으로 체결한다."),
     };
@@ -80,9 +93,9 @@ public static class Catalog
         // ---- 원자재 (재단) ----
         Profile("AL-2020", 20, 0.49f, 6000),
         Profile("AL-4040", 40, 1.55f, 17000),
-        Plate("PL-SS400-3", "강판 SS400 3t", Materials.Steel, 3, 2800),
-        Plate("PL-AL6061-5", "알루미늄 판 6061 5t", Materials.Aluminium, 5, 14000),
-        Plate("PL-PLY-12", "자작 합판 12t", Materials.Pine, 12, 4000),
+        PlateItem("PL-SS400-3", "강판 SS400 3t", Materials.Steel, 3, 2800),
+        PlateItem("PL-AL6061-5", "알루미늄 판 6061 5t", Materials.Aluminium, 5, 14000),
+        PlateItem("PL-PLY-12", "자작 합판 12t", Materials.Pine, 12, 4000),
         RoundBar("SH-SUJ2-8", "리니어 샤프트 Ø8", 8, Materials.Steel, 9000, "SUJ2 고주파 열처리 연마봉, 공차 g6"),
         RoundBar("SH-SUJ2-12", "리니어 샤프트 Ø12", 12, Materials.Steel, 15000, "SUJ2 고주파 열처리 연마봉, 공차 g6"),
         RoundBar("SH-S45C-20", "S45C 환봉 Ø20", 20, Materials.Steel, 12000, "기계구조용 탄소강 S45C"),
@@ -175,7 +188,7 @@ public static class Catalog
 }
 
 /// <summary>주문 한 줄. 재단품은 길이(·폭) mm.</summary>
-public sealed record OrderLine(CatalogItem Item, int Qty, float LengthMm = 0, float WidthMm = 0)
+public sealed record OrderLine(CatalogItem Item, int Qty, int LengthMm = 0, int WidthMm = 0)
 {
     public int Price => Item.UnitPrice(LengthMm, WidthMm) * Qty;
 }
@@ -183,6 +196,7 @@ public sealed record OrderLine(CatalogItem Item, int Qty, float LengthMm = 0, fl
 /// <summary>예산과 소모품 재고. 물리 부품은 배송 상자로 월드에 나타난다.</summary>
 public sealed class ShopAccount(long balanceKrw)
 {
+    public const long StartBudgetKrw = 300_000;
     public const int ShippingKrw = 3500;
     public const int FreeShippingOverKrw = 50000;
 

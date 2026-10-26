@@ -28,6 +28,15 @@ public sealed record PartDef(
     /// <summary>구멍 지름 mm (바퀴 허브·베어링 내경)</summary>
     public float BoreMm { get; init; }
     public ElectricalSpec? Electrical { get; init; }
+    /// <summary>재단 주문 치수 mm (카탈로그에서 다시 만들 때 쓴다)</summary>
+    public int CutLengthMm { get; init; }
+    public int CutWidthMm { get; init; }
+    /// <summary>
+    /// 현실에 없는 가상 부품 (양자 아날로그 세계관 전용). 내보낼 때 따로 표시되고,
+    /// 현실 제작용 BOM 에서는 대체 실물 부품(RealEquivalentKo)을 함께 적는다.
+    /// </summary>
+    public bool Fictional { get; init; }
+    public string? RealEquivalentKo { get; init; }
 }
 
 public enum PartRole { Structure, Profile, Shaft, Bearing, Wheel, Motor, Battery }
@@ -115,8 +124,8 @@ public sealed class JointInstance(int id, JointKind kind, int parent, int child,
 
     public int Id { get; } = id;
     public JointKind Kind { get; } = kind;
-    public int Parent { get; set; } = parent;
-    public int Child { get; set; } = child;
+    public int Parent { get; } = parent;
+    public int Child { get; } = child;
     /// <summary>월드 기준 관절 위치. 기기가 움직이면 게임 쪽에서 갱신한다.</summary>
     public Vector3 Pivot { get; set; } = pivot;
     private Vector3 _axis = Vector3.Normalize(axis);
@@ -131,6 +140,17 @@ public sealed class JointInstance(int id, JointKind kind, int parent, int child,
     /// <summary>이 관절을 구동하는 구동기 부품 id (없으면 수동)</summary>
     public int? DrivenBy { get; set; }
     public string Name => $"{Kind.ToString().ToLowerInvariant()}_{Id}";
+
+    /// <summary>부모·자식을 바꾼 복사본 (같은 관절 프레임, 각도 제한은 반대 부호). 원본은 바뀌지 않는다.</summary>
+    public JointInstance Reversed()
+    {
+        var r = new JointInstance(Id, Kind, Child, Parent, Pivot, Axis) { Lower = -Upper, Upper = -Lower, Secondary = Secondary };
+        r.Effort = Effort;
+        r.Velocity = Velocity;
+        r.DrivenBy = DrivenBy;
+        foreach (var (k, v) in Consumed) r.Consumed[k] = v;
+        return r;
+    }
 }
 
 public sealed class Assembly(string name)
@@ -165,7 +185,8 @@ public sealed class Assembly(string name)
 
     /// <summary>
     /// URDF 는 트리 구조만 허용한다. root 에서 너비 우선으로 신장 트리를 만들고,
-    /// 필요하면 관절의 부모/자식을 뒤집는다. 고리를 만드는 관절은 Loops 로 따로 돌려준다.
+    /// 방향이 반대인 관절은 뒤집은 복사본을 쓴다 (조립품 자체는 바꾸지 않는다).
+    /// 고리를 만드는 관절은 Loops 로 따로 돌려준다.
     /// 연결되지 않은 부품은 Disconnected 로 돌려준다.
     /// </summary>
     public (List<JointInstance> Tree, List<JointInstance> Loops, List<PartInstance> Disconnected) SpanningTree(int rootId)
@@ -185,10 +206,9 @@ public sealed class Assembly(string name)
                 else if (j.Child == cur) other = j.Parent;
                 else continue;
                 if (visited.Contains(other)) continue;
-                if (j.Child == cur) (j.Parent, j.Child) = (j.Child, j.Parent);
                 visited.Add(other);
                 used.Add(j.Id);
-                tree.Add(j);
+                tree.Add(j.Child == cur ? j.Reversed() : j);
                 queue.Enqueue(other);
             }
         }

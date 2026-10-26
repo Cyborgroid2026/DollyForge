@@ -153,8 +153,8 @@ public partial class CatalogUi : Control
         string price;
         try
         {
-            var unit = item.UnitPrice((float)_len.Value, (float)_wid.Value);
-            var part = item.Build((float)_len.Value, (float)_wid.Value);
+            var unit = item.UnitPrice((int)_len.Value, (int)_wid.Value);
+            var part = item.Build((int)_len.Value, (int)_wid.Value);
             price = $"단가 ₩{unit:N0} × {_qty.Value} = ₩{unit * (int)_qty.Value:N0}" + (part is not null ? $"\n개당 {part.Mass:0.###} kg" : "");
         }
         catch (ArgumentOutOfRangeException ex) { price = ex.Message.Split(" (")[0]; }
@@ -167,7 +167,7 @@ public partial class CatalogUi : Control
     void AddToCart()
     {
         if (Selected is not { } item) return;
-        var line = new OrderLine(item, (int)_qty.Value, (float)_len.Value, (float)_wid.Value);
+        var line = new OrderLine(item, (int)_qty.Value, (int)_len.Value, (int)_wid.Value);
         try { _ = line.Price; item.Build(line.LengthMm, line.WidthMm); }
         catch (ArgumentOutOfRangeException) { return; }
         _cart.Add(line);
