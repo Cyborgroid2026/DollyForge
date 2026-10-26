@@ -5,7 +5,7 @@ namespace DollyForge.Game;
 /// <summary>
 /// 미래 세계의 풍경. 미학 원칙: 인공미와 자연미의 융합.
 ///  · 인공미(양자 아날로그 기술) — 통제된 계산: 정밀한 직선과 대칭의 브루탈리즘 탑, 거대한 양자 공명탑의 회전 고리,
-///    하늘에 뜬 플랫폼, 고가 모노레일.
+///    하늘에 뜬 플랫폼. (모노레일은 Settlement 의 정류장과 함께)
 ///  · 자연미 — 예측 불가능한 무작위성: 노이즈로 군락을 이루는 소나무 숲(크기·기울기 제각각), 불규칙한 바위.
 ///  · 인공물에도 미세한 불완전함: 탑 높이 편차, 무작위로 켜진 창, 콘크리트 색 편차.
 /// 빛은 실시간 전역 조명과 볼류메트릭 안개가 계산한다.
@@ -16,9 +16,6 @@ public partial class FutureCity : Node3D
     readonly RandomNumberGenerator _rng = new() { Seed = 20261026 };
     readonly List<(Node3D Node, float Speed)> _spinners = new();
     readonly List<(Node3D Node, Vector3 Base, float Phase)> _floaters = new();
-    Node3D? _train;
-    Curve3D? _rail;
-    float _railLength, _trainT;
     float _time;
 
     public override void _Ready()
@@ -165,60 +162,98 @@ public partial class FutureCity : Node3D
     // ------------------------------------------------------------------ 인공 (양자 아날로그 도시)
 
     /// <summary>
-    /// 지평선의 브루탈리즘 탑: 북쪽 공명탑을 축으로 좌우 대칭 배치(통제된 계산),
-    /// 높이·창 불빛·콘크리트 색에는 미세한 무작위(불완전함).
+    /// 흰 외벽 재질: 층(3.6 m)마다 짙은 유리 창 띠, 창마다 반사·불빛 편차. 월드 기준 투영이라 어떤 크기의 탑에도
+    /// 같은 층 높이로 입혀진다.
+    /// </summary>
+    StandardMaterial3D Facade()
+    {
+        const int w = 64, h = 64;
+        var img = Image.CreateEmpty(w, h, true, Image.Format.Rgb8);
+        for (var y = 0; y < h; y++)
+        for (var x = 0; x < w; x++)
+        {
+            var glass = y >= 34 && y < 58 && x % 16 != 0;
+            var c = glass ? new Color(0.16f, 0.2f, 0.24f) * (0.8f + (x / 16) % 3 * 0.12f) : new Color(0.93f, 0.91f, 0.86f) * (0.97f + _rng.Randf() * 0.03f);
+            img.SetPixel(x, y, c);
+        }
+        img.GenerateMipmaps();
+        return new StandardMaterial3D
+        {
+            AlbedoTexture = ImageTexture.CreateFromImage(img), Roughness = 0.45f, Metallic = 0.05f,
+            Uv1Triplanar = true, Uv1WorldTriplanar = true, Uv1Scale = new Vector3(1 / 4f, 1 / 3.6f, 1 / 4f),
+            TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
+        };
+    }
+
+    StandardMaterial3D? _facade;
+    StandardMaterial3D FacadeMat => _facade ??= Facade();
+    static readonly StandardMaterial3D Enamel = new() { AlbedoColor = new Color(0.95f, 0.94f, 0.9f), Roughness = 0.2f, ClearcoatEnabled = true, Clearcoat = 0.5f };
+    static readonly StandardMaterial3D Crimson = new() { AlbedoColor = new Color(0.66f, 0.09f, 0.07f), Roughness = 0.35f, Metallic = 0.2f };
+    static readonly StandardMaterial3D Brass = new() { AlbedoColor = new Color(0.86f, 0.66f, 0.36f), Roughness = 0.25f, Metallic = 1f };
+
+    /// <summary>
+    /// 지평선의 미래 도시 (레트로퓨처): 흰 원통 탑과 계단식 탑, 둥근 돔 지붕, 놋쇠 첨탑, 진홍색 고리 띠.
+    /// 북쪽 공명탑을 축으로 좌우 대칭 배치(통제된 계산)지만 높이·굵기·모양 선택에는 미세한 무작위(불완전함).
     /// </summary>
     void BuildSkyline()
     {
-        var concrete = Look.Scanned("rock_boulder_dry", 4f, new Color(0.82f, 0.81f, 0.78f));
-        concrete.VertexColorUseAsAlbedo = true;
-        var windowMat = new StandardMaterial3D
-        {
-            AlbedoColor = new Color(0.15f, 0.12f, 0.08f), EmissionEnabled = true, Emission = new Color(1f, 0.72f, 0.38f),
-            EmissionEnergyMultiplier = 1.4f, VertexColorUseAsAlbedo = false,
-        };
-        var towers = new List<(Transform3D X, Color C)>();
-        var windows = new List<Transform3D>();
-        var cols = new[] { -1, 1 };
+        var shafts = new List<Transform3D>();   // 원통 몸체 (CylinderMesh r=1,h=1)
+        var domes = new List<Transform3D>();    // 돔 (SphereMesh r=1)
+        var rings = new List<Transform3D>();    // 진홍 고리 (TorusMesh)
+        var spires = new List<Transform3D>();   // 놋쇠 첨탑 (원뿔)
         for (var ring = 0; ring < 3; ring++)
         {
-            var r = 620 + ring * 160;
+            var r = 620 + ring * 170;
             var count = 6 + ring * 2;
             for (var i = 0; i < count; i++)
-            foreach (var side in cols)
+            foreach (var side in new[] { -1, 1 })
             {
-                // 북쪽(-Z) 축을 기준으로 좌우 대칭
                 var a = -Mathf.Pi / 2 + side * (0.12f + i * (Mathf.Pi * 0.86f / count));
-                var pos = new Vector3(Mathf.Cos(a) * r, 0, Mathf.Sin(a) * r);
-                var w = 22 + ring * 6 + Jitter(2);
-                var d = 18 + Jitter(2);
-                var h = 70 + ring * 45 + (count - i) * 4 + Jitter(9);
-                var basis = new Basis(Vector3.Up, -a + Mathf.Pi / 2);
-                towers.Add((new Transform3D(basis.Scaled(new Vector3(w, h, d)), pos + new Vector3(0, h / 2 - 1, 0)),
-                    new Color(1, 1, 1) * (0.88f + _rng.Randf() * 0.18f)));
-                // 층마다 가로 창 띠, 일부만 불이 켜져 있다
-                for (var y = 6f; y < h - 4; y += 3.6f)
+                var pos = new Vector3(Mathf.Cos(a) * r, -1, Mathf.Sin(a) * r);
+                var height = 70 + ring * 50 + (count - i) * 5 + Jitter(10);
+                var radius = 11 + ring * 3 + Jitter(2);
+                var kind = (i + ring) % 3;
+                if (kind == 1)
                 {
-                    if (_rng.Randf() < 0.45f) continue;
-                    var seg = _rng.RandfRange(0.25f, 0.9f) * w;
-                    var off = Jitter((w - seg) / 2);
-                    windows.Add(new Transform3D(basis.Scaled(new Vector3(seg, 0.9f, 0.3f)), pos + basis * new Vector3(off, 0, -d / 2 - 0.1f) + new Vector3(0, y, 0)));
+                    // 계단식 탑: 세 단이 위로 갈수록 가늘어지고 단마다 진홍 고리, 꼭대기에 첨탑
+                    var y = 0f;
+                    for (var tier = 0; tier < 3; tier++)
+                    {
+                        var th = height * (tier == 0 ? 0.5f : 0.25f);
+                        var tr = radius * (1 - tier * 0.25f);
+                        shafts.Add(new Transform3D(Basis.Identity.Scaled(new Vector3(tr, th, tr)), pos + new Vector3(0, y + th / 2, 0)));
+                        rings.Add(new Transform3D(Basis.Identity.Scaled(new Vector3(tr * 1.04f, 2, tr * 1.04f)), pos + new Vector3(0, y + th, 0)));
+                        y += th;
+                    }
+                    spires.Add(new Transform3D(Basis.Identity.Scaled(new Vector3(radius * 0.18f, height * 0.35f, radius * 0.18f)), pos + new Vector3(0, y + height * 0.175f, 0)));
+                }
+                else
+                {
+                    // 원통 탑 + 돔 지붕 (가끔 돔 대신 진홍 띠 두 줄)
+                    shafts.Add(new Transform3D(Basis.Identity.Scaled(new Vector3(radius, height, radius)), pos + new Vector3(0, height / 2, 0)));
+                    domes.Add(new Transform3D(Basis.Identity.Scaled(new Vector3(radius, radius * (kind == 0 ? 0.7f : 0.35f), radius)), pos + new Vector3(0, height, 0)));
+                    rings.Add(new Transform3D(Basis.Identity.Scaled(new Vector3(radius * 1.03f, 2.5f, radius * 1.03f)), pos + new Vector3(0, height * 0.62f, 0)));
+                    if (kind == 0) spires.Add(new Transform3D(Basis.Identity.Scaled(new Vector3(1.6f, height * 0.25f, 1.6f)), pos + new Vector3(0, height + radius * 0.7f + height * 0.12f, 0)));
                 }
             }
         }
-        var tm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = true, Mesh = new BoxMesh(), InstanceCount = towers.Count };
-        for (var i = 0; i < towers.Count; i++) { tm.SetInstanceTransform(i, towers[i].X); tm.SetInstanceColor(i, towers[i].C); }
-        AddChild(new MultiMeshInstance3D { Multimesh = tm, MaterialOverride = concrete, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
-        var wm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = new BoxMesh(), InstanceCount = windows.Count };
-        for (var i = 0; i < windows.Count; i++) wm.SetInstanceTransform(i, windows[i]);
-        AddChild(new MultiMeshInstance3D { Multimesh = wm, MaterialOverride = windowMat, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+        void Batch(Mesh mesh, List<Transform3D> xs, Material mat)
+        {
+            var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = mesh, InstanceCount = xs.Count };
+            for (var i = 0; i < xs.Count; i++) mm.SetInstanceTransform(i, xs[i]);
+            AddChild(new MultiMeshInstance3D { Multimesh = mm, MaterialOverride = mat, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+        }
+        Batch(new CylinderMesh { TopRadius = 1, BottomRadius = 1, Height = 1, RadialSegments = 32 }, shafts, FacadeMat);
+        Batch(new SphereMesh { Radius = 1, Height = 2, RadialSegments = 32, Rings = 16 }, domes, Enamel);
+        Batch(new CylinderMesh { TopRadius = 1, BottomRadius = 1, Height = 1, RadialSegments = 32 }, rings, Crimson);
+        Batch(new CylinderMesh { TopRadius = 0, BottomRadius = 1, Height = 1, RadialSegments = 16 }, spires, Brass);
     }
 
     /// <summary>양자 공명탑: 300 m 콘크리트·강철 바늘 탑과 서로 반대로 도는 거대한 고리들</summary>
     void BuildResonanceTower(Vector3 at)
     {
         var steel = (StandardMaterial3D)Look.For(Core.Materials.Steel);
-        var concrete = Look.Scanned("rock_boulder_dry", 6f, new Color(0.8f, 0.79f, 0.76f));
+        var concrete = FacadeMat;
         var tower = new Node3D { Position = at };
         AddChild(tower);
         tower.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 9, BottomRadius = 26, Height = 120, RadialSegments = 8 }, MaterialOverride = concrete, Position = new Vector3(0, 60, 0) });
@@ -247,14 +282,15 @@ public partial class FutureCity : Node3D
     /// <summary>하늘에 뜬 콘크리트 플랫폼 — 아래쪽에 등이 달리고 천천히 오르내린다</summary>
     void BuildFloatingPlatforms()
     {
-        var concrete = Look.Scanned("rock_boulder_dry", 5f, new Color(0.78f, 0.77f, 0.74f));
+        var concrete = Enamel;
         var lamp = new StandardMaterial3D { AlbedoColor = new Color(1, 0.85f, 0.6f), EmissionEnabled = true, Emission = new Color(1, 0.75f, 0.45f), EmissionEnergyMultiplier = 3 };
         var spots = new[] { new Vector3(-520, 230, -640), new Vector3(470, 280, -720), new Vector3(-80, 320, -1100) };
         foreach (var p in spots)
         {
             var r = _rng.RandfRange(38, 60);
             var plat = new Node3D { Position = p };
-            plat.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = r, BottomRadius = r * 0.55f, Height = 18, RadialSegments = 24 }, MaterialOverride = concrete });
+            plat.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = r, BottomRadius = r * 0.55f, Height = 18, RadialSegments = 48 }, MaterialOverride = concrete });
+            plat.AddChild(new MeshInstance3D { Mesh = new TorusMesh { InnerRadius = r * 0.98f, OuterRadius = r * 1.04f, Rings = 64, RingSegments = 8 }, MaterialOverride = Crimson, Position = new Vector3(0, 8.5f, 0) });
             for (var k = 0; k < 16; k++)
             {
                 var a = k * Mathf.Tau / 16;
@@ -263,58 +299,16 @@ public partial class FutureCity : Node3D
             for (var b = 0; b < 5; b++) // 위의 건물들
             {
                 var h = _rng.RandfRange(12, 40);
+                var br = _rng.RandfRange(4, 8);
                 plat.AddChild(new MeshInstance3D
                 {
-                    Mesh = new BoxMesh { Size = new Vector3(_rng.RandfRange(8, 16), h, _rng.RandfRange(8, 16)) }, MaterialOverride = concrete,
+                    Mesh = new CylinderMesh { TopRadius = br, BottomRadius = br, Height = h, RadialSegments = 24 }, MaterialOverride = FacadeMat,
                     Position = new Vector3(Jitter(r * 0.5f), 9 + h / 2, Jitter(r * 0.5f)),
                 });
             }
             AddChild(plat);
             _floaters.Add((plat, p, _rng.Randf() * Mathf.Tau));
         }
-    }
-
-    /// <summary>고가 모노레일: 시험장 남쪽을 가로지르는 정밀한 곡선 궤도와 기둥, 그 위를 오가는 객차</summary>
-    void BuildMonorail()
-    {
-        var steel = (StandardMaterial3D)Look.For(Core.Materials.Steel);
-        var concrete = Look.Scanned("rock_boulder_dry", 3f, new Color(0.8f, 0.79f, 0.76f));
-        _rail = new Curve3D { BakeInterval = 2 };
-        for (var i = -10; i <= 10; i++)
-        {
-            var x = i * 40f;
-            _rail.AddPoint(new Vector3(x, 26 + Mathf.Sin(i * 0.4f) * 2, 210 + Mathf.Cos(i * 0.3f) * 30));
-        }
-        _railLength = _rail.GetBakedLength();
-        var beams = new List<Transform3D>();
-        var pillars = new List<Transform3D>();
-        for (float d = 0; d < _railLength; d += 4)
-        {
-            var a = _rail.SampleBaked(d);
-            var b = _rail.SampleBaked(Mathf.Min(d + 4, _railLength));
-            var mid = (a + b) / 2;
-            var basis = Basis.LookingAt((b - a).Normalized(), Vector3.Up);
-            beams.Add(new Transform3D(basis.Scaled(new Vector3(1.2f, 1.6f, (b - a).Length() + 0.05f)), mid));
-            if ((int)d % 32 == 0) pillars.Add(new Transform3D(Basis.Identity.Scaled(new Vector3(1.6f, mid.Y, 1.6f)), new Vector3(mid.X, mid.Y / 2 - 0.8f, mid.Z)));
-        }
-        var bm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = new BoxMesh(), InstanceCount = beams.Count };
-        for (var i = 0; i < beams.Count; i++) bm.SetInstanceTransform(i, beams[i]);
-        AddChild(new MultiMeshInstance3D { Multimesh = bm, MaterialOverride = concrete });
-        var pm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = new CylinderMesh { TopRadius = 0.5f, BottomRadius = 0.6f, Height = 1 }, InstanceCount = pillars.Count };
-        for (var i = 0; i < pillars.Count; i++) pm.SetInstanceTransform(i, pillars[i]);
-        AddChild(new MultiMeshInstance3D { Multimesh = pm, MaterialOverride = concrete });
-
-        _train = new Node3D();
-        var paint = new StandardMaterial3D { AlbedoColor = new Color(0.72f, 0.12f, 0.1f), Metallic = 0.4f, Roughness = 0.35f };
-        var glass = new StandardMaterial3D { AlbedoColor = new Color(0.1f, 0.12f, 0.15f), Metallic = 0.6f, Roughness = 0.1f };
-        for (var car = 0; car < 3; car++)
-        {
-            var body = new MeshInstance3D { Mesh = new CapsuleMesh { Radius = 1.4f, Height = 13 }, MaterialOverride = paint, Rotation = new Vector3(Mathf.Pi / 2, 0, 0), Position = new Vector3(0, 2.1f, -car * 13.5f) };
-            _train.AddChild(body);
-            _train.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(2.9f, 0.6f, 9) }, MaterialOverride = glass, Position = new Vector3(0, 2.6f, -car * 13.5f) });
-            _ = steel;
-        }
-        AddChild(_train);
     }
 
     /// <summary>시험장 둘레의 철탑 — 꼭대기 항공 장애등이 천천히 깜박인다</summary>
@@ -340,14 +334,5 @@ public partial class FutureCity : Node3D
         _time += dt;
         foreach (var (node, speed) in _spinners) node.RotateY(speed * dt);
         foreach (var (node, b, phase) in _floaters) node.Position = b + new Vector3(0, Mathf.Sin(_time * 0.1f + phase) * 2.5f, 0);
-        if (_train is not null && _rail is not null)
-        {
-            _trainT = (_trainT + dt * 22f) % (_railLength + 400); // 약 80 km/h, 지나간 뒤 잠시 쉼
-            var d = Mathf.Min(_trainT, _railLength - 1);
-            var p = _rail.SampleBaked(d);
-            var ahead = _rail.SampleBaked(Mathf.Min(d + 2, _railLength));
-            _train.GlobalTransform = new Transform3D(Basis.LookingAt((ahead - p).Normalized(), Vector3.Up), p + new Vector3(0, 0.8f, 0));
-            _train.Visible = _trainT < _railLength;
-        }
     }
 }

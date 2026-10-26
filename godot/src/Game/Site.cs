@@ -144,7 +144,9 @@ public static class Site
             y = Mathf.Lerp(y, stationGround, pad);
             // 오솔길: 정류장 높이 → 마당 높이로 고르게
             var (d, along) = PathDistance(p);
-            var path = Mathf.SmoothStep(PathHalfWidth + 5f, PathHalfWidth + 0.6f, d);
+            // 길 자체는 정확히, 그 둘레 16 m 는 언덕을 대부분 낮춰 정류장에서 작업장까지 트인 풀밭 골짜기로
+            var path = Mathf.Max(Mathf.SmoothStep(PathHalfWidth + 5f, PathHalfWidth + 0.6f, d),
+                                 0.8f * Mathf.SmoothStep(PathHalfWidth + 18f, PathHalfWidth + 5f, d) * Mathf.SmoothStep(0.02f, 0.15f, along));
             y = Mathf.Lerp(y, Mathf.Lerp(stationGround, yardGround, Mathf.SmoothStep(0, 1, along)), path);
             h[i * n + j] = y;
         }
