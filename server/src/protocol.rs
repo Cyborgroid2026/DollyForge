@@ -1,9 +1,9 @@
 //! 바이너리 프로토콜. 모든 값은 little-endian.
-//! 프레임: [u16 길이(opcode+payload)] [u8 opcode] [payload]
+//! WebSocket 바이너리 메시지 1개 = [u8 opcode] [payload]
 //! 문자열: [u16 바이트 길이] [UTF-8 바이트]
-//! C# 쪽 구현: client/Unity/Assets/DollyForge/Core/Protocol.cs
+//! C# 쪽 구현: client/Net/Protocol.cs
 
-use std::io::{self, Read};
+use std::io;
 
 pub mod op {
     // Client -> Server
@@ -13,7 +13,6 @@ pub mod op {
     pub const MOVE: u8 = 0x10;
     pub const INTERACT: u8 = 0x11;
     pub const CHAT: u8 = 0x12;
-    pub const CHOOSE: u8 = 0x13;
     pub const RESTART: u8 = 0x14;
 
     // Server -> Client
@@ -43,7 +42,6 @@ pub enum C2S {
     Move { x: f32, y: f32, z: f32, yaw: f32 },
     Interact { target: u32 },
     Chat { text: String },
-    Choose { choice: u8 },
     Restart,
 }
 
@@ -53,7 +51,7 @@ pub struct Writer {
 
 impl Writer {
     pub fn new(opcode: u8) -> Self {
-        Writer { buf: vec![0, 0, opcode] }
+        Writer { buf: vec![opcode] }
     }
     pub fn u8(mut self, v: u8) -> Self {
         self.buf.push(v);
@@ -78,9 +76,7 @@ impl Writer {
         self.buf.extend_from_slice(&bytes[..len]);
         self
     }
-    pub fn finish(mut self) -> Vec<u8> {
-        let len = (self.buf.len() - 2) as u16;
-        self.buf[0..2].copy_from_slice(&len.to_le_bytes());
+    pub fn finish(self) -> Vec<u8> {
         self.buf
     }
 }
@@ -131,20 +127,10 @@ impl<'a> Reader<'a> {
     }
 }
 
-/// 프레임 하나를 읽는다. 반환값의 첫 바이트가 opcode.
-pub fn read_frame(r: &mut impl Read) -> io::Result<Vec<u8>> {
-    let mut len = [0u8; 2];
-    r.read_exact(&mut len)?;
-    let len = u16::from_le_bytes(len) as usize;
-    if len == 0 || len > MAX_FRAME {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "bad frame length"));
-    }
-    let mut buf = vec![0u8; len];
-    r.read_exact(&mut buf)?;
-    Ok(buf)
-}
-
 pub fn decode(frame: &[u8]) -> io::Result<C2S> {
+    if frame.is_empty() || frame.len() > MAX_FRAME {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "bad message length"));
+    }
     let mut r = Reader::new(&frame[1..]);
     let msg = match frame[0] {
         op::REGISTER => C2S::Register { phone: r.str()?, gender: r.u8()? },
@@ -153,7 +139,6 @@ pub fn decode(frame: &[u8]) -> io::Result<C2S> {
         op::MOVE => C2S::Move { x: r.f32()?, y: r.f32()?, z: r.f32()?, yaw: r.f32()? },
         op::INTERACT => C2S::Interact { target: r.u32()? },
         op::CHAT => C2S::Chat { text: r.str()? },
-        op::CHOOSE => C2S::Choose { choice: r.u8()? },
         op::RESTART => C2S::Restart,
         other => {
             return Err(io::Error::new(
@@ -172,8 +157,7 @@ mod tests {
     #[test]
     fn roundtrip_move() {
         let frame = Writer::new(op::MOVE).f32(1.5).f32(0.0).f32(-3.0).f32(0.25).finish();
-        let body = read_frame(&mut &frame[..]).unwrap();
-        match decode(&body).unwrap() {
+        match decode(&frame).unwrap() {
             C2S::Move { x, z, yaw, .. } => assert_eq!((x, z, yaw), (1.5, -3.0, 0.25)),
             m => panic!("unexpected {m:?}"),
         }
@@ -182,8 +166,7 @@ mod tests {
     #[test]
     fn roundtrip_korean_string() {
         let frame = Writer::new(op::CHAT).str("안녕, 돌리").finish();
-        let body = read_frame(&mut &frame[..]).unwrap();
-        match decode(&body).unwrap() {
+        match decode(&frame).unwrap() {
             C2S::Chat { text } => assert_eq!(text, "안녕, 돌리"),
             m => panic!("unexpected {m:?}"),
         }
@@ -192,7 +175,6 @@ mod tests {
     #[test]
     fn rejects_truncated_payload() {
         let frame = Writer::new(op::INTERACT).u8(1).finish();
-        let body = read_frame(&mut &frame[..]).unwrap();
-        assert!(decode(&body).is_err());
+        assert!(decode(&frame).is_err());
     }
 }
