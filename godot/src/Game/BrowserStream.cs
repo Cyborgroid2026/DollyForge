@@ -37,6 +37,7 @@ public partial class BrowserStream : Node
         // 화면은 브라우저에 보이므로 Godot 창은 내려 둔다. 숨은 창은 수직 동기를 기다리지 않게 한다.
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         Engine.MaxFps = 60;
+        DisplayServer.WindowSetMode(DisplayServer.WindowMode.Minimized);
         _page = System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://web/stream.html"));
         _http = new HttpListener();
         _http.Prefixes.Add($"http://127.0.0.1:{Port}/");

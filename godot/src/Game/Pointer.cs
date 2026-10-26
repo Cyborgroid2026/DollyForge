@@ -17,7 +17,7 @@ public static class Pointer
         set
         {
             if (Streaming) _virtual = value;
-            else Pointer.Mode = value;
+            else Input.MouseMode = value;
         }
     }
 
