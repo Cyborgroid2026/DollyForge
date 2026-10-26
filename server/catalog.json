@@ -248,6 +248,42 @@
       "fictional": false
     },
     {
+      "sku": "QA-SERVO-1",
+      "nameKo": "진공관 서보 증폭기 QA-1",
+      "category": "양자 아날로그",
+      "priceKrw": 38000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "QA-DRUM-8",
+      "nameKo": "캠 드럼 시퀀서 KD-8 (기계식 기억)",
+      "category": "양자 아날로그",
+      "priceKrw": 29000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "QA-NIXIE-4",
+      "nameKo": "닉시관 계기 NX-4",
+      "category": "양자 아날로그",
+      "priceKrw": 45000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "QR-CAP-1",
+      "nameKo": "양자 공명 축전기 QR-1 (가상 부품)",
+      "category": "양자 아날로그",
+      "priceKrw": 240000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": true
+    },
+    {
       "sku": "FS-TNUT-M5",
       "nameKo": "T너트 + 볼트 M5 세트 (2020용)",
       "category": "체결",
@@ -638,6 +674,30 @@
       "lengthMm": 0,
       "widthMm": 0,
       "unitKrw": 85000
+    },
+    {
+      "sku": "QA-SERVO-1",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 38000
+    },
+    {
+      "sku": "QA-DRUM-8",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 29000
+    },
+    {
+      "sku": "QA-NIXIE-4",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 45000
+    },
+    {
+      "sku": "QR-CAP-1",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 240000
     },
     {
       "sku": "FS-TNUT-M5",

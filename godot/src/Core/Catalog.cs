@@ -175,6 +175,36 @@ public static class Catalog
                 with { Role = PartRole.Battery, Electrical = new ElectricalSpec(12.8f, CapacityWh: 128) },
         },
 
+        // ---- 양자 아날로그 기기 (레트로 미래 기술: 진공관·기계식 기억·닉시관) ----
+        new("QA-SERVO-1", "양자 아날로그", "진공관 서보 증폭기 QA-1", "6V6 출력관 2개, 12 V, 연속 10 A. 손잡이로 모터 출력 −100 %…+100 %", 38000, "개")
+        {
+            Make = (_, _) => Def("qa-servo-1", "진공관 서보 증폭기 QA-1", Shape.Box(0.12f, 0.08f, 0.10f), Materials.Aluminium,
+                "같은 기기 안의 모터 출력을 손잡이로 연속 조절한다 ([ ] 키).", 0.9f)
+                with { Role = PartRole.Controller, Electrical = new ElectricalSpec(12, RatedCurrentA: 0.3f), RealEquivalentKo = "DC 모터 속도 제어기 (PWM, 12 V 10 A)" },
+        },
+        new("QA-DRUM-8", "양자 아날로그", "캠 드럼 시퀀서 KD-8 (기계식 기억)", "8단 캠 드럼, 1단 1초, 단마다 정회전·정지·역회전", 29000, "개")
+        {
+            Make = (_, _) => Def("qa-drum-8", "캠 드럼 시퀀서 KD-8", Shape.Cylinder(0.04f, 0.10f), Materials.Brass,
+                "모터 동작 순서를 기계식으로 기억한다. E 로 캠 핀을 다시 꽂는다.", 0.6f)
+                with { Role = PartRole.Sequencer, Electrical = new ElectricalSpec(12, RatedCurrentA: 0.05f), RealEquivalentKo = "전기기계식 캠 타이머 (드럼 프로그래머)" },
+        },
+        new("QA-NIXIE-4", "양자 아날로그", "닉시관 계기 NX-4", "IN-14 닉시관 4자리, 배터리 전압·잔량 표시", 45000, "개")
+        {
+            Make = (_, _) => Def("qa-nixie-4", "닉시관 계기 NX-4", Shape.Box(0.12f, 0.05f, 0.05f), Materials.Brass,
+                "같은 기기 안 배터리의 전압과 잔량을 주황빛 숫자로 보여 준다.", 0.25f)
+                with { Role = PartRole.Display, Electrical = new ElectricalSpec(12, RatedCurrentA: 0.02f), RealEquivalentKo = "IN-14 닉시관 4자리 + 고전압 전원" },
+        },
+        new("QR-CAP-1", "양자 아날로그", "양자 공명 축전기 QR-1 (가상 부품)", "12 V, 2 kWh, 1 kg — 현실에 없는 에너지 밀도", 240000, "개")
+        {
+            Make = (_, _) => Def("qr-cap-1", "양자 공명 축전기 QR-1", Shape.Cylinder(0.05f, 0.12f), Materials.Titanium,
+                "가상 부품. 현실 제작 시에는 대체 실물로 바꿔야 한다.", 1.0f)
+                with
+                {
+                    Role = PartRole.Battery, Electrical = new ElectricalSpec(12.8f, CapacityWh: 2000),
+                    Fictional = true, RealEquivalentKo = "리튬인산철 배터리 12.8 V 160 Ah (약 18 kg, 실제로는 훨씬 크고 무겁다)",
+                },
+        },
+
         // ---- 체결·기구 소모품 ----
         new("FS-TNUT-M5", "체결", "T너트 + 볼트 M5 세트 (2020용)", "20세트 묶음", 6000, "묶음") { PackQty = 20 },
         new("FS-BOLT-M8", "체결", "육각볼트·너트 M8 세트", "10세트 묶음, 강도 8.8", 3000, "묶음") { PackQty = 10 },

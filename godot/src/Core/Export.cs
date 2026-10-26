@@ -16,6 +16,8 @@ public static class Export
     /// <summary>수치 출력: 원래 값이 float 이므로 유효숫자 7자리 (지수 표기 허용)</summary>
     static string F(double v) => Math.Abs(v) < 1e-12 ? "0" : ((float)v).ToString("G7", Inv);
     static string V(Vector3 v) => $"{F(v.X)} {F(v.Y)} {F(v.Z)}";
+    /// <summary>USD 문자열 리터럴 이스케이프</summary>
+    static string UsdStr(string s) => "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n") + "\"";
 
     /// <summary>자식 링크가 관절 프레임에 놓일 때, 부품 형상이 관절 프레임 안에서 갖는 자세</summary>
     static Pose LocalGeometry(Pose linkFrame, Pose part) => linkFrame.Inverse().Compose(part);
@@ -121,6 +123,7 @@ public static class Export
         w.WriteStartElement("link");
         w.WriteAttributeString("name", part.LinkName);
         w.WriteComment($" {def.NameKo} — {F(def.Mass)} kg, 항복강도 {F(def.Material.YieldMPa)} MPa ");
+        if (def.Fictional) w.WriteComment($" 가상 부품 (현실에 없음). 현실 제작 시 대체: {def.RealEquivalentKo} ");
 
         w.WriteStartElement("inertial");
         WriteOrigin(w, geom.Position, rpy);
@@ -314,7 +317,12 @@ public static class Export
             L(2, "prepend apiSchemas = [\"PhysicsRigidBodyAPI\", \"PhysicsMassAPI\"]");
             L(1, ")");
             L(1, "{");
-            L(2, $"custom string dollyforge:name = \"{def.NameKo}\"");
+            L(2, $"custom string dollyforge:name = {UsdStr(def.NameKo)}");
+            if (def.Fictional)
+            {
+                L(2, "custom bool dollyforge:fictional = 1");
+                L(2, $"custom string dollyforge:realEquivalent = {UsdStr(def.RealEquivalentKo ?? "")}");
+            }
             L(2, $"double3 xformOp:translate = {P(pose.Position)}");
             L(2, $"quatf xformOp:orient = {Q(pose.Rotation)}");
             L(2, "uniform token[] xformOpOrder = [\"xformOp:translate\", \"xformOp:orient\"]");
@@ -435,7 +443,8 @@ public static class Export
         var rows = a.Parts
             .GroupBy(p => p.Def.Id)
             .Select(g => (Sku: g.First().Def.Sku ?? "(자작)", Name: g.First().Def.NameKo,
-                Material: g.First().Def.Role is PartRole.Structure or PartRole.Profile or PartRole.Shaft ? g.First().Def.Material.NameKo : "구매 부품",
+                Material: g.First().Def.Fictional ? $"가상 부품 → 현실 대체: {g.First().Def.RealEquivalentKo}"
+                    : g.First().Def.Role is PartRole.Structure or PartRole.Profile or PartRole.Shaft ? g.First().Def.Material.NameKo : "구매 부품",
                 Qty: g.Count(), Mass: g.First().Def.Mass, Unit: (long)g.First().Def.PriceKrw))
             .OrderBy(r => r.Sku)
             .ToList();

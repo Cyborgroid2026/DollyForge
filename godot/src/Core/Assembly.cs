@@ -39,7 +39,7 @@ public sealed record PartDef(
     public string? RealEquivalentKo { get; init; }
 }
 
-public enum PartRole { Structure, Profile, Shaft, Bearing, Wheel, Motor, Battery }
+public enum PartRole { Structure, Profile, Shaft, Bearing, Wheel, Motor, Battery, Controller, Sequencer, Display }
 
 /// <summary>전기 사양: 정격 전압 V, 배터리 용량 Wh, 모터 정격 전류 A</summary>
 public sealed record ElectricalSpec(float Volts, float CapacityWh = 0, float RatedCurrentA = 0);

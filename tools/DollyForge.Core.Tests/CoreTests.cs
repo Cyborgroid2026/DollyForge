@@ -139,6 +139,24 @@ public class ExportTests
         }
     }
 
+    [Fact]
+    public void FictionalPartsAreFlaggedEverywhere()
+    {
+        // 양자 공명 축전기(가상)를 태엽 대신 쓴 로봇: 내보내기마다 가상임과 현실 대체품이 드러나야 한다
+        var a = new Assembly("Quantum Cart");
+        var plate = a.AddPart(Catalog.Get("PL-AL6061-5").Build(220, 200)!, new Pose(new(0, 0.05f, 0), System.Numerics.Quaternion.Identity));
+        var cap = a.AddPart(Catalog.Get("QR-CAP-1").Build()!, new Pose(new(0, 0.11f, 0), System.Numerics.Quaternion.Identity));
+        var amp = a.AddPart(Catalog.Get("QA-SERVO-1").Build()!, new Pose(new(0.06f, 0.095f, 0.05f), System.Numerics.Quaternion.Identity));
+        a.AddJoint(JointKind.Fixed, plate, cap, cap.Pose.Position, System.Numerics.Vector3.UnitX);
+        a.AddJoint(JointKind.Fixed, plate, amp, amp.Pose.Position, System.Numerics.Vector3.UnitX);
+        Assert.Contains("가상 부품", Export.Urdf(a));
+        Assert.Contains("dollyforge:fictional = 1", Export.Usda(a));
+        Assert.Contains("현실 대체: 리튬인산철", Export.Bom(a).Markdown);
+        Assert.DoesNotContain("QA-SERVO-1 | 진공관 서보 증폭기 QA-1 | 가상", Export.Bom(a).Markdown);
+        Assert.False(Rules.Check(JoinMethod.Weld, plate.Def, amp.Def).Ok);
+        Write("quantum_cart", a);
+    }
+
     static void Write(string name, Assembly a)
     {
         Directory.CreateDirectory(OutDir);

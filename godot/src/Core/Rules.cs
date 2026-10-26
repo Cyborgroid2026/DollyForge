@@ -21,13 +21,13 @@ public static class Rules
     public static JoinCheck Check(JoinMethod method, PartDef a, PartDef b)
     {
         static JoinCheck No(string why, JointKind k) => new(false, why, None, k);
-        var delicate = new[] { PartRole.Bearing, PartRole.Motor, PartRole.Battery };
+        var delicate = new[] { PartRole.Bearing, PartRole.Motor, PartRole.Battery, PartRole.Controller, PartRole.Sequencer, PartRole.Display };
         switch (method)
         {
             case JoinMethod.Weld:
             {
                 if (delicate.Contains(a.Role) || delicate.Contains(b.Role))
-                    return No("베어링·모터·배터리는 용접하면 망가집니다. 볼트로 고정하세요.", JointKind.Fixed);
+                    return No("베어링·모터·배터리·제어 기기는 용접하면 망가집니다. 볼트로 고정하세요.", JointKind.Fixed);
                 var fa = WeldFamily(a.Material);
                 if (fa == "" || fa != WeldFamily(b.Material))
                     return No($"{a.Material.NameKo}와(과) {b.Material.NameKo}는 용접할 수 없습니다. 같은 금속끼리만 용접됩니다.", JointKind.Fixed);
