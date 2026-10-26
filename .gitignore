@@ -1,0 +1,19 @@
+# .NET 빌드 산출물
+bin/
+obj/
+*.user
+
+# Rust 빌드 산출물
+/server/target/
+
+# 서버 로컬 데이터 (계정 저장소)
+/server/data/
+
+# VS Code: 공유할 설정만 추적 (C/C++ 확장 캐시 browse.vc.db 등은 제외)
+.vscode/*
+!.vscode/tasks.json
+!.vscode/extensions.json
+
+# OS / 에디터
+.DS_Store
+*.swp

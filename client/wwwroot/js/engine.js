@@ -488,8 +488,8 @@ function buildStation(s) {
 
 function makeCyborg(gender) {
     const g = new THREE.Group();
-    const ti = mat(0xc9d1d6, { metalness: 0.9, roughness: 0.28 });
-    const dark = mat(0x2a2f35, { metalness: 0.6, roughness: 0.5 });
+    const ti = mat(0xd4dce2, { metalness: 0.45, roughness: 0.3 });
+    const dark = mat(0x3a4048, { metalness: 0.4, roughness: 0.5 });
     const glow = mat(0x66e0ff, { emissive: 0x33ccff, emissiveIntensity: 1.6 });
     const female = gender === 0;
     const shoulder = female ? 0.19 : 0.25, hip = female ? 0.17 : 0.13;

@@ -341,6 +341,12 @@ kbd {
 .ending.eternal h1 { color: var(--accent); }
 .ending.mortal h1 { color: var(--warm); }
 
+/* three.js VRButton 은 인라인 스타일로 하단 중앙에 붙으므로 상단으로 옮긴다 */
+#vr-button {
+    top: 16px !important;
+    bottom: auto !important;
+}
+
 #blazor-error-ui {
     display: none;
     position: fixed;

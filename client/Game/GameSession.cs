@@ -52,7 +52,14 @@ public sealed class GameSession(Engine engine, IJSRuntime js, NavigationManager 
     public async Task StartAsync(string viewportId)
     {
         _self = DotNetObjectReference.Create(this);
-        await engine.InitAsync(viewportId, _self, Gender);
+        try { await engine.InitAsync(viewportId, _self, Gender); }
+        catch (JSException e)
+        {
+            Error = $"3D 엔진을 불러오지 못했습니다. 새로고침해 주세요. ({e.Message})";
+            Step = LoginStep.Disconnected;
+            Changed?.Invoke();
+            return;
+        }
         Token = await LoadTokenAsync();
         if (Token is not null) QrDataUrl = MakeQr(Token);
         _net.OnMessage += Handle;

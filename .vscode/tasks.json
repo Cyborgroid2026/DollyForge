@@ -1,0 +1,90 @@
+{
+    // Dolly Forge 실행: Terminal > Run Task... > "Dolly Forge: 실행"
+    // Rust 월드 서버(ws://localhost:7700)와 C# Blazor 클라이언트(http://localhost:5080)를 띄운 뒤
+    // 통합 브라우저로 클라이언트를 연다.
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Dolly Forge: 실행",
+            "dependsOrder": "sequence",
+            "dependsOn": ["Dolly Forge: 서버+클라이언트", "Dolly Forge: 통합 브라우저 열기"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Dolly Forge: 서버+클라이언트",
+            "dependsOrder": "parallel",
+            "dependsOn": ["server: Rust 월드 서버", "client: C# Blazor 클라이언트"],
+            "problemMatcher": []
+        },
+        {
+            "label": "server: Rust 월드 서버",
+            "type": "shell",
+            "command": "cargo run",
+            "options": {
+                "cwd": "${workspaceFolder}/server",
+                // 개발 모드: SMS 대신 인증 코드를 화면에 표시
+                "env": { "DOLLY_DEV_ECHO_CODE": "1" }
+            },
+            "isBackground": true,
+            "presentation": { "group": "dolly", "panel": "dedicated" },
+            "problemMatcher": {
+                "owner": "dolly-server",
+                "pattern": { "regexp": "^__never_matches__$" },
+                "background": {
+                    "activeBegins": true,
+                    "beginsPattern": "Compiling|Finished|Running",
+                    "endsPattern": "\\[server\\] Dolly Forge"
+                }
+            }
+        },
+        {
+            "label": "client: C# Blazor 클라이언트",
+            "type": "shell",
+            "command": "dotnet run",
+            "options": { "cwd": "${workspaceFolder}/client" },
+            "isBackground": true,
+            "presentation": { "group": "dolly", "panel": "dedicated" },
+            "problemMatcher": {
+                "owner": "dolly-client",
+                "pattern": { "regexp": "^__never_matches__$" },
+                "background": {
+                    "activeBegins": true,
+                    "beginsPattern": "Using launch settings|Building",
+                    "endsPattern": "Now listening on"
+                }
+            }
+        },
+        {
+            "label": "Dolly Forge: 통합 브라우저 열기",
+            "type": "shell",
+            "command": "echo 'Dolly Forge → http://localhost:5080 ${input:openBrowser}'",
+            "presentation": { "reveal": "silent" },
+            "problemMatcher": []
+        },
+        {
+            "label": "test: 서버 단위 테스트",
+            "type": "shell",
+            "command": "cargo test",
+            "options": { "cwd": "${workspaceFolder}/server" },
+            "group": "test",
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "test: 통합 테스트 봇 (서버 실행 중일 때)",
+            "type": "shell",
+            "command": "dotnet run -- ws://127.0.0.1:7700",
+            "options": { "cwd": "${workspaceFolder}/tools/DollyForge.Bot" },
+            "group": "test",
+            "problemMatcher": []
+        }
+    ],
+    "inputs": [
+        {
+            // 통합 브라우저(Simple Browser)로 클라이언트를 연다.
+            "id": "openBrowser",
+            "type": "command",
+            "command": "simpleBrowser.show",
+            "args": "http://localhost:5080"
+        }
+    ]
+}
