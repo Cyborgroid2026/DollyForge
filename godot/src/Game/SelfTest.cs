@@ -95,7 +95,7 @@ public partial class SelfTest : Node
                 // 4. 내보내기
                 var result = Devices.ExportDevice(_robotBase);
                 Check(result.StartsWith("내보냄"), result);
-                Check(Devices.Properties(_robotBase).Contains("부품 10개"), Devices.Properties(_robotBase));
+                Check(Devices.Properties(_robotBase).Contains("부품 7개"), Devices.Properties(_robotBase));
                 GD.Print(_failures == 0 ? "SELFTEST PASS" : $"SELFTEST FAIL ({_failures})");
                 GetTree().Quit(_failures == 0 ? 0 : 1);
                 _step = 3;

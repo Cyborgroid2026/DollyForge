@@ -121,6 +121,12 @@ public static class Catalog
             Make = (_, _) => Def("wh-100-b8", "우레탄 바퀴 100 mm", Shape.Cylinder(0.05f, 0.03f), Materials.Rubber,
                 "8 mm 축에 끼운다.", 0.18f) with { Role = PartRole.Wheel, BoreMm = 8 },
         },
+        new("WH-CASTER-51", "바퀴", "볼 캐스터 (설치 높이 51 mm)", "강구 Ø25, 하우징 포함 높이 51 mm, M8 볼트 2개", 4500, "개")
+        {
+            // 물리 형상: 설치 높이와 같은 지름의 구 (바닥 접점과 높이가 실제와 같다)
+            Make = (_, _) => Def("wh-caster-51", "볼 캐스터 51 mm", Shape.Sphere(0.0255f), Materials.CasterBall,
+                "판 아래에 볼트로 고정한다. 어느 방향으로든 구른다.", 0.07f) with { Role = PartRole.Wheel },
+        },
         new("WH-260-B20", "바퀴", "공기압 타이어 260 mm (내경 20 mm)", "3.00-4 타이어, 베어링 내장", 24000, "개")
         {
             Make = (_, _) => Def("wh-260-b20", "공기압 타이어 260 mm", Shape.Cylinder(0.13f, 0.085f), Materials.Rubber,

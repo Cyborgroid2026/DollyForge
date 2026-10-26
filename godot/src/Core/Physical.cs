@@ -33,6 +33,8 @@ public static class Materials
     public static readonly MaterialDef Brick = new("clay_brick", "점토 벽돌", 1900, 15, 3, 0.7f, 0.6f, 0.1f, new(0.62f, 0.30f, 0.22f, 1));
     public static readonly MaterialDef Granite = new("granite", "화강암", 2700, 50, 130, 0.7f, 0.6f, 0.2f, new(0.55f, 0.54f, 0.52f, 1));
     public static readonly MaterialDef Quartz = new("quartz", "석영", 2650, 72, 50, 0.6f, 0.5f, 0.3f, new(0.92f, 0.94f, 0.96f, 1));
+    /// <summary>볼 캐스터의 강구. 마찰계수 자리에 구름 저항 계수(≈0.05)를 넣어 구르는 접촉을 근사한다.</summary>
+    public static readonly MaterialDef CasterBall = new("caster_ball", "볼 캐스터 강구 (구름 접촉)", 7850, 200, 235, 0.05f, 0.03f, 0.1f, new(0.75f, 0.76f, 0.78f, 1));
     public static readonly MaterialDef Soil = new("soil", "흙 (다져진 표토)", 1500, 0.05f, 0, 0.6f, 0.5f, 0.05f, new(0.40f, 0.30f, 0.22f, 1));
     public static readonly MaterialDef IronOre = new("iron_ore", "철광석 (적철석)", 5000, 0, 0, 0.7f, 0.6f, 0.2f, new(0.45f, 0.25f, 0.20f, 1));
     public static readonly MaterialDef CopperOre = new("copper_ore", "구리광석 (황동석)", 4200, 0, 0, 0.7f, 0.6f, 0.2f, new(0.55f, 0.48f, 0.25f, 1));
@@ -40,7 +42,7 @@ public static class Materials
     public static readonly IReadOnlyDictionary<string, MaterialDef> All = new[]
     {
         Steel, CastIron, Copper, Brass, Titanium, Aluminium, Pine, Oak, Rubber, Glass,
-        Concrete, Brick, Granite, Quartz, Soil, IronOre, CopperOre,
+        Concrete, Brick, Granite, Quartz, Soil, IronOre, CopperOre, CasterBall,
     }.ToDictionary(m => m.Id);
 }
 

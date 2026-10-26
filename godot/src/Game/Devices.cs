@@ -68,7 +68,8 @@ public partial class Devices : Node3D
             var snap = SnapOntoShaft(shaft, hole);
             if (!snap.Ok) return (false, snap.Message);
             pivot = hole.GlobalPosition;
-            axis = shaft.PrincipalAxis();
+            // 모터는 출력축 방향(로컬 +Z)이 구동 축의 양의 방향이다
+            axis = shaft.Part.Def.Role == PartRole.Motor ? shaft.GlobalBasis.Z.Normalized() : shaft.PrincipalAxis();
         }
         else
         {
@@ -118,11 +119,9 @@ public partial class Devices : Node3D
         Vector3 target;
         if (def.Role == PartRole.Motor)
         {
-            // 모터는 출력축 끝(하우징 바깥)에 끼운다
+            // 모터 출력축은 하우징 앞면(로컬 +Z)으로만 나와 있다
             var holeHalf = hole.Part.Def.Shape.Kind == ShapeKind.Cylinder ? hole.Part.Def.Shape.Length / 2 : hole.Part.Def.Shape.Size.Z / 2;
-            var side = Mathf.Sign(axis.Dot(hole.GlobalPosition - shaft.GlobalPosition));
-            if (side == 0) side = 1;
-            axis *= side;
+            axis = shaft.GlobalBasis.Z.Normalized();
             target = shaft.GlobalPosition + axis * (half + holeHalf + 0.003f);
         }
         else
@@ -261,7 +260,8 @@ public partial class Devices : Node3D
             var powered = battery is not null && Mathf.Abs(battery.Part.Def.Electrical!.Volts - spec.Volts) <= spec.Volts * 0.2f;
             hinge.SetFlag(HingeJoint3D.Flag.EnableMotor, powered);
             if (!powered) continue;
-            var dir = _wiring.GetValueOrDefault(motorId, 1);
+            // 정극성: 하우징에 대해 출력축(자식)이 축 방향으로 +회전. 모터가 자식 쪽이면 부호를 뒤집는다.
+            var dir = _wiring.GetValueOrDefault(motorId, 1) * (j.Parent == motorId ? 1 : -1);
             hinge.SetParam(HingeJoint3D.Param.MotorTargetVelocity, dir * j.Velocity);
             hinge.SetParam(HingeJoint3D.Param.MotorMaxImpulse, j.Effort * (float)delta);
             // 소비 전력: 정격 전류 기준, 부하(상대 회전 속도)에 따라 15–100 %

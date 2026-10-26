@@ -1,99 +1,70 @@
 {
     // Dolly Forge 실행: Terminal > Run Task... > "Dolly Forge: 실행"
-    // Rust 월드 서버(ws://localhost:7700)와 C# Blazor 클라이언트(http://localhost:5080)를 띄운 뒤
-    // 통합 브라우저로 클라이언트를 연다.
+    // CC0 실사 에셋을 (처음 한 번) 내려받고, Godot C# 프로젝트를 빌드한 뒤 게임 창을 띄운다.
     "version": "2.0.0",
+    "options": {
+        "env": {
+            "GODOT": "${env:HOME}/Applications/Godot_v4.7.2-stable_mono_linux_x86_64/Godot_v4.7.2-stable_mono_linux.x86_64"
+        }
+    },
     "tasks": [
         {
             "label": "Dolly Forge: 실행",
             "dependsOrder": "sequence",
-            "dependsOn": ["assets: 실사 에셋 내려받기", "Dolly Forge: 서버+클라이언트", "Dolly Forge: 통합 브라우저 열기"],
+            "dependsOn": ["assets: 실사 에셋 내려받기", "godot: C# 빌드·에셋 가져오기"],
+            "type": "shell",
+            "command": "\"$GODOT\" --path godot",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "group": "dolly", "panel": "dedicated" },
             "problemMatcher": []
         },
         {
-            // Poly Haven CC0 텍스처·HDRI (처음 한 번만 받고, 이후에는 건너뛴다)
             "label": "assets: 실사 에셋 내려받기",
             "type": "shell",
-            "command": "./tools/fetch-assets.sh",
+            "command": "./tools/fetch-assets.sh godot",
             "options": { "cwd": "${workspaceFolder}" },
             "presentation": { "reveal": "silent" },
             "problemMatcher": []
         },
         {
-            "label": "Dolly Forge: 서버+클라이언트",
-            "dependsOrder": "parallel",
-            "dependsOn": ["server: Rust 월드 서버", "client: C# Blazor 클라이언트"],
-            "problemMatcher": []
-        },
-        {
-            "label": "server: Rust 월드 서버",
+            "label": "godot: C# 빌드·에셋 가져오기",
             "type": "shell",
-            "command": "cargo run",
-            "options": {
-                "cwd": "${workspaceFolder}/server",
-                // 개발 모드: SMS 대신 인증 코드를 화면에 표시
-                "env": { "DOLLY_DEV_ECHO_CODE": "1" }
-            },
-            "isBackground": true,
-            "presentation": { "group": "dolly", "panel": "dedicated" },
-            "problemMatcher": {
-                "owner": "dolly-server",
-                "pattern": { "regexp": "^__never_matches__$" },
-                "background": {
-                    "activeBegins": true,
-                    "beginsPattern": "Compiling|Finished|Running",
-                    "endsPattern": "\\[server\\] Dolly Forge"
-                }
-            }
-        },
-        {
-            "label": "client: C# Blazor 클라이언트",
-            "type": "shell",
-            "command": "dotnet run",
-            "options": { "cwd": "${workspaceFolder}/client" },
-            "isBackground": true,
-            "presentation": { "group": "dolly", "panel": "dedicated" },
-            "problemMatcher": {
-                "owner": "dolly-client",
-                "pattern": { "regexp": "^__never_matches__$" },
-                "background": {
-                    "activeBegins": true,
-                    "beginsPattern": "Using launch settings|Building",
-                    "endsPattern": "Now listening on"
-                }
-            }
-        },
-        {
-            "label": "Dolly Forge: 통합 브라우저 열기",
-            "type": "shell",
-            "command": "echo 'Dolly Forge → http://localhost:5080 ${input:openBrowser}'",
+            "command": "dotnet build && \"$GODOT\" --headless --path . --import",
+            "options": { "cwd": "${workspaceFolder}/godot" },
             "presentation": { "reveal": "silent" },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Godot 편집기 열기",
+            "type": "shell",
+            "command": "\"$GODOT\" --editor --path godot",
+            "options": { "cwd": "${workspaceFolder}" },
             "problemMatcher": []
         },
         {
-            "label": "test: 서버 단위 테스트",
+            "label": "test: 코어 단위 테스트 (재료·관절·구매·내보내기)",
+            "type": "shell",
+            "command": "dotnet test",
+            "options": { "cwd": "${workspaceFolder}/tools/DollyForge.Core.Tests" },
+            "group": "test",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "test: 엔진 자체 시험 (구매→축 결합→주행→내보내기)",
+            "dependsOn": ["godot: C# 빌드·에셋 가져오기"],
+            "type": "shell",
+            "command": "\"$GODOT\" --path godot --resolution 1280x720 -- --selftest && python3 tools/validate/check_exports.py godot/exports",
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "test: Rust 서버 단위 테스트",
             "type": "shell",
             "command": "cargo test",
             "options": { "cwd": "${workspaceFolder}/server" },
             "group": "test",
             "problemMatcher": ["$rustc"]
-        },
-        {
-            "label": "test: 통합 테스트 봇 (서버 실행 중일 때)",
-            "type": "shell",
-            "command": "dotnet run -- ws://127.0.0.1:7700",
-            "options": { "cwd": "${workspaceFolder}/tools/DollyForge.Bot" },
-            "group": "test",
-            "problemMatcher": []
-        }
-    ],
-    "inputs": [
-        {
-            // 통합 브라우저(Simple Browser)로 클라이언트를 연다.
-            "id": "openBrowser",
-            "type": "command",
-            "command": "simpleBrowser.show",
-            "args": "http://localhost:5080"
         }
     ]
 }

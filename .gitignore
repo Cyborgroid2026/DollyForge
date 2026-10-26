@@ -18,3 +18,6 @@ obj/
 .DS_Store
 *.swp
 /client/wwwroot/assets/
+
+# Godot 게임에서 내보낸 기기 (URDF·USDA·STL·BOM)
+/godot/exports/
