@@ -6,12 +6,10 @@ namespace DollyForge.Game;
 /// 레트로퓨처 도시의 생활감. Atomic Heart 풍 참고 이미지에서 되풀이되는 요소를 이 세계의 말로 옮긴다
 /// (그대로 베끼지 않고 형태 언어만: 흰 에나멜 곡면, 진홍, 놋쇠, 둥근 창, 유리).
 ///  · 떠 있는 플랫폼 아래에 매달린 원통 주거 포드와 진홍 등 구슬
-///  · 하늘을 천천히 도는 구형 정비 드론 (적대 로봇이 아니라 도시의 일꾼)
 ///  · 늑골 뼈대의 유리 거품 돔 온실 군락
 /// </summary>
 public partial class FutureCity
 {
-    readonly List<(Node3D Node, Vector3 Center, float Radius, float Speed, float Phase)> _drones = new();
 
     static readonly StandardMaterial3D Lantern = new()
     {
@@ -83,33 +81,6 @@ public partial class FutureCity
         }
     }
 
-    /// <summary>
-    /// 구형 정비 드론 떼: 흰 에나멜 공에 놋쇠 띠와 진홍 눈 하나. 도시 위를 저마다의 원을 그리며 천천히 돌고,
-    /// 몇 대는 작업장 위 하늘까지 내려온다.
-    /// </summary>
-    void BuildDrones()
-    {
-        Node3D Drone(float size)
-        {
-            var d = new Node3D();
-            Put(d, new SphereMesh { Radius = size, Height = size * 2, RadialSegments = 24, Rings = 12 }, Enamel, Vector3.Zero);
-            Put(d, new TorusMesh { InnerRadius = size * 0.98f, OuterRadius = size * 1.08f, Rings = 32, RingSegments = 6 }, Brass, Vector3.Zero);
-            Put(d, new SphereMesh { Radius = size * 0.22f, Height = size * 0.44f }, Lantern, new Vector3(0, 0, size * 0.95f));
-            Put(d, new CylinderMesh { TopRadius = size * 0.35f, BottomRadius = size * 0.5f, Height = size * 0.3f, RadialSegments = 16 }, Crimson, new Vector3(0, -size * 1.0f, 0));
-            AddChild(d);
-            return d;
-        }
-        for (var i = 0; i < 34; i++)
-        {
-            var a = _rng.RandfRange(-Mathf.Pi * 0.95f, -Mathf.Pi * 0.05f);
-            var dist = _rng.RandfRange(260, 760);
-            var center = new Vector3(Mathf.Cos(a) * dist, _rng.RandfRange(55, 230), Mathf.Sin(a) * dist);
-            _drones.Add((Drone(_rng.RandfRange(1.6f, 3.2f)), center, _rng.RandfRange(15, 70), _rng.RandfRange(0.02f, 0.06f) * (_rng.Randf() < 0.5f ? 1 : -1), _rng.Randf() * Mathf.Tau));
-        }
-        foreach (var c in new[] { new Vector3(-30, 32, -25), new Vector3(35, 40, -55), new Vector3(-55, 46, 30) })
-            _drones.Add((Drone(0.9f), c, _rng.RandfRange(10, 20), 0.05f, _rng.Randf() * Mathf.Tau));
-    }
-
     /// <summary>늑골 뼈대의 유리 거품 돔 온실 군락. 돔끼리는 유리 대롱으로 이어진다.</summary>
     void BuildGreenhouses(Vector3 at)
     {
@@ -147,13 +118,4 @@ public partial class FutureCity
         }
     }
 
-    void AnimateLife(float dt)
-    {
-        foreach (var (node, center, radius, speed, phase) in _drones)
-        {
-            var a = phase + _time * speed;
-            node.Position = center + new Vector3(Mathf.Cos(a) * radius, Mathf.Sin(_time * 0.4f + phase) * 1.5f, Mathf.Sin(a) * radius);
-            node.Rotation = new Vector3(0, -a + (speed > 0 ? 0 : Mathf.Pi), 0);
-        }
-    }
 }
