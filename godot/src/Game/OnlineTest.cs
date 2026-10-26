@@ -99,7 +99,7 @@ public partial class OnlineTest : Node
                 _t = 0;
                 break;
             case 5 when _t > 0.5:
-                S.Send(Packets.RetrieveDevice(D.World.Name == "" ? "" : StoredName()));
+                S.Send(Packets.RetrieveDevice(_lastStored ?? ""));
                 _step = 6;
                 _t = 0;
                 break;
@@ -119,7 +119,6 @@ public partial class OnlineTest : Node
         }
     }
 
-    string StoredName() => _lastStored ?? "";
     string? _lastStored;
 
     public override void _EnterTree()
