@@ -164,12 +164,12 @@ public partial class FutureCity
         var root = new Node3D { Position = at };
         AddChild(root);
         var y = 0f;
-        foreach (var (w, h) in new[] { (34f, 4f), (26f, 5f), (18f, 7f) })
+        foreach (var (w, h) in new[] { (64f, 6f), (48f, 9f), (34f, 14f) })
         {
             Put(root, new BoxMesh { Size = new Vector3(w, h, w) }, FacadeMat, new Vector3(0, y + h / 2, 0));
             y += h;
         }
-        Put(root, new BoxMesh { Size = new Vector3(18.4f, 1.6f, 18.4f) }, Crimson, new Vector3(0, y - 2.2f, 0));
+        Put(root, new BoxMesh { Size = new Vector3(34.6f, 2.4f, 34.6f) }, Crimson, new Vector3(0, y - 3.5f, 0));
 
         var statue = CyborgBody.Build(0);
         statue.RaiseArm(1, -2.75f);
