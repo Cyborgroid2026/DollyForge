@@ -13,8 +13,10 @@ public class CyborgTests
     {
         var b = Cyborg.Of(gender);
         var body = Cyborg.Assemble(b, Vector3.Zero);
-        Assert.Equal(15, body.Parts.Count);
-        Assert.Equal(14, body.Joints.Count);
+        Assert.Equal(17, body.Parts.Count);   // 분절 15 + 배양 장기 코어 + 대사 지원 유닛
+        Assert.Equal(16, body.Joints.Count);
+        Assert.Single(body.Parts, p => p.Def.Role == PartRole.BioCore);
+        Assert.Single(body.Parts, p => p.Def.Role == PartRole.LifeSupport);
         // 분절 질량 합 ≈ 체중 (Winter 비율 합 ≈ 1)
         Assert.InRange(body.TotalMass, b.Mass * 0.97f, b.Mass * 1.03f);
         // 머리 꼭대기 ≈ 키
@@ -62,5 +64,32 @@ public class CyborgTests
             File.WriteAllText(Path.Combine(dir, "cyborg_female.urdf"), urdf);
             File.WriteAllText(Path.Combine(dir, "cyborg_female.usda"), Export.Usda(body, body.Parts[0].Id));
         }
+    }
+
+    [Fact]
+    public void WearablesClipOnLikeWatchesAndHeadphones()
+    {
+        var b = Cyborg.Female;
+        var hand = Cyborg.Module(b, BodySlot.HandL);
+        var head = Cyborg.Module(b, BodySlot.Head);
+        var jet = Catalog.Get("ATE-JT-250").Build()!;
+        var hs = Catalog.Get("ATE-HS-G").Build()!;
+        Assert.True(Rules.Check(JoinMethod.Wear, hand, jet).Ok);
+        Assert.False(Rules.Check(JoinMethod.Wear, Cyborg.Module(b, BodySlot.ThighL), jet).Ok);
+        Assert.True(Rules.Check(JoinMethod.Wear, head, hs).Ok);
+        Assert.False(Rules.Check(JoinMethod.Wear, hand, hs).Ok);
+        Assert.Empty(Rules.Check(JoinMethod.Wear, hand, jet).Consumes); // 공구·소모품 없이
+    }
+
+    [Fact]
+    public void RealThrustersCannotLiftABodyButFictionalOnesCan()
+    {
+        // 실제: 마이크로 제트 터빈 250 N × 2 = 500 N < 60 kg 몸 + 5.2 kg 의 무게 640 N
+        var real = Enumerable.Repeat(Catalog.Get("ATE-JT-250").Build()!, 2);
+        Assert.True(Cyborg.LiftAcceleration(Cyborg.Female.Mass, real) < 0);
+        // 가상: 양자 추력기 700 N × 2 = 1400 N > 61.8 kg 의 무게 606 N
+        var quantum = Enumerable.Repeat(Catalog.Get("ATE-QW-1").Build()!, 2);
+        Assert.True(Cyborg.LiftAcceleration(Cyborg.Female.Mass, quantum) > 5);
+        Assert.True(Catalog.Get("ATE-QW-1").Build()!.Fictional);
     }
 }

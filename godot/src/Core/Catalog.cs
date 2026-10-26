@@ -212,6 +212,39 @@ public static class Catalog
         new("MC-HINGE-75", "기구", "강철 경첩 75 mm", "개당, 나사 포함", 2000, "개") { PackQty = 1 },
         new("MC-LM8UU", "기구", "리니어 부싱 LM8UU", "8 mm 축용, 개당", 1500, "개") { PackQty = 1 },
         new("MC-RODEND-M8", "기구", "로드엔드 볼조인트 M8", "개당", 4000, "개") { PackQty = 1 },
+        // ---- Android Tool Environment: 몸에 차는 기기 ----
+        new("ATE-JT-250", "Android Tool", "손목 제트 추력기 JT-250", "마이크로 가스터빈, 추력 250 N, 2.6 kg, 등유 1.5 L. 시계처럼 손목에 찬다", 4800000, "개")
+        {
+            Make = (_, _) => Def("ate-jt-250", "손목 제트 추력기 JT-250", Shape.Cylinder(0.055f, 0.30f), Materials.Titanium,
+                "실제 마이크로 제트 터빈과 같은 추력. 둘로는 사람 하나를 띄우지 못한다.", 2.6f)
+                with { Role = PartRole.Wearable, Wear = WearSlot.Wrist, ThrustN = 250 },
+        },
+        new("ATE-QW-1", "Android Tool", "양자 손목 추력기 Q-W1 (가상 부품)", "추력 700 N, 0.9 kg — 현실에 없는 추력 대 무게비", 9500000, "개")
+        {
+            Make = (_, _) => Def("ate-qw-1", "양자 손목 추력기 Q-W1", Shape.Cylinder(0.04f, 0.12f), Materials.Titanium,
+                "가상 부품. 손목 둘이면 사람 하나를 띄운다.", 0.9f)
+                with
+                {
+                    Role = PartRole.Wearable, Wear = WearSlot.Wrist, ThrustN = 700, Fictional = true,
+                    RealEquivalentKo = "마이크로 제트 터빈 250 N × 3개 (약 7.8 kg) — 실제 제트 슈트는 팔·등에 5개를 단다",
+                },
+        },
+        new("ATE-HS-G", "Android Tool", "헤드셋형 자세 안정기 HS-G", "기계식 자이로 + 진공관 서보, 0.45 kg. 헤드폰처럼 머리에 쓴다", 1200000, "개")
+        {
+            Make = (_, _) => Def("ate-hs-g", "헤드셋형 자세 안정기 HS-G", Shape.Box(0.19f, 0.06f, 0.08f), Materials.Aluminium,
+                "비행 중 자세를 잡아 준다. 없으면 추력이 흔들린다.", 0.45f)
+                with { Role = PartRole.Wearable, Wear = WearSlot.Head, RealEquivalentKo = "관성 측정 장치(IMU) + 추력 벡터 제어기" },
+        },
+        new("ATE-MSU-2", "Android Tool", "대사 지원 유닛 MSU-2 (가상 부품)", "산소화·영양 공급·체온 조절, 2.4 kg. 흉부 프레임 안에 들어간다", 6800000, "개")
+        {
+            Make = (_, _) => Def("ate-msu-2", "대사 지원 유닛 MSU-2", Shape.Box(0.18f, 0.12f, 0.08f), Materials.Titanium,
+                "배양 장기 코어의 물리·대사 활동을 보장한다.", 2.4f)
+                with
+                {
+                    Role = PartRole.LifeSupport, Fictional = true,
+                    RealEquivalentKo = "체외막산소공급기(ECMO) + 투석기 + 열교환기 — 실제로는 병상 한 칸 크기",
+                },
+        },
         new(Cyborg.Connector, "사이보그 모듈", "모듈 커넥터", "볼트 4개 + 전원·신호 접점. 몸 모듈 하나를 붙일 때 1개", 85000, "개") { PackQty = 1 },
     ];
 

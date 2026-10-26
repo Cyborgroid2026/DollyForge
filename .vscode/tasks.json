@@ -1,6 +1,6 @@
 {
     // Dolly Forge 실행: Terminal > Run Task... > "Dolly Forge: 실행"
-    // CC0 실사 에셋을 (처음 한 번) 내려받고, Godot C# 프로젝트를 빌드한 뒤 게임 창을 띄운다.
+    // CC0 실사 에셋을 (처음 한 번) 내려받고, Rust 월드 서버를 띄운 뒤, Godot C# 게임 창을 연다.
     "version": "2.0.0",
     "options": {
         "env": {
@@ -11,7 +11,7 @@
         {
             "label": "Dolly Forge: 실행",
             "dependsOrder": "sequence",
-            "dependsOn": ["assets: 실사 에셋 내려받기", "godot: C# 빌드·에셋 가져오기"],
+            "dependsOn": ["assets: 실사 에셋 내려받기", "server: Rust 월드 서버", "godot: C# 빌드·에셋 가져오기"],
             "type": "shell",
             "command": "\"$GODOT\" --path godot",
             "options": { "cwd": "${workspaceFolder}" },
@@ -25,6 +25,27 @@
             "options": { "cwd": "${workspaceFolder}" },
             "presentation": { "reveal": "silent" },
             "problemMatcher": []
+        },
+        {
+            // 개발 모드: SMS 대신 인증 코드를 화면에 표시한다
+            "label": "server: Rust 월드 서버",
+            "type": "shell",
+            "command": "cargo run",
+            "options": {
+                "cwd": "${workspaceFolder}/server",
+                "env": { "DOLLY_DEV_ECHO_CODE": "1" }
+            },
+            "isBackground": true,
+            "presentation": { "group": "dolly", "panel": "dedicated" },
+            "problemMatcher": {
+                "owner": "dolly-server",
+                "pattern": { "regexp": "^__never_matches__$" },
+                "background": {
+                    "activeBegins": true,
+                    "beginsPattern": "Compiling|Finished|Running",
+                    "endsPattern": "\\[server\\] Dolly Forge"
+                }
+            }
         },
         {
             "label": "godot: C# 빌드·에셋 가져오기",
@@ -42,7 +63,7 @@
             "problemMatcher": []
         },
         {
-            "label": "test: 코어 단위 테스트 (재료·관절·구매·내보내기)",
+            "label": "test: 코어 단위 테스트 (재료·관절·구매·사이보그·내보내기)",
             "type": "shell",
             "command": "dotnet test",
             "options": { "cwd": "${workspaceFolder}/tools/DollyForge.Core.Tests" },
@@ -50,11 +71,28 @@
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "test: 엔진 자체 시험 (구매→축 결합→주행→내보내기)",
+            "label": "test: 엔진 자체 시험 (구매→결합→주행→양자 아날로그→비행→내보내기)",
             "dependsOn": ["godot: C# 빌드·에셋 가져오기"],
             "type": "shell",
             "command": "\"$GODOT\" --path godot --resolution 1280x720 -- --selftest && python3 tools/validate/check_exports.py godot/exports",
             "options": { "cwd": "${workspaceFolder}" },
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "test: 엔진 통신망 시험 (서버 실행 중일 때)",
+            "dependsOn": ["godot: C# 빌드·에셋 가져오기"],
+            "type": "shell",
+            "command": "\"$GODOT\" --path godot --resolution 1280x720 -- --onlinetest --delivery=1",
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "test: 서버 통합 시험 봇 (서버 실행 중일 때)",
+            "type": "shell",
+            "command": "dotnet run -- ws://127.0.0.1:7700",
+            "options": { "cwd": "${workspaceFolder}/tools/DollyForge.Bot" },
             "group": "test",
             "problemMatcher": []
         },

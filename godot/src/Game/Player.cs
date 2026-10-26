@@ -46,6 +46,70 @@ public partial class Player : CharacterBody3D
     public string ToolName => Tools[_tool].NameKo;
     public float EyeHeight { get; set; } = 1.55f;
 
+    // ------------------------------------------------------------------ Android Tool Environment: 몸에 찬 기기·비행
+
+    /// <summary>몸 질량 (kg): Android Cyborg 모듈 합 = 실제 체중</summary>
+    public float BodyMassKg { get; set; } = Cyborg.Female.Mass;
+    /// <summary>몸에 찬 기기들과 남은 연료 (kg, 제트 터빈만)</summary>
+    public List<(PartDef Gear, float FuelKg)> Worn { get; } = new();
+    /// <summary>자동 시험용: 참이면 추력 키를 누른 것으로 친다</summary>
+    public bool ThrottleOverride { get; set; }
+    readonly RandomNumberGenerator _wobble = new();
+    const float JetFuelKg = 1.2f, JetBurnKgPerSec = 0.01f; // 등유 1.5 L, 최대 추력에서 분당 0.6 kg
+
+    public float TotalMassKg => BodyMassKg + Worn.Sum(w => w.Gear.Mass + w.FuelKg);
+
+    public string Wear(PartBody gear)
+    {
+        var def = gear.Part.Def;
+        if (def.Wear is not { } slot) return "몸에 찰 수 있는 기기가 아닙니다.";
+        var limit = slot == WearSlot.Wrist ? 2 : 1;
+        if (Worn.Count(w => w.Gear.Wear == slot) >= limit)
+            return slot == WearSlot.Wrist ? "두 손목이 모두 차 있습니다. (H 로 벗기)" : "이미 머리에 쓰고 있습니다. (H 로 벗기)";
+        Worn.Add((def, def.Role == PartRole.Wearable && def.ThrustN > 0 && !def.Fictional ? JetFuelKg : 0));
+        Devices.Remove(gear);
+        var lift = Cyborg.LiftAcceleration(BodyMassKg, Worn.Select(w => w.Gear));
+        var thrust = Worn.Sum(w => w.Gear.ThrustN);
+        return $"{def.NameKo} 착용 ({(slot == WearSlot.Wrist ? "손목" : "머리")}) — 추력 합 {thrust:0} N, 몸무게 {TotalMassKg * 9.81f:0} N → " +
+               (thrust <= 0 ? "비행 불가" : lift > 0 ? $"상승 가속 +{lift:0.0} m/s², Space 를 누르고 있으면 난다" : $"떠오르지 못함 (가속 {lift:0.0} m/s²) — 낙하만 늦춘다");
+    }
+
+    public string TakeOffAll()
+    {
+        if (Worn.Count == 0) return "찬 기기가 없습니다.";
+        var front = GlobalPosition - GlobalBasis.Z * 0.8f + Vector3.Up * 0.6f;
+        var i = 0;
+        foreach (var (gear, _) in Worn) Devices.Spawn(gear, new Transform3D(Basis.Identity, front + GlobalBasis.X * (i++ * 0.25f - 0.25f)));
+        var n = Worn.Count;
+        Worn.Clear();
+        return $"기기 {n}개를 벗어 내려놓았습니다.";
+    }
+
+    /// <summary>추력: 몸에 찬 추력기의 합력 / 전체 질량. 자세 안정기가 없으면 추력 방향이 흔들린다.</summary>
+    Vector3 ThrustAcceleration(float dt, Vector3 wish)
+    {
+        var thrusting = ThrottleOverride || Input.IsActionPressed("jump");
+        if (!thrusting || Worn.Count == 0) return Vector3.Zero;
+        var force = 0f;
+        for (var i = 0; i < Worn.Count; i++)
+        {
+            var (gear, fuel) = Worn[i];
+            if (gear.ThrustN <= 0) continue;
+            if (!gear.Fictional)
+            {
+                if (fuel <= 0) continue; // 연료가 떨어진 터빈
+                Worn[i] = (gear, Mathf.Max(0, fuel - JetBurnKgPerSec * dt));
+            }
+            force += gear.ThrustN;
+        }
+        if (force <= 0) return Vector3.Zero;
+        // 추력 방향: 대부분 위, 이동 입력 쪽으로 약간 기울인다
+        var dir = (Vector3.Up * 0.88f + wish.LimitLength(1) * 0.35f).Normalized();
+        if (!Worn.Any(w => w.Gear.Wear == WearSlot.Head))
+            dir = (dir + new Vector3(_wobble.RandfRange(-0.35f, 0.35f), 0, _wobble.RandfRange(-0.35f, 0.35f))).Normalized();
+        return dir * force / TotalMassKg;
+    }
+
     public override void _Ready()
     {
         CollisionLayer = PartBody.LayerPlayer;
@@ -134,6 +198,12 @@ public partial class Player : CharacterBody3D
             case Key.F8 when _aimBody is not null:
                 Notify?.Invoke(Devices.ExportDevice(_aimBody));
                 break;
+            case Key.G when _aimBody is not null:
+                Notify?.Invoke(Wear(_aimBody));
+                break;
+            case Key.H:
+                Notify?.Invoke(TakeOffAll());
+                break;
             case Key.F5 when _aimBody is not null:
                 Stow?.Invoke(_aimBody);
                 break;
@@ -192,8 +262,10 @@ public partial class Player : CharacterBody3D
         var target = wish.LimitLength(1) * speed;
         var horizontal = new Vector3(v.X, 0, v.Z).MoveToward(target, (IsOnFloor() ? GroundAccel : AirAccel) * dt);
         v = new Vector3(horizontal.X, v.Y, horizontal.Z);
-        if (IsOnFloor() && Input.IsActionJustPressed("jump")) v.Y = JumpSpeed;
-        if (!IsOnFloor()) v.Y -= Gravity * dt;
+        if (IsOnFloor() && Input.IsActionJustPressed("jump") && Worn.All(w => w.Gear.ThrustN <= 0)) v.Y = JumpSpeed;
+        var thrust = ThrustAcceleration(dt, wish);
+        v += thrust * dt;
+        if (!IsOnFloor() || thrust.Y > Gravity) v.Y -= Gravity * dt;
         Velocity = v;
         MoveAndSlide();
 
@@ -261,6 +333,7 @@ public partial class Player : CharacterBody3D
             extra += d.Role == PartRole.Battery ? $"\n잔량 {_aimBody.EnergyJ / 3600:0.0} / {d.Electrical!.CapacityWh:0} Wh" :
                         d.Role == PartRole.Controller ? $"\n출력 {Devices.Knob(_aimBody.Part.Id) * 100:+0;-0;0}% · [ ] 로 조절" :
                         d.Role == PartRole.Sequencer ? "\nE — 캠 핀 다시 꽂기" :
+                        d.Wear is { } ws ? $"\nG — {(ws == WearSlot.Wrist ? "손목에 차기" : "머리에 쓰기")}" + (d.ThrustN > 0 ? $" · 추력 {d.ThrustN:0} N" : "") :
                         d.ShaftMm > 0 ? $"\n축 Ø{d.ShaftMm} mm" : d.BoreMm > 0 ? $"\n구멍 Ø{d.BoreMm} mm" : "";
             var sel = _selected == _aimBody ? "\n[기준 부품]" : "";
             _tag.Text = $"{d.NameKo}\n{d.Mass:0.###} kg · ₩{d.PriceKrw:N0}{extra}{sel}";

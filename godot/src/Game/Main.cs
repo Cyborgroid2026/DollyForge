@@ -132,6 +132,7 @@ public partial class Main : Node3D
         {
             case LoginOk ok:
                 _player.EyeHeight = ok.Gender == 1 ? 1.67f : 1.55f;
+                _player.BodyMassKg = Cyborg.Of(ok.Gender).Mass;
                 CloseLogin();
                 Notify($"통신망 접속 — 전신 사이보그 #{ok.PlayerId}. E 카탈로그 · F5 창고에 넣기 · F6 창고 · F8 내보내기");
                 break;

@@ -137,5 +137,32 @@ public partial class SelfTest : Node
         Check(net > full * 1.0f && net < full * 3.5f && reversed,
             $"캠 드럼 8초: 순이동 {net:0.00} m (전속 8초면 {full * 8:0.0} m), 최대 {MathF.Abs(maxAlong):0.00} m 후 되돌아옴");
         Devices.TogglePower(c3);
+
+        // 6. Android Tool Environment: 손목 추력기 (시계처럼 찬다)
+        var player = GetTree().Root.GetNode<Main>("Main").PlayerNode;
+        player.GlobalPosition = new Vector3(-10, World().HeightAt(-10, 30) + 0.3f, 30);
+        await Wait(0.8);
+        foreach (var sku in new[] { "ATE-JT-250", "ATE-JT-250" })
+            GD.Print("  " + player.Wear(Devices.Spawn(Catalog.Get(sku).Build()!, new Transform3D(Basis.Identity, player.GlobalPosition + Vector3.Up * 3))));
+        var y0 = player.GlobalPosition.Y;
+        player.ThrottleOverride = true;
+        await Wait(2.0);
+        var realRise = player.GlobalPosition.Y - y0;
+        Check(realRise < 0.2f, $"실제 제트 터빈 250 N × 2: 60 kg 몸을 띄우지 못함 (상승 {realRise:0.00} m)");
+        player.ThrottleOverride = false;
+        GD.Print("  " + player.TakeOffAll());
+        foreach (var sku in new[] { "ATE-QW-1", "ATE-QW-1", "ATE-HS-G" })
+            GD.Print("  " + player.Wear(Devices.Spawn(Catalog.Get(sku).Build()!, new Transform3D(Basis.Identity, player.GlobalPosition + Vector3.Up * 3))));
+        await Wait(0.5);
+        y0 = player.GlobalPosition.Y;
+        player.ThrottleOverride = true;
+        await Wait(1.5);
+        var quantumRise = player.GlobalPosition.Y - y0;
+        player.ThrottleOverride = false;
+        // 1400 N / 62.25 kg − 9.81 ≈ 12.7 m/s² → 1.5 초에 이론상 약 14 m
+        Check(quantumRise > 5f, $"양자 추력기(가상) 700 N × 2 + 자세 안정기: 비행 상승 {quantumRise:0.0} m / 1.5 s");
+        player.TakeOffAll();
     }
+
+    World World() => GetTree().Root.GetNode<Main>("Main").GetChildren().OfType<World>().First();
 }

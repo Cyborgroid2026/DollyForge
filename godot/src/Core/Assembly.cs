@@ -37,9 +37,16 @@ public sealed record PartDef(
     /// </summary>
     public bool Fictional { get; init; }
     public string? RealEquivalentKo { get; init; }
+    /// <summary>추력 N (비행용 장착 기기)</summary>
+    public float ThrustN { get; init; }
+    /// <summary>장착 자리 (장착 기기만)</summary>
+    public WearSlot? Wear { get; init; }
 }
 
-public enum PartRole { Structure, Profile, Shaft, Bearing, Wheel, Motor, Battery, Controller, Sequencer, Display }
+public enum PartRole { Structure, Profile, Shaft, Bearing, Wheel, Motor, Battery, Controller, Sequencer, Display, BioCore, LifeSupport, Wearable }
+
+/// <summary>몸에 차는 기기의 자리: 손목(시계처럼), 머리(헤드폰처럼)</summary>
+public enum WearSlot { Wrist, Head }
 
 /// <summary>전기 사양: 정격 전압 V, 배터리 용량 Wh, 모터 정격 전류 A</summary>
 public sealed record ElectricalSpec(float Volts, float CapacityWh = 0, float RatedCurrentA = 0);

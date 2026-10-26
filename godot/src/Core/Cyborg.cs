@@ -6,8 +6,12 @@ namespace DollyForge.Core;
 public enum BodySlot { Pelvis, Torso, Head, UpperArmL, UpperArmR, ForearmL, ForearmR, HandL, HandR, ThighL, ThighR, ShinL, ShinR, FootL, FootR }
 
 /// <summary>
-/// 전신 사이보그: 수술로 사람을 사이보그로 옮겨 조립한 몸. 몸 전체가 모듈로 되어 있어
-/// 로봇처럼 계속 떼고 붙이며 개조할 수 있다 (같은 부품·관절·URDF 체계).
+/// Android Cyborg (안드로이드 사이보그): 사람과 로봇이 합쳐진 몸.
+///  · Cyborg — 생체 쪽. 사람의 몸을 로봇에 옮겨 넣어 자유롭게 움직이게 하는 것이 목적이며,
+///    로봇이라기보다 줄기세포·장기 배양체(배양 장기 코어)와 신경 중추다.
+///  · Android Tool Environment (ATE) — 기계 쪽. 대사 지원 유닛이 물리·대사 활동을 보장하고,
+///    모듈식 몸이 로봇으로서 기능한다. 비행 같은 기능은 시계·헤드폰처럼 몸에 차는 기기로 더한다.
+/// 몸 전체가 모듈이라 로봇처럼 계속 떼고 붙이며 개조할 수 있다 (같은 부품·관절·URDF 체계).
 ///
 /// 치수와 질량은 실제 사람 인체 측정 자료(Winter 의 분절 비율)를 따른다:
 /// 키 H 에 대한 분절 길이, 체중 M 에 대한 분절 질량. 관절 가동 범위는 사람의 정상 범위,
@@ -59,18 +63,32 @@ public static class Cyborg
         [BodySlot.FootL] = BodySlot.ShinL, [BodySlot.FootR] = BodySlot.ShinR,
     };
 
+    public const float OrganCoreKg = 3.5f;
+    public const float LifeSupportKg = 2.4f;
+
+    /// <summary>배양 장기 코어: 줄기세포에서 기른 장기 배양체 (Cyborg 의 생체 쪽). 현재 기술로는 불가능 → 가상 부품.</summary>
+    public static PartDef OrganCore(BodyType body) => new(
+        $"cy_{(body.Gender == 1 ? "m" : "f")}_organs", $"{body.NameKo} 배양 장기 코어", Shape.Cylinder(0.07f, 0.2f), Materials.Titanium,
+        "줄기세포·장기 배양체. 사람 몸에서 옮겨 온 생체 부분이며 대사 지원 유닛이 살려 둔다.", OrganCoreKg)
+    {
+        Sku = $"CY-{(body.Gender == 1 ? "M" : "F")}-ORGANS", Role = PartRole.BioCore, PriceKrw = 0, Fictional = true,
+        RealEquivalentKo = "현실 대체 없음 — 장기 오가노이드는 연구 단계 (수 mm 크기)",
+    };
+
     /// <summary>모듈 부품 정의. 질량은 실제 분절 질량, 구동기는 그 분절을 매다는 관절의 것.</summary>
     public static PartDef Module(BodyType body, BodySlot slot)
     {
         var seg = Segments.First(s => s.Slot == slot);
         var head = slot == BodySlot.Head;
+        // 흉부 프레임의 질량에서 안에 든 배양 장기 코어·대사 지원 유닛을 뺀다 (몸 전체 = 실제 체중)
+        var mass = body.Mass * seg.MassFrac - (slot == BodySlot.Torso ? OrganCoreKg + LifeSupportKg : 0);
         return new PartDef(
             $"cy_{(body.Gender == 1 ? "m" : "f")}_{slot.ToString().ToLowerInvariant()}",
             $"{body.NameKo} {seg.NameKo}",
             seg.Shape(body),
             Materials.Titanium,
             $"전신 사이보그 모듈. {seg.ActuatorKo}" + (seg.Torque > 0 ? $" (최대 {seg.Torque} N·m)" : "") + ". 모듈 커넥터로 떼고 붙인다.",
-            body.Mass * seg.MassFrac,
+            mass,
             seg.Torque > 0 ? new ActuatorSpec(seg.Torque, seg.Speed, 0) : null)
         {
             Sku = $"CY-{(body.Gender == 1 ? "M" : "F")}-{slot.ToString().ToUpperInvariant()}",
@@ -112,7 +130,7 @@ public static class Cyborg
 
         PartInstance Put(BodySlot slot, Vector3 at, Quaternion rot) => parts[slot] = a.AddPart(Module(b, slot), new Pose(at, rot));
         Put(BodySlot.Pelvis, new(feet.X, hipY, feet.Z), Quaternion.Identity);
-        Put(BodySlot.Torso, new(feet.X, hipY + pelvisH / 2 + torsoH / 2, feet.Z), Quaternion.Identity);
+        var torso = Put(BodySlot.Torso, new(feet.X, hipY + pelvisH / 2 + torsoH / 2, feet.Z), Quaternion.Identity);
         Put(BodySlot.Head, new(feet.X, shoulderY + 0.05f * H + 0.105f * H / 1.7f, feet.Z), Quaternion.Identity);
         foreach (var (side, ua, fa, hd, th, sh, ft) in new[]
                  {
@@ -129,6 +147,12 @@ public static class Cyborg
             Put(sh, new(hx, hipY - thighL - shinL / 2, feet.Z), up);
             Put(ft, new(hx, feet.Y + footH / 2, feet.Z - 0.152f * H * 0.3f), Quaternion.Identity);
         }
+
+        // 흉부 안: 생체 쪽(배양 장기 코어)과 ATE 의 대사 지원 유닛. 그 질량만큼 흉부 프레임은 가볍다.
+        var organs = a.AddPart(OrganCore(b), new Pose(torso.Pose.Position + new Vector3(0, 0.03f, 0), Quaternion.Identity));
+        var msu = a.AddPart(Catalog.Get("ATE-MSU-2").Build()!, new Pose(torso.Pose.Position + new Vector3(0, -0.1f, 0.02f), Quaternion.Identity));
+        a.AddJoint(JointKind.Fixed, torso, organs, organs.Pose.Position, Vector3.UnitX).Consumed[Connector] = 1;
+        a.AddJoint(JointKind.Fixed, torso, msu, msu.Pose.Position, Vector3.UnitX).Consumed[Connector] = 1;
 
         // 관절: 자식 모듈의 몸 쪽 끝(근위단)에 둔다. 굽힘 축은 좌우(X) — 무릎은 뒤로, 팔꿈치는 앞으로만 접힌다.
         foreach (var (child, parent) in ParentOf)
@@ -148,6 +172,17 @@ public static class Cyborg
         j.Effort = seg.Torque;
         j.Velocity = seg.Speed;
         j.Consumed[Connector] = 1;
+    }
+
+    /// <summary>
+    /// 비행: 몸에 찬 추력기의 합력으로 낼 수 있는 수직 가속도 (m/s², 중력 포함).
+    /// 0 보다 커야 떠오른다. 실제 마이크로 제트 터빈 둘(500 N)로는 사람 하나를 띄우지 못한다.
+    /// </summary>
+    public static float LiftAcceleration(float bodyMassKg, IEnumerable<PartDef> worn)
+    {
+        var gear = worn.ToList();
+        var mass = bodyMassKg + gear.Sum(g => g.Mass);
+        return gear.Sum(g => g.ThrustN) / mass - 9.81f;
     }
 
     /// <summary>

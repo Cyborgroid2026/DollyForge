@@ -1,7 +1,7 @@
 namespace DollyForge.Core;
 
 /// <summary>사람이 실제로 쓰는 체결·결합 방법. 각 방법은 관절 종류 하나로 이어진다.</summary>
-public enum JoinMethod { Weld, Bolt, Screw, Axle, Hinge, Slide, Ball }
+public enum JoinMethod { Weld, Bolt, Screw, Axle, Hinge, Slide, Ball, Wear }
 
 /// <summary>결합 가능 여부, 이유, 소모되는 체결 부품, 모터 구동 여부</summary>
 public sealed record JoinCheck(bool Ok, string ReasonKo, IReadOnlyDictionary<string, int> Consumes, JointKind Kind, bool Driven = false);
@@ -14,12 +14,29 @@ public static class Rules
 {
     static readonly IReadOnlyDictionary<string, int> None = new Dictionary<string, int>();
 
+    /// <summary>장착: 손목 기기는 손·전완 모듈에, 머리 기기는 머리 모듈에 찬다 (공구 없이, 시계·헤드폰처럼).</summary>
+    static JoinCheck CheckWear(PartDef body, PartDef gear)
+    {
+        if (gear.Wear is null) (body, gear) = (gear, body);
+        if (gear.Wear is not { } slot) return new(false, "몸에 찰 수 있는 기기가 아닙니다.", None, JointKind.Fixed);
+        var at = Cyborg.SlotOf(body);
+        var ok = slot switch
+        {
+            WearSlot.Wrist => at is BodySlot.HandL or BodySlot.HandR or BodySlot.ForearmL or BodySlot.ForearmR,
+            _ => at is BodySlot.Head,
+        };
+        return ok
+            ? new(true, slot == WearSlot.Wrist ? "손목에 참" : "머리에 씀", None, JointKind.Fixed)
+            : new(false, slot == WearSlot.Wrist ? "손목 기기는 손이나 전완 모듈에 찹니다." : "머리 기기는 머리 모듈에 씁니다.", None, JointKind.Fixed);
+    }
+
     static bool IsMetal(MaterialDef m) => m.Id is "steel_s235" or "cast_iron" or "al6061_t6" or "ti6al4v" or "brass_c260" or "copper";
     static bool IsWood(MaterialDef m) => m.Id is "pine" or "oak";
     static string WeldFamily(MaterialDef m) => m.Id is "al6061_t6" ? "al" : m.Id is "steel_s235" ? "steel" : m.Id is "ti6al4v" ? "ti" : "";
 
     public static JoinCheck Check(JoinMethod method, PartDef a, PartDef b)
     {
+        if (method == JoinMethod.Wear) return CheckWear(a, b);
         static JoinCheck No(string why, JointKind k) => new(false, why, None, k);
         var delicate = new[] { PartRole.Bearing, PartRole.Motor, PartRole.Battery, PartRole.Controller, PartRole.Sequencer, PartRole.Display };
         switch (method)

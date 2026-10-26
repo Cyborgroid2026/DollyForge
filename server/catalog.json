@@ -338,6 +338,42 @@
       "fictional": false
     },
     {
+      "sku": "ATE-JT-250",
+      "nameKo": "손목 제트 추력기 JT-250",
+      "category": "Android Tool",
+      "priceKrw": 4800000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "ATE-QW-1",
+      "nameKo": "양자 손목 추력기 Q-W1 (가상 부품)",
+      "category": "Android Tool",
+      "priceKrw": 9500000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": true
+    },
+    {
+      "sku": "ATE-HS-G",
+      "nameKo": "헤드셋형 자세 안정기 HS-G",
+      "category": "Android Tool",
+      "priceKrw": 1200000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "ATE-MSU-2",
+      "nameKo": "대사 지원 유닛 MSU-2 (가상 부품)",
+      "category": "Android Tool",
+      "priceKrw": 6800000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": true
+    },
+    {
       "sku": "MC-MODULE-LINK",
       "nameKo": "모듈 커넥터",
       "category": "사이보그 모듈",
@@ -743,6 +779,30 @@
       "lengthMm": 0,
       "widthMm": 0,
       "unitKrw": 4000
+    },
+    {
+      "sku": "ATE-JT-250",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 4800000
+    },
+    {
+      "sku": "ATE-QW-1",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 9500000
+    },
+    {
+      "sku": "ATE-HS-G",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1200000
+    },
+    {
+      "sku": "ATE-MSU-2",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 6800000
     },
     {
       "sku": "MC-MODULE-LINK",
