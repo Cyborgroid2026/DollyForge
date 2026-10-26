@@ -159,7 +159,7 @@ public sealed class GameSession(Engine engine, IJSRuntime js, NavigationManager 
                 MyId = ok.PlayerId;
                 Gender = ok.Gender;
                 Step = LoginStep.InGame;
-                _ = engine.EnterWorld();
+                _ = engine.EnterWorld(ok.Gender);
                 break;
             case StateUpdate s:
                 State = s.State;

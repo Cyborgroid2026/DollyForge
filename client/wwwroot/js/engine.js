@@ -3,10 +3,14 @@
 // 로컬 충돌, 원격 플레이어 보간만 맡고 결과를 C# 으로 콜백한다.
 import * as THREE from '../lib/three/three.module.min.js';
 import { VRButton } from '../lib/three/addons/webxr/VRButton.js';
+import { Reflector } from '../lib/three/addons/objects/Reflector.js';
+import { makeCyborg, outdoorEnvironment } from './body.js';
 
 const FENCE_R = 18, GATE_W = 1.6, WORLD_R = 60, REACH = 3.5, BODY_R = 0.3;
 const WALK = 3.5, RUN = 6.0, SEND_HZ = 10;
 const SPAWN = { x: -6.5, z: 0, yaw: Math.PI / 2 };
+const MIRROR = { x: -3.2, z: 3.4 };
+const SELF_LAYER = 1; // 내 몸은 1인칭 카메라에는 안 보이고 거울에만 비친다
 const HARAM_POS = { x: -22, z: -34 };
 const HOUSE_POS = { x: -27, z: -37 };
 const RES_COLORS = [0xb8c4cc, 0xdff2ff, 0xc87533, 0x4caf50];
@@ -19,6 +23,7 @@ let preview = null, previewAngle = 0, previewGender = 0;
 let hovered = 0, lastSend = 0, lastSent = { x: 0, z: 0, yaw: 0 };
 let towerRings = [], gateBars, haram, grave, pillars = [];
 let vrHud, vrCtx, vrTex, snapReady = true;
+let selfBody = null, selfSpeed = 0, lastSelf = { x: 0, z: 0 };
 const keys = {};
 const walls = [], circles = [], trees = [];
 const targets = [];               // 상호작용 가능한 루트 오브젝트 (userData.tid)
@@ -39,6 +44,10 @@ export function init(hostId, dotnetRef, stations, gender) {
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(host.clientWidth, host.clientHeight);
     renderer.xr.enabled = true;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.95;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     host.appendChild(renderer.domElement);
 
     scene = new THREE.Scene();
@@ -48,9 +57,18 @@ export function init(hostId, dotnetRef, stations, gender) {
     scene.add(rig);
     camera.position.y = 1.6;
 
-    hemi = new THREE.HemisphereLight(0xffffff, 0x445533, 0.9);
+    // 크롬이 실제 금속처럼 보이도록 주변 환경을 반사시킨다.
+    scene.environment = outdoorEnvironment(renderer);
+    hemi = new THREE.HemisphereLight(0xffffff, 0x445533, 0.5);
     sun = new THREE.DirectionalLight(0xffffff, 1.6);
-    scene.add(hemi, sun);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = sun.shadow.camera.bottom = -18;
+    sun.shadow.camera.right = sun.shadow.camera.top = 18;
+    sun.shadow.camera.far = 150;
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.02;
+    scene.add(hemi, sun, sun.target);
     scene.fog = new THREE.Fog(0xcfe8ff, 35, 120);
 
     buildWorld(stations);
@@ -75,9 +93,12 @@ export function showPreview(gender) {
     scene.add(preview);
 }
 
-export function enterWorld() {
+export function enterWorld(gender) {
     mode = 'world';
     if (preview) { scene.remove(preview); preview = null; }
+    selfBody = makeCyborg(gender);
+    selfBody.traverse(o => o.layers.set(SELF_LAYER));
+    scene.add(selfBody);
     camera.position.set(0, 1.6, 0);
     camera.rotation.set(0, 0, 0);
     teleport(SPAWN.x, 0, SPAWN.z, SPAWN.yaw);
@@ -119,7 +140,7 @@ export function upsertPlayer(id, gender, x, y, z, yawRad) {
         tag.position.y = 2.1;
         obj.add(tag);
         scene.add(obj);
-        r = { obj, to: { x, z, yaw: yawRad } };
+        r = { obj, to: { x, z, yaw: yawRad }, speed: 0 };
         remotes.set(id, r);
         obj.position.set(x, 0, z);
     }
@@ -187,6 +208,7 @@ function mat(color, opts = {}) {
 function box(w, h, d, color, x, y, z, parent = scene, opts) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, opts));
     m.position.set(x, y, z);
+    m.castShadow = m.receiveShadow = true;
     parent.add(m);
     return m;
 }
@@ -194,6 +216,7 @@ function box(w, h, d, color, x, y, z, parent = scene, opts) {
 function cyl(rt, rb, h, color, x, y, z, parent = scene, opts) {
     const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 16), mat(color, opts));
     m.position.set(x, y, z);
+    m.castShadow = m.receiveShadow = true;
     parent.add(m);
     return m;
 }
@@ -234,10 +257,12 @@ function rng(seed) {
 function buildWorld(stations) {
     const ground = new THREE.Mesh(new THREE.CircleGeometry(WORLD_R + 60, 64), mat(0x6f8f4e));
     ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
     scene.add(ground);
     const plaza = new THREE.Mesh(new THREE.CircleGeometry(FENCE_R, 64), mat(0x9c8f78));
     plaza.rotation.x = -Math.PI / 2;
     plaza.position.y = 0.01;
+    plaza.receiveShadow = true;
     scene.add(plaza);
     const path = new THREE.Mesh(new THREE.PlaneGeometry(3, 30), mat(0x8a7a5e));
     path.rotation.x = -Math.PI / 2;
@@ -251,6 +276,7 @@ function buildWorld(stations) {
     buildFence();
     buildHaramHouse();
     buildForest();
+    buildMirror();
 
     for (const s of stations) {
         const obj = buildStation(s);
@@ -271,6 +297,25 @@ function buildWorld(stations) {
     vrTex.colorSpace = THREE.SRGBColorSpace;
     vrHud = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.15), new THREE.MeshBasicMaterial({ map: vrTex, transparent: true }));
     setVrHud(['Dolly Forge']);
+}
+
+function buildMirror() {
+    const g = new THREE.Group();
+    g.position.set(MIRROR.x, 0, MIRROR.z);
+    g.rotation.y = Math.atan2(SPAWN.x - MIRROR.x, SPAWN.z - MIRROR.z);
+    const mirror = new Reflector(new THREE.PlaneGeometry(1.1, 2.1), {
+        textureWidth: 1024, textureHeight: 2048, color: 0xc8d0d8,
+    });
+    mirror.camera.layers.enableAll(); // 거울에는 내 몸(SELF_LAYER)도 비친다
+    mirror.position.set(0, 1.15, 0.03);
+    g.add(mirror);
+    box(1.24, 2.3, 0.06, 0x5a3e2b, 0, 1.15, -0.01, g);
+    box(0.5, 0.06, 0.4, 0x5a3e2b, 0, 0.03, -0.1, g);
+    const label = makeLabel('전신 거울', 0.8);
+    label.position.y = 2.55;
+    g.add(label);
+    scene.add(g);
+    circles.push({ x: MIRROR.x, z: MIRROR.z, r: 0.5 });
 }
 
 function buildPavilion(cx, back, color) {
@@ -367,6 +412,7 @@ function buildForest() {
         cyl(0.15, 0.22, 1.6, 0x5b3a22, 0, 0.8, 0, g);
         const leaves = new THREE.Mesh(new THREE.ConeGeometry(1.1, 2.6, 8), mat(0x2f6b3a + Math.floor(rand() * 0x101010)));
         leaves.position.y = 2.8;
+        leaves.castShadow = true;
         g.add(leaves);
         const base = 0.8 + rand() * 0.6;
         g.position.set(x, 0, z);
@@ -486,35 +532,6 @@ function buildStation(s) {
     return g;
 }
 
-function makeCyborg(gender) {
-    const g = new THREE.Group();
-    const ti = mat(0xd4dce2, { metalness: 0.45, roughness: 0.3 });
-    const dark = mat(0x3a4048, { metalness: 0.4, roughness: 0.5 });
-    const glow = mat(0x66e0ff, { emissive: 0x33ccff, emissiveIntensity: 1.6 });
-    const female = gender === 0;
-    const shoulder = female ? 0.19 : 0.25, hip = female ? 0.17 : 0.13;
-    const part = (geo, m, x, y, z, sx = 1, sy = 1, sz = 1) => {
-        const mesh = new THREE.Mesh(geo, m);
-        mesh.position.set(x, y, z);
-        mesh.scale.set(sx, sy, sz);
-        g.add(mesh);
-        return mesh;
-    };
-    part(new THREE.SphereGeometry(0.13, 24, 16), ti, 0, 1.68, 0, 1, 1.2, 1.05);   // 얼굴 없는 머리
-    part(new THREE.BoxGeometry(0.17, 0.025, 0.02), glow, 0, 1.7, 0.125);          // 바이저
-    part(new THREE.CylinderGeometry(0.05, 0.06, 0.12), dark, 0, 1.5, 0);
-    part(new THREE.CapsuleGeometry(0.15, 0.32, 6, 12), ti, 0, 1.18, 0, shoulder / 0.15, 1, 0.75);
-    part(new THREE.CircleGeometry(0.05, 16), glow, 0, 1.28, 0.115);              // 가슴 코어
-    part(new THREE.BoxGeometry(hip * 2.2, 0.16, 0.2), dark, 0, 0.88, 0);
-    for (const s of [-1, 1]) {
-        part(new THREE.CapsuleGeometry(0.045, 0.5, 4, 8), ti, s * (shoulder + 0.07), 1.12, 0);
-        part(new THREE.SphereGeometry(0.05), dark, s * (shoulder + 0.07), 1.38, 0);
-        part(new THREE.CapsuleGeometry(0.065, 0.66, 4, 8), ti, s * hip * 0.6, 0.42, 0);
-        part(new THREE.SphereGeometry(0.06), dark, s * hip * 0.6, 0.45, 0.03);
-    }
-    return g;
-}
-
 function makeHuman() {
     const g = new THREE.Group();
     const skin = mat(0xe0b896), cloth = mat(0x6a4c7a);
@@ -587,7 +604,7 @@ function applyLook() {
     const L = LOOKS[Math.min(phase, 3)];
     scene.background = new THREE.Color(L.sky);
     scene.fog.color.set(L.sky);
-    sun.position.set(...L.sun);
+    sun.position.copy(sun.target.position).add(new THREE.Vector3(...L.sun));
     sun.intensity = L.si;
     sun.color.set(L.sc);
     hemi.intensity = L.hi;
@@ -741,6 +758,14 @@ function sendMove(now) {
     dotnet.invokeMethodAsync('OnLocalMove', x, 0, z, yaw);
 }
 
+// 그림자 카메라를 플레이어 주변에 붙여 넓은 월드에서도 선명한 그림자를 유지한다.
+const sunOffset = new THREE.Vector3();
+function followShadow(x, z) {
+    sunOffset.copy(sun.position).sub(sun.target.position);
+    sun.target.position.set(x, 0, z);
+    sun.position.copy(sun.target.position).add(sunOffset);
+}
+
 // ---------- 프레임 ----------
 
 function frame(time) {
@@ -748,18 +773,34 @@ function frame(time) {
     for (const [i, r] of towerRings.entries()) r.rotation.z += dt * (0.4 + i * 0.3) * (i % 2 ? -1 : 1);
 
     if (mode === 'preview') {
-        previewAngle += dt * 0.35;
-        rig.position.set(Math.sin(previewAngle) * 3.2, 0, Math.cos(previewAngle) * 3.2);
+        previewAngle += dt * 0.3;
+        rig.position.set(Math.sin(previewAngle) * 2.6, 0, Math.cos(previewAngle) * 2.6);
         rig.rotation.y = 0;
-        camera.position.set(0, 1.4, 0);
-        camera.lookAt(0, 1.1, 0);
+        camera.position.set(0, 1.25, 0);
+        camera.lookAt(0, 0.95, 0);
+        preview?.userData.animate(dt, 0);
+        followShadow(0, 0);
     } else {
         updateMovement(dt);
         sendMove(time);
         const k = 1 - Math.exp(-10 * dt);
+        if (selfBody) {
+            const { x, z } = rig.position;
+            const v = Math.hypot(x - lastSelf.x, z - lastSelf.z) / Math.max(dt, 1e-3);
+            selfSpeed += (v - selfSpeed) * Math.min(1, dt * 10);
+            lastSelf = { x, z };
+            selfBody.position.set(x, 0, z);
+            selfBody.rotation.y = yaw + Math.PI;
+            selfBody.userData.animate(dt, selfSpeed);
+        }
+        followShadow(rig.position.x, rig.position.z);
         for (const r of remotes.values()) {
+            const px = r.obj.position.x, pz = r.obj.position.z;
             r.obj.position.x += (r.to.x - r.obj.position.x) * k;
             r.obj.position.z += (r.to.z - r.obj.position.z) * k;
+            const v = Math.hypot(r.obj.position.x - px, r.obj.position.z - pz) / Math.max(dt, 1e-3);
+            r.speed += (v - r.speed) * Math.min(1, dt * 10);
+            r.obj.userData.animate(dt, r.speed);
             let d = r.to.yaw + Math.PI - r.obj.rotation.y;
             d = Math.atan2(Math.sin(d), Math.cos(d));
             r.obj.rotation.y += d * k;

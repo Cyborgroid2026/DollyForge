@@ -21,7 +21,7 @@ public sealed class Engine(IJSRuntime js) : IAsyncDisposable
         _module is null ? ValueTask.CompletedTask : _module.InvokeVoidAsync(fn, args);
 
     public ValueTask ShowPreview(byte gender) => Call("showPreview", gender);
-    public ValueTask EnterWorld() => Call("enterWorld");
+    public ValueTask EnterWorld(byte gender) => Call("enterWorld", gender);
 
     public ValueTask SetWorld(PlayerState s) =>
         Call("setWorld", (int)s.Phase, s.Research, s.Years, s.HaramAlive, s.HaramAge);
