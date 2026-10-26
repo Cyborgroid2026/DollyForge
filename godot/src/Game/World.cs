@@ -46,15 +46,18 @@ public partial class World : Node3D
         AddChild(new Nature { World = this });
     }
 
-    /// <summary>아침 하늘 HDRI (Poly Haven qwantani_mid_morning) 속 해의 방향, 고도 약 40°</summary>
-    static readonly Vector3 HdriSun = new Vector3(0.450f, 0.645f, -0.617f).Normalized();
+    /// <summary>
+    /// 구름 낀 하늘 HDRI (Poly Haven kloofendal_48d_partly_cloudy) 속 해의 방향, 고도 약 48°.
+    /// 실제 사진에는 거의 언제나 구름이 있어서 맑기만 한 하늘 대신 쓴다. HDRI 의 가장 밝은 점에서 계산했다.
+    /// </summary>
+    static readonly Vector3 HdriSun = new Vector3(0.377f, 0.742f, -0.555f).Normalized();
     /// <summary>하늘을 돌려 해가 동남동에서 비치게 한다: 정류장에서 북쪽(작업장·도시)을 볼 때 오른쪽 옆빛</summary>
     const float SkyYaw = -1.32f;
     public static Vector3 SunDirection => HdriSun.Rotated(Vector3.Up, SkyYaw);
 
     void BuildEnvironment()
     {
-        const string hdri = "res://assets/hdri/qwantani_mid_morning_puresky.hdr";
+        const string hdri = "res://assets/hdri/kloofendal_48d_partly_cloudy_puresky.hdr";
         var sky = new Sky
         {
             SkyMaterial = new PanoramaSkyMaterial
@@ -84,7 +87,7 @@ public partial class World : Node3D
             SsrMaxSteps = 48,
             SdfgiEnabled = true,
             SdfgiUseOcclusion = true,
-            SdfgiCascades = 4,
+            SdfgiCascades = 3,
             SdfgiMinCellSize = 0.1f,
             SdfgiEnergy = 1.0f,
             // 언리얼 4 블룸: 문턱 없이 밝은 곳이 여러 크기로 넓게 번진다 (진공관·등·해)
@@ -139,13 +142,18 @@ public partial class World : Node3D
             LightEnergy = 1.9f,
             LightColor = new Color(1.0f, 0.92f, 0.82f),
             ShadowEnabled = true,
-            DirectionalShadowMaxDistance = 80f,
-            DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel4Splits,
+            DirectionalShadowMaxDistance = 60f,
+            DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel2Splits,
             LightAngularDistance = 0.5f, // 실제 태양의 시직경 (반그림자)
             LightVolumetricFogEnergy = 0.6f,
         };
         _sun.Basis = Basis.LookingAt(-SunDirection, Vector3.Up);
         AddChild(_sun);
+
+        // 내장 그래픽(Intel)에서도 끊기지 않게: 3D 는 67 % 해상도로 그리고 FSR 2 로 키운다 (TAA 를 겸한다).
+        // 측정: GPU 105 ms → 아래 그림자·SDFGI 조정과 함께 약 절반 (DOLLY_STREAM_STATS=1 로 확인)
+        GetViewport().Scaling3DMode = Viewport.Scaling3DModeEnum.Fsr2;
+        GetViewport().Scaling3DScale = 0.67f;
     }
 
     void BuildTerrain()

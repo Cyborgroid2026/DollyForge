@@ -174,10 +174,14 @@ public partial class BrowserStream : Node
 
         if (_stats)
         {
+            RenderingServer.ViewportSetMeasureRenderTime(GetViewport().GetViewportRid(), true);
             _statsTimer += delta;
             if (_statsTimer >= 5)
             {
-                GD.Print($"[stream] 렌더 {Engine.GetFramesPerSecond():0} fps · 전송 {(_frameSeq - _statsSeq) / _statsTimer:0.0} 장/초");
+                GD.Print($"[stream] 렌더 {Engine.GetFramesPerSecond():0} fps · 전송 {(_frameSeq - _statsSeq) / _statsTimer:0.0} 장/초 · " +
+                         $"처리 {Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000:0} ms · 물리 {Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000:0} ms · " +
+                         $"렌더 CPU {RenderingServer.ViewportGetMeasuredRenderTimeCpu(GetViewport().GetViewportRid()) + RenderingServer.GetFrameSetupTimeCpu():0} ms · " +
+                         $"GPU {RenderingServer.ViewportGetMeasuredRenderTimeGpu(GetViewport().GetViewportRid()):0} ms · 그리기 호출 {Performance.GetMonitor(Performance.Monitor.RenderTotalDrawCallsInFrame):0}");
                 _statsTimer = 0;
                 _statsSeq = _frameSeq;
             }
@@ -186,9 +190,45 @@ public partial class BrowserStream : Node
         _frameTimer += delta;
         if (Volatile.Read(ref _inFlight) >= MaxInFlight || _frameTimer < 1.0 / Fps) return;
         _frameTimer = 0;
-        var image = GetViewport().GetTexture().GetImage();
         var seq = ++_frameSeq;
         Interlocked.Increment(ref _inFlight);
+        // GPU 를 멈춰 세우지 않고 화면을 받는다: 렌더링은 계속되고, 데이터가 준비되면 콜백이 온다.
+        // 읽을 수 없는 형식이면 예전처럼 동기 읽기(GetImage)로 돌아간다.
+        if (!RequestFrameAsync(seq, ws))
+            Encode(GetViewport().GetTexture().GetImage(), seq, ws);
+    }
+
+    Rid _rdTexture;
+    Vector2I _rdSize;
+
+    bool RequestFrameAsync(long seq, WebSocket ws)
+    {
+        var rd = RenderingServer.GetRenderingDevice();
+        if (rd is null) return false;
+        var tex = GetViewport().GetTexture();
+        var size = new Vector2I(tex.GetWidth(), tex.GetHeight());
+        if (!_rdTexture.IsValid || size != _rdSize)
+        {
+            _rdTexture = RenderingServer.TextureGetRdTexture(tex.GetRid());
+            _rdSize = size;
+            if (!_rdTexture.IsValid) return false;
+            var format = rd.TextureGetFormat(_rdTexture).Format;
+            if (format is not (RenderingDevice.DataFormat.R8G8B8A8Unorm or RenderingDevice.DataFormat.R8G8B8A8Srgb))
+            {
+                GD.Print($"[stream] 화면 형식 {format} — 동기 읽기로 보냅니다");
+                _rdTexture = default;
+                _asyncUnsupported = true;
+            }
+        }
+        if (_asyncUnsupported || !_rdTexture.IsValid) return false;
+        var err = rd.TextureGetDataAsync(_rdTexture, 0, Callable.From<byte[]>(data =>
+            Encode(Image.CreateFromData(size.X, size.Y, false, Image.Format.Rgba8, data), seq, ws)));
+        return err == Error.Ok;
+    }
+    bool _asyncUnsupported;
+
+    void Encode(Image image, long seq, WebSocket ws)
+    {
         _ = Task.Run(async () =>
         {
             try
