@@ -253,6 +253,21 @@ public sealed class Assembly(string name)
         return sub;
     }
 
+    /// <summary>조립품 전체를 평행이동 (창고에서 꺼내 놓을 때)</summary>
+    public void Translate(Vector3 offset)
+    {
+        foreach (var p in Parts) p.Pose = p.Pose with { Position = p.Pose.Position + offset };
+        foreach (var j in Joints) j.Pivot += offset;
+    }
+
+    /// <summary>각 부품 형상의 가장 낮은 점 높이 (근사: 중심 − 외접 반경)</summary>
+    public float LowestPoint() => Parts.Min(p => p.Pose.Position.Y - (p.Def.Shape.Kind switch
+    {
+        ShapeKind.Box => p.Def.Shape.Size.Length() / 2,
+        ShapeKind.Cylinder => MathF.Sqrt(p.Def.Shape.Radius * p.Def.Shape.Radius + p.Def.Shape.Length * p.Def.Shape.Length / 4),
+        _ => p.Def.Shape.Radius,
+    }));
+
     public void RemovePart(int id)
     {
         Parts.RemoveAll(p => p.Id == id);

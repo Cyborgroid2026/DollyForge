@@ -21,6 +21,9 @@ public partial class Devices : Node3D
 
     public IEnumerable<PartBody> Bodies => _bodies.Values;
 
+    /// <summary>체결 소모품 사용·회수 알림 (온라인이면 서버 재고에 반영)</summary>
+    public Action<string, int>? OnConsume, OnRefund;
+
     public PartBody Spawn(PartDef def, Transform3D xform)
     {
         var part = World.AddPart(def, xform.Pose());
@@ -85,6 +88,7 @@ public partial class Devices : Node3D
         var joint = World.AddJoint(check.Kind, a.Part, b.Part, pivot.N(), axis.N(), lower, upper);
         foreach (var (k, v) in check.Consumes) joint.Consumed[k] = v;
         Shop.Consume(check.Consumes);
+        foreach (var (k, v) in check.Consumes) OnConsume?.Invoke(k, v);
         if (check.Driven)
         {
             var motor = a.Part.Def.Role == PartRole.Motor ? a : b;
@@ -216,7 +220,11 @@ public partial class Devices : Node3D
             if (_joints.Remove(j.Id, out var n)) n.Node.QueueFree();
             World.Joints.Remove(j);
         }
-        foreach (var (k, v) in back) Shop.Consumables[k] = Shop.Consumables.GetValueOrDefault(k) + v;
+        foreach (var (k, v) in back)
+        {
+            Shop.Consumables[k] = Shop.Consumables.GetValueOrDefault(k) + v;
+            OnRefund?.Invoke(k, v);
+        }
         var welds = removed.Count(j => j.Kind == JointKind.Fixed && j.Consumed.Count == 0);
         return $"관절 {removed.Count}개 해체" + (welds > 0 ? $" (용접 {welds}곳 절단)" : "") +
                (back.Count > 0 ? $", 회수: {string.Join(", ", back.Select(kv => $"{Catalog.Get(kv.Key).NameKo} {kv.Value}"))}" : "");
@@ -320,6 +328,25 @@ public partial class Devices : Node3D
         System.IO.File.WriteAllText(path + ".bom.md", md);
         System.IO.File.WriteAllText(path + ".bom.csv", csv);
         return $"내보냄: exports/{name}.(urdf|usda|stl|bom.md|bom.csv) — 부품 {dev.Parts.Count}개, {dev.TotalMass:0.###} kg, ₩{total:N0}";
+    }
+
+    /// <summary>
+    /// 기기를 월드에서 통째로 뺀다 (창고에 넣을 때). 체결 부품은 기기에 그대로 붙어 있으므로 회수하지 않는다.
+    /// </summary>
+    public void RemoveDevice(IEnumerable<int> partIds)
+    {
+        var ids = partIds.ToHashSet();
+        foreach (var j in World.Joints.Where(j => ids.Contains(j.Parent) || ids.Contains(j.Child)).ToList())
+        {
+            if (_joints.Remove(j.Id, out var n)) n.Node.QueueFree();
+            World.Joints.Remove(j);
+        }
+        foreach (var id in ids)
+        {
+            _running.Remove(id);
+            World.RemovePart(id);
+            if (_bodies.Remove(id, out var b)) b.QueueFree();
+        }
     }
 
     public void Remove(PartBody b)

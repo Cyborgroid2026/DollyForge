@@ -1,9 +1,10 @@
 //! Dolly Forge 월드 서버 진입점.
 //! 접속마다 읽기/쓰기 스레드를 두고, 게임 상태는 단일 게임 루프 스레드가 소유한다.
 
+mod catalog;
 mod data;
 mod game;
-mod physics;
+mod json;
 mod protocol;
 mod store;
 mod ws;
@@ -21,16 +22,19 @@ const MAX_MSGS_PER_SEC: u32 = 120;
 
 fn main() {
     let addr = env::var("DOLLY_ADDR").unwrap_or_else(|_| "127.0.0.1:7700".into());
-    let data_dir = env::var("DOLLY_DATA").unwrap_or_else(|_| "data/accounts".into());
+    let data_dir = env::var("DOLLY_DATA").unwrap_or_else(|_| "data".into());
+    let catalog_path = env::var("DOLLY_CATALOG").unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/catalog.json").into());
     let dev_echo = env::var("DOLLY_DEV_ECHO_CODE").map_or(false, |v| v == "1");
 
     let store = store::Store::open(&data_dir).expect("계정 저장소를 열 수 없습니다");
     let listener = TcpListener::bind(&addr).unwrap_or_else(|e| panic!("{addr} 바인드 실패: {e}"));
     let (tx, rx) = mpsc::channel::<Event>();
 
-    let mut game = Game::new(store, dev_echo);
+    let catalog = catalog::Catalog::load(&catalog_path).unwrap_or_else(|e| panic!("카탈로그를 읽을 수 없습니다: {e}"));
+    let items = catalog.items.len();
+    let mut game = Game::new(store, catalog, dev_echo);
     println!(
-        "[server] Dolly Forge 월드 서버 ws://{addr}  (계정 {}개, 데이터 {data_dir}{})",
+        "[server] Dolly Forge 월드 서버 ws://{addr}  (계정 {}개, 카탈로그 {items}품목, 데이터 {data_dir}{})",
         game.account_count(),
         if dev_echo { ", 개발 모드: 인증코드 클라이언트에 표시" } else { "" }
     );
@@ -45,20 +49,20 @@ fn main() {
         }
     });
 
-    let tick = Duration::from_secs_f32(1.0 / data::PHYSICS_HZ as f32);
+    let tick = Duration::from_secs_f32(1.0 / data::TICK_HZ as f32);
     let mut next_tick = Instant::now() + tick;
     let mut last_report = Instant::now();
     loop {
         let now = Instant::now();
         if now >= next_tick {
-            game.tick(tick.as_secs_f32());
+            game.tick();
             next_tick += tick;
             if next_tick < now {
                 next_tick = now + tick;
             }
-            if last_report.elapsed() > Duration::from_secs(60) {
+            if last_report.elapsed() > Duration::from_secs(30) {
                 last_report = Instant::now();
-                game.save_all();
+                game.save_dirty();
                 println!("[server] 접속 {}명", game.online_count());
             }
             continue;

@@ -11,6 +11,8 @@ public partial class CatalogUi : Control
 {
     public ShopAccount Shop { get; set; } = null!;
     public Action<List<PartDef>>? Ordered;
+    /// <summary>온라인이면 결제는 서버가 한다: 주문서를 넘기고 ShowResult 로 영수증을 받는다.</summary>
+    public Action<List<OrderLine>>? SubmitOnline;
     public Action? Closed;
 
     readonly List<OrderLine> _cart = new();
@@ -186,11 +188,27 @@ public partial class CatalogUi : Control
 
     void Checkout()
     {
+        if (SubmitOnline is not null)
+        {
+            if (_cart.Count == 0) return;
+            _summary.Text = "통신망으로 결제 요청 중…";
+            SubmitOnline([.. _cart]);
+            return;
+        }
         var (ok, msg, delivered) = Shop.Purchase(_cart);
         _summary.Text = msg;
         if (!ok) return;
         _cart.Clear();
         _cartText.Text = "(주문 완료)";
         Ordered?.Invoke(delivered);
+    }
+
+    /// <summary>서버 영수증 반영</summary>
+    public void ShowResult(bool ok, string message)
+    {
+        _summary.Text = message;
+        if (!ok) return;
+        _cart.Clear();
+        _cartText.Text = "(주문 완료)";
     }
 }

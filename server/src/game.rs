@@ -1,11 +1,11 @@
-//! 서버 권위 게임 상태. 단일 게임 루프 스레드가 소유한다.
-//! 마을 시설과 자원 노드는 모든 플레이어가 공유하고, 일상·연구·외출 진행과
-//! 하람의 나이(개인 시간선)는 플레이어별로 따로 흐른다.
-//! 위치는 클라이언트가 보내지 않는다. 입력만 받아 physics.rs 가 시뮬레이션한다.
+//! 월드 서버 상태. 단일 게임 루프 스레드가 소유한다.
+//! 서버가 권위를 갖는 것: QR 계정·인증, 예산과 결제(가격을 직접 다시 계산), 소모품 재고,
+//! 기기 창고, 다른 플레이어의 위치 중계. 물리는 각 클라이언트(Godot·Jolt)가 계산한다.
 
+use crate::catalog::Catalog;
 use crate::data::*;
-use crate::physics::{Input, Physics};
-use crate::protocol::{op, Writer, C2S};
+use crate::json;
+use crate::protocol::{op, OrderLine, Writer, C2S};
 use crate::store::{Account, Store};
 use crate::ws;
 use std::collections::HashMap;
@@ -22,28 +22,19 @@ pub enum Event {
 }
 
 const MSG_TOAST: u8 = 0;
-const MSG_DIALOGUE: u8 = 1;
-const MSG_SYSTEM: u8 = 2;
-
 const CODE_TTL: Duration = Duration::from_secs(300);
 const CODE_MAX_ATTEMPTS: u8 = 5;
-const CRYO_CONFIRM: Duration = Duration::from_secs(5);
 
-struct OnlinePlayer {
+struct Online {
     acc: Account,
-    x: f32,
-    y: f32,
-    z: f32,
-    yaw: f32,
     moved: bool,
     dirty: bool,
-    cryo_armed: Option<Instant>,
 }
 
 struct Session {
     out: Sender<Vec<u8>>,
     stream: TcpStream,
-    player: Option<OnlinePlayer>,
+    player: Option<Online>,
 }
 
 impl Session {
@@ -68,18 +59,14 @@ enum Dest {
 pub struct Game {
     sessions: HashMap<u32, Session>,
     store: Store,
-    physics: Physics,
-    nodes: HashMap<u32, u8>, // 자원 노드 id -> 종류 (위치·자세는 physics)
-    next_node: u32,
-    ticks: u32,
-    node_timer: f32,
+    catalog: Catalog,
     codes: HashMap<String, PendingCode>,
     rng: Rng,
     dev_echo_code: bool,
     outbox: Vec<(Dest, Vec<u8>)>,
 }
 
-// ---------- 메시지 생성 ----------
+// ---------- 메시지 ----------
 
 fn msg_text(kind: u8, text: &str) -> Vec<u8> {
     Writer::new(op::MESSAGE).u8(kind).str(text).finish()
@@ -89,78 +76,36 @@ fn msg_error(text: &str) -> Vec<u8> {
     Writer::new(op::ERROR).str(text).finish()
 }
 
-fn msg_state(p: &OnlinePlayer) -> Vec<u8> {
-    let a = &p.acc;
-    let mut w = Writer::new(op::PLAYER_STATE)
-        .u16(a.day)
-        .u16(a.years)
-        .u8(a.phase as u8)
-        .u8(a.tasks)
-        .f32(a.battery)
-        .f32(a.bio)
-        .u16(a.memory);
-    for n in a.inv {
-        w = w.u16(n);
-    }
-    w.u8(a.collected).u8(a.research).u8(a.haram_age).u8(a.haram_alive as u8).u8(a.gender).finish()
-}
-
-fn msg_teleport(x: f32, y: f32, z: f32, yaw: f32) -> Vec<u8> {
-    Writer::new(op::TELEPORT).f32(x).f32(y).f32(z).f32(yaw).finish()
-}
-
-fn msg_joined(id: u32, p: &OnlinePlayer) -> Vec<u8> {
-    Writer::new(op::PLAYER_JOINED).u32(id).u8(p.acc.gender).f32(p.x).f32(p.y).f32(p.z).f32(p.yaw).finish()
-}
-
-fn msg_moved(id: u32, p: &OnlinePlayer) -> Vec<u8> {
-    Writer::new(op::PLAYER_MOVED).u32(id).f32(p.x).f32(p.y).f32(p.z).f32(p.yaw).finish()
-}
-
-fn msg_node_spawn(id: u32, kind: u8, pos: [f32; 3]) -> Vec<u8> {
-    Writer::new(op::NODE_SPAWN).u32(id).u8(kind).f32(pos[0]).f32(pos[1]).f32(pos[2]).finish()
-}
-
-/// 지형 높이(cm, i16)와 나무·바위 배치. 클라이언트가 같은 지면을 그리도록 서버가 보낸다.
-fn msg_world_init(ph: &Physics) -> Vec<u8> {
-    let t = &ph.terrain;
-    let mut w = Writer::new(op::WORLD_INIT).u16(t.n as u16).f32(t.size);
-    for h in &t.heights {
-        w = w.i16((h * 100.0).round().clamp(-32000.0, 32000.0) as i16);
-    }
-    w = w.u16(ph.trees.len() as u16);
-    for tr in &ph.trees {
-        w = w.f32(tr.x).f32(tr.y).f32(tr.z).f32(tr.scale);
-    }
-    w = w.u16(ph.rocks.len() as u16);
-    for r in &ph.rocks {
-        w = w.f32(r.x).f32(r.y).f32(r.z).f32(r.size);
+fn msg_profile(a: &Account) -> Vec<u8> {
+    let stock: Vec<_> = a.stock.iter().filter(|(_, &n)| n > 0).collect();
+    let mut w = Writer::new(op::PROFILE).i64(a.balance_krw).u16(stock.len() as u16);
+    for (sku, n) in stock {
+        w = w.str(sku).u32(*n as u32);
     }
     w.finish()
 }
 
-fn msg_prop_spawn(ph: &Physics, id: u32) -> Option<Vec<u8>> {
-    let prop = ph.props.get(&id)?;
-    let (p, q, _) = ph.prop_pose(id)?;
-    let w = Writer::new(op::PROP_SPAWN).u32(id).u8(prop.kind).f32(prop.size[0]).f32(prop.size[1]).f32(prop.size[2]);
-    Some(w.f32(p[0]).f32(p[1]).f32(p[2]).f32(q[0]).f32(q[1]).f32(q[2]).f32(q[3]).finish())
+fn msg_joined(id: u32, a: &Account) -> Vec<u8> {
+    let p = a.pose;
+    Writer::new(op::PLAYER_JOINED).u32(id).u8(a.gender).f32(p[0]).f32(p[1]).f32(p[2]).f32(p[3]).finish()
 }
 
-// ---------- 규칙 도우미 ----------
-
-fn has_task(a: &Account, bit: u8) -> bool {
-    a.tasks & (1 << bit) != 0
+fn msg_moved(id: u32, a: &Account) -> Vec<u8> {
+    let p = a.pose;
+    Writer::new(op::PLAYER_MOVED).u32(id).f32(p[0]).f32(p[1]).f32(p[2]).f32(p[3]).finish()
 }
 
-/// 처음 완료했으면 true
-fn complete_task(a: &mut Account, bit: u8) -> bool {
-    let fresh = !has_task(a, bit);
-    a.tasks |= 1 << bit;
-    fresh
-}
-
-fn inside_fence(x: f32, z: f32) -> bool {
-    x.hypot(z) < FENCE_RADIUS
+/// 원화 표기: 425000 → "₩425,000"
+fn won(n: i64) -> String {
+    let digits = n.unsigned_abs().to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    format!("{}₩{out}", if n < 0 { "-" } else { "" })
 }
 
 fn normalize_phone(raw: &str) -> Option<String> {
@@ -174,41 +119,34 @@ fn mask_phone(phone: &str) -> String {
     format!("{}-****-{}", &phone[..3.min(phone.len())], tail)
 }
 
-fn ending_text(a: &Account, eternal: bool) -> (String, String) {
-    let memory_line = format!("\n\n기억 조각 {}개 · 경과한 세월 {}년 · {}일째의 선택.", a.memory, a.years, a.day);
-    if eternal {
-        let haram = if a.haram_alive {
-            "하람은 몇 해 뒤 세상을 떠났다. 당신은 그 장례식에서도, 그 후 백 년이 지나서도 같은 모습이었다."
-        } else {
-            "하람의 편지는 당신의 기억 회로에 영원히 새겨졌다. 지워지지도, 바래지도 않는다."
-        };
-        (
-            "영원한 티타늄".into(),
-            format!("마지막 유기 조직이 티타늄으로 대체되었다. 더 이상 동면은 필요 없다.\n{haram}{memory_line}"),
-        )
-    } else {
-        let haram = if a.haram_alive {
-            "그날 저녁, 하람과 함께 노을을 보았다. 끝이 있기에 오늘이 선명했다."
-        } else {
-            "하람의 묘 옆에, 언젠가 당신의 자리도 생길 것이다. 그 사실이 이상하게 따뜻했다."
-        };
-        (
-            "유한한 아침".into(),
-            format!("당신은 영생 프로토콜을 봉인했다. 생체 조직은 언젠가 멈출 것이다.\n{haram}{memory_line}"),
-        )
+/// 주문 금액을 카탈로그로 다시 계산한다. (단가 목록, 상품 합계) 또는 거절 이유.
+pub fn price_order(catalog: &Catalog, lines: &[OrderLine]) -> Result<(Vec<i64>, i64), String> {
+    if lines.is_empty() {
+        return Err("주문할 품목이 없습니다.".into());
     }
+    if lines.len() > MAX_ORDER_LINES {
+        return Err("주문서가 너무 깁니다.".into());
+    }
+    let mut units = Vec::with_capacity(lines.len());
+    let mut subtotal = 0i64;
+    for l in lines {
+        let item = catalog.items.get(&l.sku).ok_or_else(|| format!("없는 품번입니다: {}", l.sku))?;
+        if l.qty == 0 || l.qty as i64 > MAX_ORDER_QTY {
+            return Err(format!("{} 수량은 1–{MAX_ORDER_QTY} 입니다.", item.name_ko));
+        }
+        let unit = item.unit_price(l.length_mm as i64, l.width_mm as i64)?;
+        units.push(unit);
+        subtotal += unit * l.qty as i64;
+    }
+    Ok((units, subtotal))
 }
 
 impl Game {
-    pub fn new(store: Store, dev_echo_code: bool) -> Self {
+    pub fn new(store: Store, catalog: Catalog, dev_echo_code: bool) -> Self {
         Game {
             sessions: HashMap::new(),
             store,
-            physics: Physics::new(),
-            nodes: HashMap::new(),
-            next_node: NODE_ID_BASE,
-            ticks: 0,
-            node_timer: 0.0,
+            catalog,
             codes: HashMap::new(),
             rng: Rng::seeded(),
             dev_echo_code,
@@ -227,87 +165,19 @@ impl Game {
         self.flush();
     }
 
-    /// 물리 한 스텝 (1/60초)
-    pub fn tick(&mut self, dt: f32) {
-        self.ticks = self.ticks.wrapping_add(1);
-        // 자원 노드 리스폰
-        self.node_timer -= dt;
-        if self.nodes.len() < NODE_TARGET && self.node_timer <= 0.0 {
-            self.node_timer = NODE_RESPAWN_SECS;
-            self.spawn_node();
-        }
-
-        let sessions = &self.sessions;
-        self.physics.step(|id| {
-            sessions.get(&id).and_then(|s| s.player.as_ref()).map_or(false, |p| p.acc.phase == Phase::Outing)
-        });
-
-        // 실제 이동 거리만큼 배터리 소모
-        let mut drained = Vec::new();
-        for (&id, s) in self.sessions.iter_mut() {
-            let Some(p) = s.player.as_mut() else { continue };
-            let Some([x, y, z]) = self.physics.feet(id) else { continue };
-            let dist = (x - p.x).hypot(z - p.z);
-            if dist > 1e-4 || (y - p.y).abs() > 1e-4 {
-                p.moved = true;
-            }
-            if dist > 1e-4 && p.acc.phase != Phase::Finished {
-                let rate = if inside_fence(x, z) { BATTERY_PER_M_INSIDE } else { BATTERY_PER_M_OUTSIDE };
-                let rate = if p.acc.research >= P_SPRING { rate * 0.5 } else { rate };
-                p.acc.battery = (p.acc.battery - dist * rate).max(0.0);
-                p.dirty = true;
-                if p.acc.battery <= 0.0 {
-                    drained.push(id);
-                }
-            }
-            p.x = x;
-            p.y = y;
-            p.z = z;
-        }
-        for id in drained {
-            self.shutdown(id);
-        }
-
-        if self.ticks % SNAPSHOT_EVERY == 0 {
-            self.snapshot();
-        }
-        let now = Instant::now();
-        self.codes.retain(|_, c| c.expires > now);
-        self.flush();
-    }
-
-    /// 30Hz 스냅샷: 다른 플레이어 위치, 내 물리 상태, 움직이는 소품
-    fn snapshot(&mut self) {
+    /// 위치 중계 (TICK_HZ)
+    pub fn tick(&mut self) {
         for (&id, s) in self.sessions.iter_mut() {
             let Some(p) = s.player.as_mut() else { continue };
             if p.moved {
                 p.moved = false;
-                self.outbox.push((Dest::Others { except: id, near: Some((p.x, p.z)) }, msg_moved(id, p)));
-            }
-            if let Some((v, grounded)) = self.physics.velocity(id) {
-                let me = Writer::new(op::SELF_STATE)
-                    .f32(p.x).f32(p.y).f32(p.z).f32(v.x).f32(v.y).f32(v.z).u8(grounded as u8)
-                    .finish();
-                self.outbox.push((Dest::One(id), me));
-            }
-            if p.dirty && self.ticks % (SNAPSHOT_EVERY * 3) == 0 {
-                p.dirty = false;
-                self.outbox.push((Dest::One(id), msg_state(p)));
+                let near = Some((p.acc.pose[0], p.acc.pose[2]));
+                self.outbox.push((Dest::Others { except: id, near }, msg_moved(id, &p.acc)));
             }
         }
-        let awake: Vec<(u32, [f32; 3], [f32; 4])> = self
-            .physics
-            .props
-            .keys()
-            .filter_map(|&id| self.physics.prop_pose(id).filter(|(_, _, a)| *a).map(|(p, q, _)| (id, p, q)))
-            .collect();
-        for chunk in awake.chunks(100) {
-            let mut w = Writer::new(op::PROP_STATE).u16(chunk.len() as u16);
-            for (id, p, q) in chunk {
-                w = w.u32(*id).f32(p[0]).f32(p[1]).f32(p[2]).f32(q[0]).f32(q[1]).f32(q[2]).f32(q[3]);
-            }
-            self.outbox.push((Dest::All, w.finish()));
-        }
+        let now = Instant::now();
+        self.codes.retain(|_, c| c.expires > now);
+        self.flush();
     }
 
     fn flush(&mut self) {
@@ -326,7 +196,7 @@ impl Game {
                             continue;
                         }
                         if let Some((x, z)) = near {
-                            if (p.x - x).hypot(p.z - z) > AOI_RADIUS {
+                            if (p.acc.pose[0] - x).hypot(p.acc.pose[2] - z) > AOI_RADIUS {
                                 continue;
                             }
                         }
@@ -347,15 +217,14 @@ impl Game {
         self.outbox.push((Dest::One(conn), payload));
     }
 
-    fn toast(&mut self, conn: u32, text: &str) {
-        self.reply(conn, msg_text(MSG_TOAST, text));
+    fn error(&mut self, conn: u32, text: &str) {
+        self.reply(conn, msg_error(text));
     }
 
     fn disconnect(&mut self, conn: u32) {
         if let Some(s) = self.sessions.remove(&conn) {
             let _ = s.stream.shutdown(Shutdown::Both);
             if let Some(p) = s.player {
-                self.physics.remove_avatar(conn);
                 self.store.save(&p.acc);
                 self.outbox.push((Dest::All, Writer::new(op::PLAYER_LEFT).u32(conn).finish()));
                 println!("[game] 퇴장 #{conn} ({})", mask_phone(&p.acc.phone));
@@ -369,30 +238,39 @@ impl Game {
             C2S::Register { phone, gender } => self.on_register(conn, &phone, gender),
             C2S::RequestCode { token } => self.on_request_code(conn, &token),
             C2S::Login { token, code } => self.on_login(conn, &token, &code),
-            _ if !logged_in => self.reply(conn, msg_error("로그인이 필요합니다.")),
-            C2S::Input { mx, mz, yaw, flags } => self.on_input(conn, mx, mz, yaw, flags),
-            C2S::Interact { target } => self.on_interact(conn, target),
+            _ if !logged_in => self.error(conn, "로그인이 필요합니다."),
+            C2S::Pose { x, y, z, yaw } => self.on_pose(conn, x, y, z, yaw),
             C2S::Chat { text } => {
                 let text: String = text.trim().chars().take(120).collect();
                 if !text.is_empty() {
                     self.outbox.push((Dest::All, Writer::new(op::CHAT_BROADCAST).u32(conn).str(&text).finish()));
                 }
             }
-            C2S::Restart => self.on_restart(conn),
+            C2S::Purchase { lines } => self.on_purchase(conn, &lines),
+            C2S::Consume { sku, qty } => self.on_stock_move(conn, &sku, qty as i64, true),
+            C2S::Refund { sku, qty } => self.on_stock_move(conn, &sku, qty as i64, false),
+            C2S::StowDevice { name, json } => self.on_stow(conn, &name, &json),
+            C2S::ListDevices => self.send_device_list(conn),
+            C2S::RetrieveDevice { name } => self.on_retrieve(conn, &name),
         }
+    }
+
+    fn player(&mut self, conn: u32) -> Option<&mut Online> {
+        self.sessions.get_mut(&conn).and_then(|s| s.player.as_mut())
     }
 
     // ---------- QR 계정 / 인증 ----------
 
     fn on_register(&mut self, conn: u32, phone: &str, gender: u8) {
         let Some(phone) = normalize_phone(phone) else {
-            return self.reply(conn, msg_error("전화번호 형식이 올바르지 않습니다. (예: 010-1234-5678)"));
+            return self.error(conn, "전화번호 형식이 올바르지 않습니다. (예: 010-1234-5678)");
         };
         let token = match self.store.token_for_phone(&phone) {
             Some(t) => t.clone(),
             None => {
                 let token = random_token(&mut self.rng);
-                self.store.save(&Account::new(token.clone(), phone.clone(), gender.min(1)));
+                let acc = Account::new(token.clone(), phone.clone(), gender.min(1), self.catalog.start_budget_krw, SPAWN);
+                self.store.save(&acc);
                 println!("[auth] 새 QR 계정 {}", mask_phone(&phone));
                 token
             }
@@ -402,22 +280,19 @@ impl Game {
 
     fn on_request_code(&mut self, conn: u32, token: &str) {
         let Some(acc) = self.store.load(token) else {
-            return self.reply(conn, msg_error("등록되지 않은 QR 계정입니다."));
+            return self.error(conn, "등록되지 않은 QR 계정입니다.");
         };
         let cooldown = if self.dev_echo_code { Duration::from_secs(1) } else { Duration::from_secs(30) };
         if let Some(prev) = self.codes.get(token) {
             if prev.sent_at.elapsed() < cooldown {
-                return self.reply(conn, msg_error("잠시 후 다시 요청해 주세요."));
+                return self.error(conn, "잠시 후 다시 요청해 주세요.");
             }
         }
         let code = format!("{:06}", self.rng.next() % 1_000_000);
         // 첫 버전: SMS 게이트웨이 대신 서버 콘솔에 출력한다.
         println!("[SMS → {}] [Dolly Forge] 인증코드 {code}", mask_phone(&acc.phone));
         let now = Instant::now();
-        self.codes.insert(
-            token.to_string(),
-            PendingCode { code: code.clone(), expires: now + CODE_TTL, attempts: 0, sent_at: now },
-        );
+        self.codes.insert(token.to_string(), PendingCode { code: code.clone(), expires: now + CODE_TTL, attempts: 0, sent_at: now });
         let echo = if self.dev_echo_code { code.as_str() } else { "" };
         self.reply(conn, Writer::new(op::CODE_SENT).str(&mask_phone(&acc.phone)).str(echo).finish());
     }
@@ -431,11 +306,11 @@ impl Game {
             _ => false,
         };
         if !verified {
-            return self.reply(conn, msg_error("인증 코드가 틀렸거나 만료되었습니다."));
+            return self.error(conn, "인증 코드가 틀렸거나 만료되었습니다.");
         }
         self.codes.remove(token);
 
-        // 같은 계정의 기존 접속은 끊는다.
+        // 같은 계정의 기존 접속은 끊는다 (그 접속의 상태를 먼저 저장)
         let dup: Vec<u32> = self
             .sessions
             .iter()
@@ -450,396 +325,152 @@ impl Game {
         }
 
         let Some(acc) = self.store.load(token) else {
-            return self.reply(conn, msg_error("계정을 불러오지 못했습니다."));
+            return self.error(conn, "계정을 불러오지 못했습니다.");
         };
-        let (x, y, z) = SPAWN;
-        let player = OnlinePlayer {
-            acc,
-            x,
-            y,
-            z,
-            yaw: SPAWN_YAW,
-            moved: false,
-            dirty: false,
-            cryo_armed: None,
-        };
-        println!("[game] 입장 #{conn} ({})", mask_phone(&player.acc.phone));
-
-        self.physics.add_avatar(conn, player.acc.gender, [x, y, z]);
-        self.reply(conn, Writer::new(op::LOGIN_OK).u32(conn).u8(player.acc.gender).finish());
-        self.reply(conn, msg_world_init(&self.physics));
-        let props: Vec<Vec<u8>> = self
-            .physics
-            .props
-            .keys()
-            .filter(|id| !self.nodes.contains_key(id))
-            .filter_map(|&id| msg_prop_spawn(&self.physics, id))
-            .collect();
-        for m in props {
-            self.reply(conn, m);
-        }
-        self.reply(conn, msg_state(&player));
-        self.reply(conn, msg_teleport(x, y, z, SPAWN_YAW));
+        println!("[game] 입장 #{conn} ({})", mask_phone(&acc.phone));
+        self.reply(conn, Writer::new(op::LOGIN_OK).u32(conn).u8(acc.gender).finish());
+        self.reply(conn, msg_profile(&acc));
         let others: Vec<Vec<u8>> = self
             .sessions
             .iter()
-            .filter_map(|(&id, s)| s.player.as_ref().map(|p| msg_joined(id, p)))
+            .filter_map(|(&id, s)| s.player.as_ref().map(|p| msg_joined(id, &p.acc)))
             .collect();
         for m in others {
             self.reply(conn, m);
         }
-        let nodes: Vec<Vec<u8>> = self
-            .nodes
-            .iter()
-            .filter_map(|(&id, &kind)| self.physics.prop_pos(id).map(|pos| msg_node_spawn(id, kind, pos)))
-            .collect();
-        for m in nodes {
-            self.reply(conn, m);
-        }
-        self.outbox.push((Dest::Others { except: conn, near: None }, msg_joined(conn, &player)));
-        let greeting = format!("Day {} — {}", player.acc.day, phase_hint(player.acc.phase));
-        self.reply(conn, msg_text(MSG_SYSTEM, &greeting));
+        self.outbox.push((Dest::Others { except: conn, near: None }, msg_joined(conn, &acc)));
         if let Some(s) = self.sessions.get_mut(&conn) {
-            s.player = Some(player);
+            s.player = Some(Online { acc, moved: false, dirty: false });
         }
     }
 
-    // ---------- 이동 ----------
+    // ---------- 위치 ----------
 
-    fn on_input(&mut self, conn: u32, mx: f32, mz: f32, yaw: f32, flags: u8) {
-        let Some(p) = self.sessions.get_mut(&conn).and_then(|s| s.player.as_mut()) else { return };
-        let frozen = p.acc.phase == Phase::Finished;
-        p.yaw = yaw;
-        let (mx, mz) = if frozen { (0.0, 0.0) } else { (mx.clamp(-1.0, 1.0), mz.clamp(-1.0, 1.0)) };
-        self.physics.set_input(conn, Input { mx, mz, yaw, jump: flags & 1 != 0 && !frozen, run: flags & 2 != 0 });
-    }
-
-    fn shutdown(&mut self, conn: u32) {
-        let Some(p) = self.sessions.get_mut(&conn).and_then(|s| s.player.as_mut()) else { return };
-        for i in 0..4 {
-            p.acc.inv[i] = p.acc.inv[i].saturating_sub(p.acc.today[i]);
-        }
-        p.acc.battery = 100.0;
-        self.outbox.push((
-            Dest::One(conn),
-            msg_text(MSG_SYSTEM, "배터리 방전! 비상 귀환 프로토콜 가동 — 오늘 수집한 자원을 잃었습니다."),
-        ));
-        self.end_day(conn);
-    }
-
-    // ---------- 하루 진행 ----------
-
-    fn end_day(&mut self, conn: u32) {
-        let Some(p) = self.sessions.get_mut(&conn).and_then(|s| s.player.as_mut()) else { return };
-        let decay = if p.acc.research >= P_CULTURE { BIO_DECAY_CULTURE } else { BIO_DECAY };
-        p.acc.bio -= decay;
-        if p.acc.bio <= 0.0 {
-            self.outbox.push((
-                Dest::One(conn),
-                msg_text(MSG_SYSTEM, "생체 안정도 0% — 강제 인공 동면이 시작됩니다."),
-            ));
-            return self.cryo(conn);
-        }
-        let a = &mut p.acc;
-        a.day += 1;
-        let mut text = format!("Day {} 아침. 생체 안정도 {:.0}%.", a.day, a.bio);
-        if a.bio < 30.0 {
-            text.push_str(" 위험 — 집의 인공 동면 포드 사용을 고려하세요.");
-        }
-        self.start_morning(conn, &text);
-    }
-
-    fn cryo(&mut self, conn: u32) {
-        let Some(p) = self.sessions.get_mut(&conn).and_then(|s| s.player.as_mut()) else { return };
-        let a = &mut p.acc;
-        a.years += CRYO_YEARS;
-        a.cryo_count += 1;
-        a.haram_age = a.haram_age.saturating_add(CRYO_YEARS as u8);
-        if a.haram_alive && a.haram_age >= HARAM_DEATH_AGE {
-            a.haram_alive = false;
-        }
-        a.bio = 100.0;
-        a.battery = 100.0;
-        a.day += 1;
-        let text = format!(
-            "인공 동면 종료. {}년이 흘렀습니다 (누적 {}년). 바깥의 나무가 훌쩍 자랐습니다.",
-            CRYO_YEARS, a.years
-        );
-        self.start_morning(conn, &text);
-    }
-
-    fn start_morning(&mut self, conn: u32, text: &str) {
-        let Some(p) = self.sessions.get_mut(&conn).and_then(|s| s.player.as_mut()) else { return };
-        let a = &mut p.acc;
-        a.phase = Phase::Daily;
-        a.tasks = 0;
-        a.collected = 0;
-        a.today = [0; 4];
-        let (x, y, z) = SPAWN;
-        p.x = x;
-        p.y = y;
-        p.z = z;
-        p.yaw = SPAWN_YAW;
-        p.moved = true;
-        p.dirty = false;
-        p.cryo_armed = None;
-        let state = msg_state(p);
-        self.physics.teleport(conn, [x, y, z]);
-        self.store.save(&p.acc);
-        self.reply(conn, msg_teleport(x, y, z, SPAWN_YAW));
-        self.reply(conn, state);
-        self.reply(conn, msg_text(MSG_SYSTEM, text));
-    }
-
-    fn check_phase_done(&mut self, conn: u32) {
-        let Some(p) = self.sessions.get_mut(&conn).and_then(|s| s.player.as_mut()) else { return };
-        let a = &mut p.acc;
-        let full = (1u8 << a.phase.task_count()) - 1;
-        if a.tasks != full {
+    fn on_pose(&mut self, conn: u32, x: f32, y: f32, z: f32, yaw: f32) {
+        if x.abs() > WORLD_LIMIT || z.abs() > WORLD_LIMIT || !(-100.0..=500.0).contains(&y) {
             return;
         }
-        let text = match a.phase {
-            Phase::Daily => {
-                a.phase = Phase::Research;
-                "일상 과제를 모두 마쳤습니다. 연구소로 이동하세요."
-            }
-            Phase::Research => {
-                a.phase = Phase::Outing;
-                "연구 시간이 끝났습니다. 울타리 남쪽 문이 열렸습니다 — 외출하세요."
-            }
-            _ => return,
-        };
-        a.tasks = 0;
-        self.store.save(&p.acc);
-        self.reply(conn, msg_text(MSG_SYSTEM, text));
-    }
-
-    // ---------- 상호작용 ----------
-
-    fn on_interact(&mut self, conn: u32, target: u32) {
-        if target >= NODE_ID_BASE {
-            self.collect(conn, target);
-        } else {
-            self.use_station(conn, target);
-        }
-        if let Some(p) = self.sessions.get_mut(&conn).and_then(|s| s.player.as_mut()) {
+        if let Some(p) = self.player(conn) {
+            p.acc.pose = [x, y, z, yaw];
+            p.moved = true;
             p.dirty = true;
         }
-        self.check_phase_done(conn);
     }
 
-    fn collect(&mut self, conn: u32, id: u32) {
-        let Some(p) = self.sessions.get_mut(&conn).and_then(|s| s.player.as_mut()) else { return };
-        let Some(&kind) = self.nodes.get(&id) else { return };
-        let Some([nx, _, nz]) = self.physics.prop_pos(id) else { return };
-        if (nx - p.x).hypot(nz - p.z) > INTERACT_RANGE {
-            return self.toast(conn, "너무 멉니다.");
-        }
-        if p.acc.phase != Phase::Outing {
-            return self.toast(conn, "지금은 외출 시간이 아닙니다.");
-        }
-        let kind = kind as usize;
-        self.nodes.remove(&id);
-        self.physics.remove_prop(id);
-        let a = &mut p.acc;
-        a.inv[kind] += 1;
-        a.today[kind] += 1;
-        a.collected = a.collected.saturating_add(1);
-        if a.collected >= COLLECT_GOAL {
-            complete_task(a, task::COLLECT);
-        }
-        let text = format!("+1 {} ({}/{})", RESOURCE_NAMES[kind], a.collected.min(COLLECT_GOAL), COLLECT_GOAL);
-        self.outbox.push((Dest::All, Writer::new(op::NODE_REMOVE).u32(id).finish()));
-        self.toast(conn, &text);
-    }
+    // ---------- 경제 ----------
 
-    fn use_station(&mut self, conn: u32, target: u32) {
-        let Some(s) = self.sessions.get_mut(&conn) else { return };
-        let Some(p) = s.player.as_mut() else { return };
-        let Some((sx, sz)) = station_pos(target) else { return };
-        if (sx - p.x).hypot(sz - p.z) > INTERACT_RANGE {
-            return self.toast(conn, "너무 멉니다.");
-        }
-        use target::*;
-        let phase = p.acc.phase;
-        if target != CRYO_POD {
-            p.cryo_armed = None;
-        }
-        let a = &mut p.acc;
-        let text: String = match target {
-            CHARGE_DOCK => {
-                a.battery = 100.0;
-                if phase == Phase::Daily {
-                    complete_task(a, task::CHARGE);
-                }
-                "충전 완료. 배터리 100%".into()
-            }
-            FOOD_TABLE | OIL_CAN | JOURNAL if phase != Phase::Daily => "지금은 일상 시간이 아닙니다.".into(),
-            FOOD_TABLE => {
-                if complete_task(a, task::EAT) {
-                    a.bio = (a.bio + BIO_MEAL).min(100.0);
-                    format!("생체 조직에 영양을 공급했습니다. 생체 안정도 {:.0}%", a.bio)
-                } else {
-                    "이미 식사를 했습니다.".into()
-                }
-            }
-            OIL_CAN => {
-                if complete_task(a, task::OIL) {
-                    "관절에 윤활유를 보충했습니다. 움직임이 부드럽습니다.".into()
-                } else {
-                    "이미 윤활유를 보충했습니다.".into()
-                }
-            }
-            JOURNAL => {
-                if complete_task(a, task::JOURNAL) {
-                    a.memory += 1;
-                    format!("기억 일지를 기록했습니다. 기억 조각 {}개", a.memory)
-                } else {
-                    "오늘의 일지는 이미 썼습니다.".into()
-                }
-            }
-            BED => match phase {
-                Phase::Outing if has_task(a, task::COLLECT) && has_task(a, task::VISIT) => {
-                    complete_task(a, task::SLEEP);
-                    return self.end_day(conn);
-                }
-                Phase::Outing => "자원 3개 수집과 하람 방문을 먼저 마치세요.".into(),
-                _ => "아직 잘 시간이 아닙니다.".into(),
-            },
-            CRYO_POD => {
-                if phase != Phase::Daily {
-                    "동면 포드는 아침(일상 시간)에만 사용할 수 있습니다.".into()
-                } else if p.cryo_armed.map_or(false, |t| t.elapsed() < CRYO_CONFIRM) {
-                    return self.cryo(conn);
-                } else {
-                    p.cryo_armed = Some(Instant::now());
-                    format!(
-                        "인공 동면 포드: 생체 안정도가 100%로 회복되지만 {}년이 흐릅니다. 5초 안에 다시 사용하면 동면에 들어갑니다.",
-                        CRYO_YEARS
-                    )
-                }
-            }
-            GOODS_SHELF => GOODS_TEXT.into(),
-            BLACKBOARD | ANALYZER | WORKBENCH if phase != Phase::Research => "지금은 연구 시간이 아닙니다.".into(),
-            BLACKBOARD => {
-                complete_task(a, task::BOARD);
-                match PROJECTS.get(a.research as usize) {
-                    Some(proj) => format!(
-                        "다음 연구: {} — 필요 재료: {} (보유: {})",
-                        proj.name,
-                        cost_text(&proj.cost),
-                        cost_text(&a.inv)
-                    ),
-                    None => "모든 연구를 마쳤습니다.".into(),
-                }
-            }
-            ANALYZER => {
-                if !has_task(a, task::BOARD) {
-                    "연구 칠판을 먼저 확인하세요.".into()
-                } else {
-                    complete_task(a, task::ANALYZE);
-                    "시료 분석기가 웅웅거리며 돌아갑니다. 진공관이 주황빛으로 달아오릅니다.".into()
-                }
-            }
-            WORKBENCH => {
-                if !(has_task(a, task::BOARD) && has_task(a, task::ANALYZE)) {
-                    "칠판 확인과 시료 분석을 먼저 하세요.".into()
-                } else if has_task(a, task::BENCH) {
-                    "오늘 연구는 이미 끝났습니다.".into()
-                } else {
-                    let idx = a.research as usize;
-                    let proj = &PROJECTS[idx.min(PROJECTS.len() - 1)];
-                    if a.inv.iter().zip(proj.cost).all(|(&have, need)| have >= need) {
-                        for i in 0..4 {
-                            a.inv[i] -= proj.cost[i];
-                        }
-                        a.research += 1;
-                        if a.research as usize == PROJECTS.len() {
-                            a.phase = Phase::Ending;
-                            a.tasks = 0;
-                            self.store.save(&p.acc);
-                            return self.reply(
-                                conn,
-                                msg_text(
-                                    MSG_SYSTEM,
-                                    "영생 프로토콜 완성. 연구소 입구의 두 기둥 중 하나를 선택하세요 — 왼쪽: 영원, 오른쪽: 유한.",
-                                ),
-                            );
-                        }
-                        complete_task(a, task::BENCH);
-                        format!("연구 완료: {} — {}", proj.name, proj.effect)
-                    } else {
-                        complete_task(a, task::BENCH);
-                        format!(
-                            "재료 부족 (필요: {}). 오늘은 자료 정리로 마무리합니다. 외출에서 재료를 모으세요.",
-                            cost_text(&proj.cost)
-                        )
-                    }
-                }
-            }
-            PILLAR_ETERNAL | PILLAR_MORTAL => {
-                if phase != Phase::Ending {
-                    "차가운 금속 기둥이다. 아직 아무 반응이 없다.".into()
-                } else {
-                    let eternal = target == PILLAR_ETERNAL;
-                    let (title, body) = ending_text(a, eternal);
-                    a.phase = Phase::Finished;
-                    a.tasks = 1;
-                    self.store.save(&p.acc);
-                    return self.reply(
-                        conn,
-                        Writer::new(op::ENDING).u8(if eternal { 0 } else { 1 }).str(&title).str(&body).finish(),
-                    );
-                }
-            }
-            HARAM => {
-                let (line, kind) = haram_talk(a);
-                if phase == Phase::Outing && complete_task(a, task::VISIT) {
-                    a.memory += if a.research >= P_RADIO { 2 } else { 1 };
-                }
-                return self.reply(conn, msg_text(kind, &line));
-            }
-            _ => return,
+    fn on_purchase(&mut self, conn: u32, lines: &[OrderLine]) {
+        let priced = price_order(&self.catalog, lines);
+        let shipping = priced.as_ref().map(|(_, s)| self.catalog.shipping_for(*s)).unwrap_or(0);
+        let pack: HashMap<String, (bool, i64)> =
+            lines.iter().filter_map(|l| self.catalog.items.get(&l.sku).map(|i| (l.sku.clone(), (i.physical, i.pack_qty)))).collect();
+        let Some(p) = self.player(conn) else { return };
+        let fail = |msg: String, balance: i64| {
+            Writer::new(op::PURCHASE_RESULT).u8(0).str(&msg).u32(0).i64(balance).u16(0).finish()
         };
-        self.toast(conn, &text);
+        let (units, subtotal) = match priced {
+            Ok(v) => v,
+            Err(e) => {
+                let m = fail(e, p.acc.balance_krw);
+                return self.reply(conn, m);
+            }
+        };
+        let total = subtotal + shipping;
+        if total > p.acc.balance_krw {
+            let m = fail(format!("잔액이 부족합니다. (필요 {}, 잔액 {})", won(total), won(p.acc.balance_krw)), p.acc.balance_krw);
+            return self.reply(conn, m);
+        }
+        p.acc.balance_krw -= total;
+        for l in lines {
+            let (physical, pack_qty) = pack[&l.sku];
+            if !physical {
+                *p.acc.stock.entry(l.sku.clone()).or_insert(0) += pack_qty * l.qty as i64;
+            }
+        }
+        let mut w = Writer::new(op::PURCHASE_RESULT)
+            .u8(1)
+            .str(&format!("결제 완료 {}. 잔액 {}", won(total), won(p.acc.balance_krw)))
+            .u32(total as u32)
+            .i64(p.acc.balance_krw)
+            .u16(lines.len() as u16);
+        for (l, unit) in lines.iter().zip(units) {
+            w = w.str(&l.sku).u16(l.qty).u32(l.length_mm).u32(l.width_mm).u32(unit as u32);
+        }
+        let receipt = w.finish();
+        let profile = msg_profile(&p.acc);
+        let acc = p.acc.clone();
+        self.store.save(&acc);
+        println!("[shop] {} 주문 {} (잔액 {})", mask_phone(&acc.phone), won(total), won(acc.balance_krw));
+        self.reply(conn, receipt);
+        self.reply(conn, profile);
     }
 
-    fn on_restart(&mut self, conn: u32) {
-        let Some(p) = self.sessions.get_mut(&conn).and_then(|s| s.player.as_mut()) else { return };
-        if p.acc.phase != Phase::Finished {
-            return;
+    /// consume: 재고 → 설치, refund: 설치 → 재고 (설치된 만큼만)
+    fn on_stock_move(&mut self, conn: u32, sku: &str, qty: i64, consume: bool) {
+        if qty <= 0 || !self.catalog.items.get(sku).map_or(false, |i| !i.physical) {
+            return self.error(conn, "체결 소모품이 아닙니다.");
         }
-        p.acc.reset_progress();
-        self.start_morning(conn, "새로운 여정이 시작됩니다. Day 1 아침.");
+        let Some(p) = self.player(conn) else { return };
+        let (from, to) = if consume { (&mut p.acc.stock, &mut p.acc.installed) } else { (&mut p.acc.installed, &mut p.acc.stock) };
+        let have = *from.get(sku).unwrap_or(&0);
+        if have < qty {
+            let why = if consume { "재고가 부족합니다." } else { "설치된 수량보다 많이 회수할 수 없습니다." };
+            return self.error(conn, why);
+        }
+        from.insert(sku.to_string(), have - qty);
+        *to.entry(sku.to_string()).or_insert(0) += qty;
+        let profile = msg_profile(&p.acc);
+        let acc = p.acc.clone();
+        self.store.save(&acc);
+        self.reply(conn, profile);
     }
 
-    fn spawn_node(&mut self) {
-        for _ in 0..20 {
-            let r = 22.0 + self.rng.unit() * 34.0;
-            let t = self.rng.unit() * std::f32::consts::TAU;
-            let (x, z) = (r * t.cos(), r * t.sin());
-            let (hx, hz) = station_pos(target::HARAM).unwrap();
-            let crowded = self.nodes.keys().filter_map(|&id| self.physics.prop_pos(id)).any(|p| (p[0] - x).hypot(p[2] - z) < 3.0);
-            if (x - hx).hypot(z - hz) < 8.0 || crowded {
-                continue;
-            }
-            let total: u32 = RESOURCE_WEIGHTS.iter().sum();
-            let mut roll = (self.rng.next() % total as u64) as u32;
-            let mut kind = 0u8;
-            for (i, w) in RESOURCE_WEIGHTS.iter().enumerate() {
-                if roll < *w {
-                    kind = i as u8;
-                    break;
-                }
-                roll -= w;
-            }
-            let id = self.next_node;
-            self.next_node += 1;
-            let y = self.physics.add_node(id, kind, x, z);
-            self.outbox.push((Dest::All, msg_node_spawn(id, kind, [x, y, z])));
-            self.nodes.insert(id, kind);
-            return;
+    // ---------- 창고 ----------
+
+    fn on_stow(&mut self, conn: u32, name: &str, json_text: &str) {
+        let Some(token) = self.player(conn).map(|p| p.acc.token.clone()) else { return };
+        if json_text.len() > MAX_DEVICE_BYTES {
+            return self.error(conn, "기기 문서가 너무 큽니다.");
         }
+        if self.store.list_devices(&token).len() >= MAX_DEVICES {
+            return self.error(conn, "창고가 가득 찼습니다.");
+        }
+        let parts = match json::parse(json_text) {
+            Ok(doc) => doc.get("parts").and_then(|p| p.arr()).map(|a| a.len()),
+            Err(_) => None,
+        };
+        if parts.unwrap_or(0) == 0 {
+            return self.error(conn, "올바른 기기 문서가 아닙니다.");
+        }
+        match self.store.put_device(&token, name, json_text) {
+            Ok(saved) => {
+                self.reply(conn, msg_text(MSG_TOAST, &format!("창고에 넣었습니다: {saved} (부품 {}개)", parts.unwrap())));
+                self.send_device_list(conn);
+            }
+            Err(e) => self.error(conn, &e.to_string()),
+        }
+    }
+
+    fn on_retrieve(&mut self, conn: u32, name: &str) {
+        let Some(token) = self.player(conn).map(|p| p.acc.token.clone()) else { return };
+        match self.store.take_device(&token, name) {
+            Ok(json_text) => {
+                self.reply(conn, Writer::new(op::DEVICE_DATA).str(name).blob(&json_text).finish());
+                self.send_device_list(conn);
+            }
+            Err(_) => self.error(conn, "창고에 그런 기기가 없습니다."),
+        }
+    }
+
+    fn send_device_list(&mut self, conn: u32) {
+        let Some(token) = self.player(conn).map(|p| p.acc.token.clone()) else { return };
+        let list = self.store.list_devices(&token);
+        let mut w = Writer::new(op::DEVICE_LIST).u16(list.len() as u16);
+        for (name, text) in &list {
+            let parts = json::parse(text).ok().and_then(|d| d.get("parts").and_then(|p| p.arr()).map(|a| a.len())).unwrap_or(0);
+            w = w.str(name).u16(parts as u16).u32(text.len() as u32);
+        }
+        self.reply(conn, w.finish());
     }
 
     pub fn online_count(&self) -> usize {
@@ -850,45 +481,20 @@ impl Game {
         self.store.account_count()
     }
 
-    pub fn save_all(&mut self) {
-        for s in self.sessions.values() {
-            if let Some(p) = &s.player {
-                self.store.save(&p.acc);
+    /// 위치가 바뀐 계정만 주기적으로 저장
+    pub fn save_dirty(&mut self) {
+        let mut accs = Vec::new();
+        for s in self.sessions.values_mut() {
+            if let Some(p) = s.player.as_mut() {
+                if p.dirty {
+                    p.dirty = false;
+                    accs.push(p.acc.clone());
+                }
             }
         }
-    }
-}
-
-fn haram_talk(a: &mut Account) -> (String, u8) {
-    if !a.haram_alive {
-        if !a.letter_read {
-            a.letter_read = true;
-            a.memory += 3;
-            return (format!("하람의 묘비 아래에서 편지를 발견했다.\n{HARAM_LETTER}"), MSG_DIALOGUE);
+        for a in accs {
+            self.store.save(&a);
         }
-        return ("하람의 묘비 앞에 들꽃이 피어 있다.".into(), MSG_DIALOGUE);
-    }
-    let prefix = format!("하람 ({}세): ", a.haram_age);
-    let line = if a.cryo_count > a.haram_seen_cryo {
-        let slept = (a.cryo_count - a.haram_seen_cryo) * CRYO_YEARS;
-        a.haram_seen_cryo = a.cryo_count;
-        format!("{slept}년이나 잤구나… 너는 그대로인데, 나만 이렇게 늙었네.")
-    } else if a.research >= P_RADIO && a.visits % 2 == 1 {
-        HARAM_DEEP_LINES[(a.visits as usize / 2) % HARAM_DEEP_LINES.len()].to_string()
-    } else {
-        HARAM_LINES[a.visits as usize % HARAM_LINES.len()].to_string()
-    };
-    a.visits += 1;
-    (prefix + &line, MSG_DIALOGUE)
-}
-
-fn phase_hint(phase: Phase) -> &'static str {
-    match phase {
-        Phase::Daily => "일상 시간입니다. 집에서 일상 과제를 하세요.",
-        Phase::Research => "연구 시간입니다. 연구소로 이동하세요.",
-        Phase::Outing => "외출 시간입니다. 남쪽 문으로 나가세요.",
-        Phase::Ending => "연구소의 두 기둥 중 하나를 선택하세요.",
-        Phase::Finished => "여정을 마쳤습니다.",
     }
 }
 
@@ -903,7 +509,7 @@ fn random_token(rng: &mut Rng) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// xorshift64* — 게임플레이용 난수 (보안 용도 아님)
+/// xorshift64* — 인증 코드용 난수 (운영 시 OS 난수로 교체)
 pub struct Rng(u64);
 
 impl Rng {
@@ -917,32 +523,51 @@ impl Rng {
         self.0 ^= self.0 >> 27;
         self.0.wrapping_mul(0x2545F4914F6CDD1D)
     }
-    pub fn unit(&mut self) -> f32 {
-        (self.next() >> 40) as f32 / (1u64 << 24) as f32
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn catalog() -> Catalog {
+        Catalog::load(concat!(env!("CARGO_MANIFEST_DIR"), "/catalog.json")).unwrap()
+    }
+
+    fn line(sku: &str, qty: u16, l: u32, w: u32) -> OrderLine {
+        OrderLine { sku: sku.into(), qty, length_mm: l, width_mm: w }
+    }
+
+    #[test]
+    fn prices_order_like_csharp_quote() {
+        // 모터 1 + 65 mm 바퀴 1 + M8 볼트 1묶음 = 16 000 + 3 500 + 3 000 (+ 배송 3 500)
+        let c = catalog();
+        let (units, subtotal) = price_order(&c, &[line("MT-JGB37-100", 1, 0, 0), line("WH-65-D6", 1, 0, 0), line("FS-BOLT-M8", 1, 0, 0)]).unwrap();
+        assert_eq!(units, vec![16000, 3500, 3000]);
+        assert_eq!(subtotal + c.shipping_for(subtotal), 26000);
+        assert_eq!(c.shipping_for(85000), 0);
+    }
+
+    #[test]
+    fn rejects_bad_orders() {
+        let c = catalog();
+        assert!(price_order(&c, &[]).is_err());
+        assert!(price_order(&c, &[line("NOPE", 1, 0, 0)]).is_err());
+        assert!(price_order(&c, &[line("AL-2020", 1, 10, 0)]).is_err());
+        assert!(price_order(&c, &[line("MT-JGB37-100", 0, 0, 0)]).is_err());
+        assert!(price_order(&c, &[line("MT-JGB37-100", 1, 300, 0)]).is_err());
+    }
+
+    #[test]
+    fn formats_won() {
+        assert_eq!(won(425000), "₩425,000");
+        assert_eq!(won(999), "₩999");
+        assert_eq!(won(1_000_000), "₩1,000,000");
+    }
+
     #[test]
     fn phone_normalization() {
         assert_eq!(normalize_phone("010-1234-5678").as_deref(), Some("01012345678"));
         assert!(normalize_phone("12345").is_none());
         assert_eq!(mask_phone("01012345678"), "010-****-5678");
-    }
-
-    #[test]
-    fn haram_reacts_to_cryo() {
-        let mut a = Account::new("00".repeat(16), "01000000000".into(), 0);
-        a.cryo_count = 1;
-        a.haram_age = 82;
-        let (line, _) = haram_talk(&mut a);
-        assert!(line.contains("10년이나 잤구나"));
-        a.haram_alive = false;
-        let (line, _) = haram_talk(&mut a);
-        assert!(line.contains("편지"));
-        assert_eq!(a.memory, 3);
     }
 }

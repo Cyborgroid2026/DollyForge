@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- 헤드리스 통합 테스트 봇: 클라이언트와 같은 프로토콜 코드로 서버의 하루 루프를 끝까지 플레이한다. -->
+  <!--
+    월드 서버 통합 시험 클라이언트. Godot 게임과 같은 공용 코어(godot/src/Core: 카탈로그·가격·기기 JSON·프로토콜)를 쓴다.
+    사용법: dotnet run 뒤에 서버 주소 (기본 ws://127.0.0.1:7700). 서버는 DOLLY_DEV_ECHO_CODE=1 로 실행한다.
+  -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -9,9 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="../../client/Net/Protocol.cs" Link="Shared/Protocol.cs" />
-    <Compile Include="../../client/Net/WorldClient.cs" Link="Shared/WorldClient.cs" />
-    <Compile Include="../../client/Game/GameData.cs" Link="Shared/GameData.cs" />
+    <Compile Include="../../godot/src/Core/**/*.cs" Link="Core/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

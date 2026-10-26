@@ -29,7 +29,8 @@ public partial class Player : CharacterBody3D
 
     public Devices Devices { get; set; } = null!;
     public Camera3D Camera { get; private set; } = null!;
-    public Action? OpenCatalog;
+    public Action? OpenCatalog, OpenStorage;
+    public Action<PartBody>? Stow;
     public Action<string>? Notify;
 
     float _pitch;
@@ -125,6 +126,12 @@ public partial class Player : CharacterBody3D
                 break;
             case Key.F8 when _aimBody is not null:
                 Notify?.Invoke(Devices.ExportDevice(_aimBody));
+                break;
+            case Key.F5 when _aimBody is not null:
+                Stow?.Invoke(_aimBody);
+                break;
+            case Key.F6:
+                OpenStorage?.Invoke();
                 break;
             case Key.F9 when _aimBody is not null:
                 Notify?.Invoke(Devices.Properties(_aimBody));

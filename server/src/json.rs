@@ -90,9 +90,17 @@ impl<'a> Parser<'a> {
             b'{' => self.object(),
             b'[' => self.array(),
             b'"' => Ok(Json::Str(self.string()?)),
-            b't' if self.eat(b"true") => Ok(Json::Bool(true)),
-            b'f' if self.eat(b"false") => Ok(Json::Bool(false)),
-            b'n' if self.eat(b"null") => Ok(Json::Null),
+            b't' | b'f' | b'n' => {
+                if self.eat(b"true") {
+                    Ok(Json::Bool(true))
+                } else if self.eat(b"false") {
+                    Ok(Json::Bool(false))
+                } else if self.eat(b"null") {
+                    Ok(Json::Null)
+                } else {
+                    self.err("bad literal")
+                }
+            }
             _ => self.number(),
         }
     }

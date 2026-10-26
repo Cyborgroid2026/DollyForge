@@ -231,6 +231,14 @@ public sealed class ShopAccount(long balanceKrw)
         return (true, $"결제 완료 ₩{total:N0}. 잔액 ₩{BalanceKrw:N0}", delivered);
     }
 
+    /// <summary>서버가 알려 준 잔액·소모품 재고로 맞춘다 (온라인일 때 서버가 권위).</summary>
+    public void Sync(long balanceKrw, IReadOnlyDictionary<string, int> consumables)
+    {
+        BalanceKrw = balanceKrw;
+        Consumables.Clear();
+        foreach (var (k, v) in consumables) Consumables[k] = v;
+    }
+
     public bool Has(IReadOnlyDictionary<string, int> needs) => needs.All(n => Consumables.GetValueOrDefault(n.Key) >= n.Value);
 
     public void Consume(IReadOnlyDictionary<string, int> needs)

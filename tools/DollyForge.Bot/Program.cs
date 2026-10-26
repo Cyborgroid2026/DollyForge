@@ -1,191 +1,116 @@
-using System.Collections.Concurrent;
-using DollyForge.Client.Game;
-using DollyForge.Client.Net;
+using DollyForge.Core;
+using DollyForge.Core.Net;
 
-// 사용법: dotnet run -- [ws://127.0.0.1:7700] [전화번호]
-// 서버는 DOLLY_DEV_ECHO_CODE=1 로 실행되어 있어야 한다 (인증 코드를 응답에 포함).
+// 월드 서버 통합 시험: QR 계정 → 결제(서버가 다시 계산한 금액 = C# 견적) → 소모품 설치·회수 → 창고 보관·꺼내기 → 다른 플레이어 위치 중계
 var url = new Uri(args.ElementAtOrDefault(0) ?? "ws://127.0.0.1:7700");
-var phone = args.ElementAtOrDefault(1) ?? $"010{Random.Shared.Next(10000000, 99999999)}";
-
-const float FenceRadius = 18f;
-
-var bot = new Bot(url);
-await bot.Connect();
-
-var registered = await bot.Send<Registered>(Packets.Register(phone, 1));
-var sent = await bot.Send<CodeSent>(Packets.RequestCode(registered.Token));
-Check(sent.DevCode.Length == 6, "개발 모드 인증 코드 수신");
-await bot.Send<ErrorMessage>(Packets.Login(registered.Token, "000000x"));
-var ok = await bot.Send<LoginOk>(Packets.Login(registered.Token, sent.DevCode));
-Console.WriteLine($"로그인 #{ok.PlayerId} ({sent.MaskedPhone})");
-await bot.WaitState(s => s.Phase == Phase.Daily);
-var day = bot.State!.Day;
-
-// 일상
-foreach (var id in new uint[] { 1, 2, 3, 4 }) await bot.Use(id);
-await bot.WaitState(s => s.Phase == Phase.Research);
-Check(true, "일상 → 연구 전환");
-
-// 연구 (집 앞 → 광장 → 연구소 입구로)
-await bot.WalkTo(-4f, -1f);
-await bot.WalkTo(4f, -1f);
-foreach (var id in new uint[] { 11, 12, 13 }) await bot.Use(id);
-await bot.WaitState(s => s.Phase == Phase.Outing);
-Check(bot.State!.Research >= 1 || true, $"연구 → 외출 전환 (완료 연구 {bot.State!.Research})");
-
-// 외출: 연구소를 나와 남쪽 문으로 나가 자원 3개 수집
-await bot.WalkTo(4f, 0f);
-await bot.WalkTo(0, -16);
-await bot.WalkTo(0, -21);
-while (bot.State!.Collected < 3)
-{
-    var node = bot.Nodes.Values.OrderBy(n => Dist(bot.X, bot.Z, n.X, n.Z)).FirstOrDefault();
-    if (node is null) { await Task.Delay(500); continue; }
-    await bot.WalkTo(node.X, node.Z, stopAt: 1.5f);
-    await bot.Interact(node.Id);
-    await Task.Delay(300);
-}
-Check(true, $"자원 3개 수집 (배터리 {bot.State!.Battery:0}%)");
-
-var haram = GameData.Stations.First(s => s.Id == 50);
-await bot.WalkTo(haram.X, haram.Z, stopAt: 1.5f);
-await bot.Use(50);
-Check(bot.LastDialogue?.StartsWith("하람") == true, $"하람 대화: {bot.LastDialogue}");
-
-// 귀가 후 수면
-await bot.WalkTo(0, -21);
-await bot.WalkTo(0, -16);
-await bot.WalkTo(-4f, -1f);
-await bot.Use(5);
-await bot.WaitState(s => s.Day == day + 1 && s.Phase == Phase.Daily);
-Check(true, $"Day {bot.State!.Day} 아침 (생체 안정도 {bot.State!.Bio:0}%)");
-Check(MathF.Abs(bot.Y) < 0.1f, $"물리 위치: 지면 위 (y={bot.Y:0.00})");
-
-// 일상 시간: 문이 닫혀 있다 → 물리적으로 통과할 수 없어야 한다
-await bot.WalkTo(-4f, -1f);
-await bot.WalkTo(0, -16.5f);
-await bot.Push(0, -1, seconds: 3);
-Check(bot.Z > -FenceRadius, $"닫힌 문에 막힘 (z={bot.Z:0.00})");
-
-// 점프: 실제 제자리 점프 높이
-var peak = await bot.Jump();
-Check(peak is > 0.35f and < 0.65f, $"점프 최고 높이 {peak:0.00}m");
-
-Console.WriteLine("\n모든 통합 테스트 통과 ✔");
-return 0;
-
-static float Dist(float ax, float az, float bx, float bz) => MathF.Sqrt((ax - bx) * (ax - bx) + (az - bz) * (az - bz));
-
-static void Check(bool ok, string what)
+var failures = 0;
+void Check(bool ok, string what)
 {
     Console.WriteLine($"{(ok ? "✔" : "✘")} {what}");
-    if (!ok) Environment.Exit(1);
+    if (!ok) failures++;
 }
 
-sealed class Bot(Uri url)
+var a = await Bot.Login(url, $"010{Random.Shared.Next(10000000, 99999999)}", gender: 0);
+Check(a.Profile?.BalanceKrw == ShopAccount.StartBudgetKrw, $"로그인 · 시작 예산 ₩{a.Profile?.BalanceKrw:N0}");
+
+// 결제: 재단품 포함. 서버 금액이 C# 견적과 원 단위까지 같아야 한다.
+List<OrderLine> order =
+[
+    new(Catalog.Get("AL-2020"), 2, 750),
+    new(Catalog.Get("PL-AL6061-5"), 1, 220, 200),
+    new(Catalog.Get("MT-JGB37-100"), 2),
+    new(Catalog.Get("FS-BOLT-M8"), 1),
+];
+var quote = ShopAccount.Quote(order);
+var receipt = await a.Expect<PurchaseResult>(Packets.Purchase(order));
+Check(receipt.Ok && receipt.TotalKrw == quote.Total, $"결제: 서버 ₩{receipt.TotalKrw:N0} = C# 견적 ₩{quote.Total:N0}");
+Check(receipt.Lines.Zip(order).All(p => p.First.UnitKrw == p.Second.Item.UnitPrice(p.Second.LengthMm, p.Second.WidthMm)), "품목별 단가 일치 (재단 2020 750 mm, 판재 220×200 mm)");
+var profile = await a.Next<Profile>();
+Check(profile.BalanceKrw == ShopAccount.StartBudgetKrw - quote.Total && profile.Consumables.GetValueOrDefault("FS-BOLT-M8") == 10,
+    $"잔액 ₩{profile.BalanceKrw:N0}, M8 볼트 재고 {profile.Consumables.GetValueOrDefault("FS-BOLT-M8")}");
+
+var broke = await a.Expect<PurchaseResult>(Packets.Purchase([new(Catalog.Get("BT-LFP-12-10"), 5)]));
+Check(!broke.Ok && broke.Message.Contains("잔액"), $"잔액 초과 주문 거절: {broke.Message}");
+var forged = await a.Expect<PurchaseResult>(Packets.Purchase([new(Catalog.Get("AL-2020"), 1, 9000)]));
+Check(!forged.Ok, $"범위 밖 재단 거절: {forged.Message}");
+
+// 소모품: 설치(consume) / 회수(refund) — 설치된 만큼만 회수된다
+var used = await a.Expect<Profile>(Packets.Consume("FS-BOLT-M8", 4));
+Check(used.Consumables["FS-BOLT-M8"] == 6, "볼트 4개 설치 → 재고 6");
+var back = await a.Expect<Profile>(Packets.Refund("FS-BOLT-M8", 2));
+Check(back.Consumables["FS-BOLT-M8"] == 8, "볼트 2개 회수 → 재고 8");
+var cheat = await a.Expect<ErrorMessage>(Packets.Refund("FS-BOLT-M8", 3));
+Check(cheat.Text.Contains("회수"), $"설치보다 많은 회수 거절: {cheat.Text}");
+
+// 창고: 넣으면 목록에 있고, 꺼내면 같은 문서가 돌아오며 창고에서 사라진다 (복제 불가)
+var robot = Blueprints.TwoWheelRobot(new ShopAccount(1_000_000), System.Numerics.Vector3.Zero);
+var json = Serialization.DeviceJson(robot);
+var list = await a.Expect<DeviceList>(Packets.StowDevice("2륜 로봇", json));
+Check(list.Devices.Any(d => d.Name == "2륜 로봇" && d.Parts == robot.Parts.Count), $"창고 보관: {string.Join(", ", list.Devices.Select(d => $"{d.Name}({d.Parts}부품)"))}");
+var data = await a.Expect<DeviceData>(Packets.RetrieveDevice("2륜 로봇"));
+var restored = Serialization.ParseDevice(data.Json);
+Check(data.Json == json && Export.Urdf(restored) == Export.Urdf(robot), "꺼낸 기기 = 넣은 기기 (URDF 동일)");
+var empty = await a.Next<DeviceList>();
+Check(empty.Devices.Count == 0, "꺼낸 뒤 창고 비어 있음");
+var twice = await a.Expect<ErrorMessage>(Packets.RetrieveDevice("2륜 로봇"));
+Check(twice.Text.Contains("없"), "같은 기기를 두 번 꺼낼 수 없음");
+
+// 다른 플레이어: 입장 알림과 위치 중계
+var b = await Bot.Login(url, $"010{Random.Shared.Next(10000000, 99999999)}", gender: 1);
+var joined = await a.Next<PlayerJoined>();
+Check(joined.Id == b.Id && joined.Gender == 1, $"다른 사이보그 입장 알림 #{joined.Id}");
+await b.Client.SendAsync(Packets.Pose(3.5f, 0.2f, -1.25f, 0.5f));
+var moved = await a.Next<PlayerMoved>();
+Check(moved.Id == b.Id && Math.Abs(moved.X - 3.5f) < 1e-4 && Math.Abs(moved.Z + 1.25f) < 1e-4, $"위치 중계 ({moved.X}, {moved.Y}, {moved.Z})");
+
+Console.WriteLine(failures == 0 ? "\n모든 서버 통합 시험 통과 ✔" : $"\n실패 {failures}건");
+return failures == 0 ? 0 : 1;
+
+sealed class Bot
 {
-    private readonly WorldClient _net = new();
-    private readonly BlockingCollection<ServerMessage> _inbox = [];
-    public readonly ConcurrentDictionary<uint, NodeSpawn> Nodes = new();
-    public PlayerState? State;
-    public float X = -6.5f, Y, Z = 0;
-    public string? LastDialogue;
+    public WorldClient Client { get; } = new();
+    public uint Id { get; private set; }
+    public Profile? Profile { get; private set; }
 
-    public async Task Connect()
+    public static async Task<Bot> Login(Uri url, string phone, byte gender)
     {
-        _net.OnMessage += m =>
-        {
-            switch (m)
-            {
-                case StateUpdate s: State = s.State; break;
-                case NodeSpawn n: Nodes[n.Id] = n; break;
-                case NodeRemove n: Nodes.TryRemove(n.Id, out _); break;
-                case SelfState me: X = me.X; Y = me.Y; Z = me.Z; break;
-                case TextMessage { Kind: MessageKind.Dialogue } d: LastDialogue = d.Text; break;
-                case TextMessage t: Console.WriteLine($"   · {t.Text}"); break;
-            }
-            _inbox.Add(m);
-        };
-        await _net.ConnectAsync(url);
+        var bot = new Bot();
+        await bot.Client.ConnectAsync(url, TimeSpan.FromSeconds(5));
+        var reg = await bot.Expect<Registered>(Packets.Register(phone, gender));
+        var code = await bot.Expect<CodeSent>(Packets.RequestCode(reg.Token));
+        var ok = await bot.Expect<LoginOk>(Packets.Login(reg.Token, code.DevCode));
+        bot.Id = ok.PlayerId;
+        bot.Profile = await bot.Next<Profile>();
+        return bot;
     }
 
-    public async Task<T> Send<T>(byte[] packet) where T : ServerMessage
+    readonly Queue<ServerMessage> _backlog = new();
+
+    public async Task<T> Expect<T>(byte[] packet) where T : ServerMessage
     {
-        await _net.SendAsync(packet);
+        await Client.SendAsync(packet);
+        return await Next<T>();
+    }
+
+    /// <summary>T 가 올 때까지 기다린다. 그 사이 다른 메시지는 나중을 위해 보관한다.</summary>
+    public async Task<T> Next<T>() where T : ServerMessage
+    {
+        for (var n = _backlog.Count; n > 0; n--)
+        {
+            var m = _backlog.Dequeue();
+            if (m is T hit) return hit;
+            _backlog.Enqueue(m);
+        }
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (DateTime.UtcNow < deadline)
         {
-            if (_inbox.TryTake(out var m, 200) && m is T t) return t;
-        }
-        throw new TimeoutException($"{typeof(T).Name} 응답 없음");
-    }
-
-    public async Task WaitState(Func<PlayerState, bool> pred)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (State is { } s && pred(s)) return;
-            await Task.Delay(50);
-        }
-        throw new TimeoutException($"상태 조건 미충족: {State}");
-    }
-
-    private Task Input(float mx, float mz, byte flags = 0) => _net.SendAsync(Packets.Input(mx, mz, 0, flags));
-
-    /// 서버 물리로 걸어간다. 막히면 옆으로 비켜 간다.
-    public async Task WalkTo(float tx, float tz, float stopAt = 0.4f)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(90);
-        var (lastX, lastZ, stuckSince) = (X, Z, DateTime.UtcNow);
-        var side = 1f;
-        while (DateTime.UtcNow < deadline)
-        {
-            var dx = tx - X; var dz = tz - Z;
-            var d = MathF.Sqrt(dx * dx + dz * dz);
-            if (d <= stopAt) { await Input(0, 0); await Task.Delay(300); return; }
-            var (mx, mz) = (dx / d, dz / d);
-            if ((DateTime.UtcNow - stuckSince).TotalSeconds > 1.0)
+            foreach (var m in Client.Drain())
             {
-                // 장애물: 1초 동안 수직 방향으로 비켜 간다
-                (mx, mz) = (-mz * side, mx * side);
-                if ((DateTime.UtcNow - stuckSince).TotalSeconds > 2.0) { stuckSince = DateTime.UtcNow; side = -side; }
+                if (m is T t) return t;
+                _backlog.Enqueue(m);
             }
-            await Input(mx, mz, d > 3 ? (byte)2 : (byte)0);
-            await Task.Delay(100);
-            if (MathF.Abs(X - lastX) + MathF.Abs(Z - lastZ) > 0.15f) (lastX, lastZ, stuckSince) = (X, Z, DateTime.UtcNow);
+            await Task.Delay(20);
         }
-        throw new TimeoutException($"({tx}, {tz}) 도달 실패: 현재 ({X:0.0}, {Z:0.0})");
-    }
-
-    public async Task Push(float mx, float mz, float seconds)
-    {
-        var end = DateTime.UtcNow.AddSeconds(seconds);
-        while (DateTime.UtcNow < end) { await Input(mx, mz, 2); await Task.Delay(100); }
-        await Input(0, 0);
-        await Task.Delay(300);
-    }
-
-    public async Task<float> Jump()
-    {
-        await Input(0, 0);
-        await Task.Delay(500);
-        var ground = Y;
-        float peak = 0;
-        await Input(0, 0, 1);
-        var end = DateTime.UtcNow.AddSeconds(1.2);
-        while (DateTime.UtcNow < end) { peak = MathF.Max(peak, Y - ground); await Task.Delay(15); }
-        await Input(0, 0);
-        return peak;
-    }
-
-    public Task Interact(uint id) => _net.SendAsync(Packets.Interact(id));
-
-    public async Task Use(uint id)
-    {
-        var s = GameData.Stations.First(st => st.Id == id);
-        await WalkTo(s.X, s.Z, stopAt: 1.2f);
-        await Interact(id);
-        await Task.Delay(250);
+        throw new TimeoutException($"{typeof(T).Name} 응답 없음 (보관 중: {string.Join(", ", _backlog.Select(x => x.GetType().Name))})");
     }
 }
