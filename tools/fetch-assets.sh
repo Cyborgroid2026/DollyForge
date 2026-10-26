@@ -20,7 +20,7 @@ done
 
 echo "[assets] PBR 텍스처 (색·노멀·거칠기)"
 for t in aerial_grass_rock forrest_ground_01 rock_face_03 rocky_trail weathered_planks white_plaster_02 bark_brown_02 rock_boulder_dry plywood metal_plate \
-         painted_concrete concrete_pavers grass_path_2 leafy_grass; do
+         concrete_pavers; do
   for m in diff nor_gl rough; do
     fetch "$BASE/Textures/jpg/1k/$t/${t}_${m}_1k.jpg" "assets/tex/$t/$m.jpg"
   done

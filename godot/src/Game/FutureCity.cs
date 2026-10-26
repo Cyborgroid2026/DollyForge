@@ -29,7 +29,6 @@ public partial class FutureCity : Node3D
         BuildSkyline();
         BuildResonanceTower(new Vector3(60, 0, -950));
         BuildFloatingPlatforms();
-        BuildMonorail();
         BuildMasts();
     }
 
@@ -92,8 +91,7 @@ public partial class FutureCity : Node3D
         {
             var x = _rng.RandfRange(-78, 78);
             var z = _rng.RandfRange(-78, 78);
-            if (new Vector2(x, z - 2).Length() < 22) continue; // 작업장과 자갈 마당은 비운다
-            if (new Vector2(x - World.PondCenter.X, z - World.PondCenter.Y).Length() < World.PondRadius + 3) continue;
+            if (!Site.Clear(x, z, 5f) || new Vector2(x, z + 4).Length() < 16) continue; // 사람 자리·작업장 둘레는 비운다
             if (noise.GetNoise2D(x, z) < 0.05f + _rng.Randf() * 0.25f) continue;
             var s = _rng.RandfRange(0.7f, 1.4f);
             var basis = new Basis(Vector3.Up, _rng.RandfRange(0, Mathf.Tau))
@@ -155,7 +153,7 @@ public partial class FutureCity : Node3D
         for (var i = 0; i < 90; i++)
         {
             float x, z;
-            do { x = _rng.RandfRange(-76, 76); z = _rng.RandfRange(-76, 76); } while (new Vector2(x, z - 2).Length() < 20);
+            do { x = _rng.RandfRange(-76, 76); z = _rng.RandfRange(-76, 76); } while (!Site.Clear(x, z, 2.5f));
             var size = Mathf.Pow(_rng.Randf(), 2.2f) * 1.6f + 0.15f; // 작은 돌이 많고 큰 바위는 드물다
             var basis = new Basis(new Vector3(_rng.Randf(), _rng.Randf(), _rng.Randf()).Normalized(), _rng.RandfRange(0, Mathf.Tau))
                 .Scaled(new Vector3(size * _rng.RandfRange(0.8f, 1.4f), size * _rng.RandfRange(0.45f, 0.8f), size * _rng.RandfRange(0.8f, 1.3f)));

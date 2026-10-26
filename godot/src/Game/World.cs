@@ -41,19 +41,25 @@ public partial class World : Node3D
         BuildEnvironment();
         BuildTerrain();
         BuildWorkshop();
+        AddChild(new Settlement { World = this });
         AddChild(new FutureCity { World = this });
         AddChild(new Nature { World = this });
     }
 
+    /// <summary>아침 하늘 HDRI (Poly Haven qwantani_mid_morning) 속 해의 방향, 고도 약 40°</summary>
+    static readonly Vector3 HdriSun = new Vector3(0.450f, 0.645f, -0.617f).Normalized();
+    /// <summary>하늘을 돌려 해가 동남동에서 비치게 한다: 정류장에서 북쪽(작업장·도시)을 볼 때 오른쪽 옆빛</summary>
+    const float SkyYaw = -1.32f;
+    public static Vector3 SunDirection => HdriSun.Rotated(Vector3.Up, SkyYaw);
+
     void BuildEnvironment()
     {
+        const string hdri = "res://assets/hdri/qwantani_mid_morning_puresky.hdr";
         var sky = new Sky
         {
             SkyMaterial = new PanoramaSkyMaterial
             {
-                Panorama = ResourceLoader.Exists("res://assets/hdri/kloofendal_48d_partly_cloudy_puresky.hdr")
-                    ? GD.Load<Texture2D>("res://assets/hdri/kloofendal_48d_partly_cloudy_puresky.hdr")
-                    : null,
+                Panorama = ResourceLoader.Exists(hdri) ? GD.Load<Texture2D>(hdri) : null,
                 EnergyMultiplier = 1.0f,
             },
             ProcessMode = Sky.ProcessModeEnum.Automatic,
@@ -63,6 +69,7 @@ public partial class World : Node3D
         {
             BackgroundMode = Godot.Environment.BGMode.Sky,
             Sky = sky,
+            SkyRotation = new Vector3(0, SkyYaw, 0),
             AmbientLightSource = Godot.Environment.AmbientSource.Sky,
             ReflectedLightSource = Godot.Environment.ReflectionSource.Sky,
             TonemapMode = Godot.Environment.ToneMapper.Agx,
@@ -82,31 +89,38 @@ public partial class World : Node3D
             GlowIntensity = 0.25f,
             GlowBloom = 0.02f,
             VolumetricFogEnabled = true,
-            VolumetricFogDensity = 0.0006f,
-            VolumetricFogAlbedo = new Color(0.9f, 0.92f, 0.95f),
-            VolumetricFogLength = 120f,
-            // 공기 원근: 멀수록 하늘빛에 잠기는 실제 대기 산란
+            VolumetricFogDensity = 0.0012f,
+            VolumetricFogAlbedo = new Color(0.95f, 0.93f, 0.9f),
+            VolumetricFogAnisotropy = 0.55f, // 해 쪽으로 빛이 번지는 앞방향 산란
+            VolumetricFogLength = 140f,
+            // 공기 원근: 멀수록 하늘빛에 잠기는 실제 대기 산란 + 낮은 곳에 고이는 아침 안개
             FogEnabled = true,
-            FogLightColor = new Color(0.66f, 0.75f, 0.86f),
-            FogDensity = 0.0011f,
-            FogAerialPerspective = 0.75f,
-            FogSunScatter = 0.25f,
+            FogLightColor = new Color(0.72f, 0.78f, 0.86f),
+            FogDensity = 0.0013f,
+            FogAerialPerspective = 0.8f,
+            FogSunScatter = 0.35f,
             FogSkyAffect = 0.0f,
+            FogHeight = 1.2f,
+            FogHeightDensity = 0.035f,
+            // 색: 맑은 아침의 채도와 대비 (과하지 않게)
+            AdjustmentEnabled = true,
+            AdjustmentSaturation = 1.12f,
+            AdjustmentContrast = 1.05f,
         };
         AddChild(new WorldEnvironment { Environment = env });
 
-        // 태양: HDRI 의 해 방향(오후, 남서쪽 높이 약 45°)에 맞춘 실제 일사 수준 조명
+        // 태양: HDRI 의 해 방향에 맞춘 아침 햇빛 (약간 따뜻한 색)
         _sun = new DirectionalLight3D
         {
-            LightEnergy = 1.6f,
-            LightColor = new Color(1.0f, 0.96f, 0.9f),
+            LightEnergy = 1.9f,
+            LightColor = new Color(1.0f, 0.92f, 0.82f),
             ShadowEnabled = true,
             DirectionalShadowMaxDistance = 80f,
             DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel4Splits,
             LightAngularDistance = 0.5f, // 실제 태양의 시직경 (반그림자)
             LightVolumetricFogEnergy = 0.6f,
         };
-        _sun.RotationDegrees = new Vector3(-42, -140, 0);
+        _sun.Basis = Basis.LookingAt(-SunDirection, Vector3.Up);
         AddChild(_sun);
     }
 
@@ -189,7 +203,7 @@ public partial class World : Node3D
     {
         var concrete = Look.Scanned("rock_boulder_dry", 2.5f, new Color(0.78f, 0.78f, 0.76f));
         concrete.Roughness = 0.9f;
-        var plaster = Look.Scanned("white_plaster_02", 2.0f, Colors.White);
+        var plaster = Look.Scanned("white_plaster_02", 2.5f, new Color(0.98f, 0.96f, 0.92f));
         var steel = (StandardMaterial3D)Look.For(Core.Materials.Steel);
         var plywood = Look.For(Core.Materials.Pine);
 

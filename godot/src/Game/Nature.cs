@@ -31,8 +31,7 @@ public partial class Nature : Node3D
     bool OpenGround(float x, float z, out float h)
     {
         h = World.HeightAt(x, z);
-        if (new Vector2(x, z - 2).Length() < 19) return false; // 작업장·자갈 마당
-        if (new Vector2(x - World.PondCenter.X, z - World.PondCenter.Y).Length() < World.PondRadius + 0.8f) return false;
+        if (!Site.Clear(x, z)) return false; // 작업장·마당·정류장·선로·오솔길·연못
         var slope = new Vector2(World.HeightAt(x + 0.5f, z) - World.HeightAt(x - 0.5f, z), World.HeightAt(x, z + 0.5f) - World.HeightAt(x, z - 0.5f)).Length();
         return slope < 0.7f; // 가파른 비탈엔 풀이 덜 붙는다
     }
@@ -103,9 +102,7 @@ public partial class Nature : Node3D
             {
                 var px = x + _rng.RandfRange(-0.3f, 0.3f);
                 var pz = z + _rng.RandfRange(-0.3f, 0.3f);
-                var near = new Vector2(px, pz - 2).Length();
-                var yardWeeds = near is > 15 and < 19 && _rng.Randf() < 0.12f; // 마당 가장자리의 잡초
-                if (!yardWeeds && !OpenGround(px, pz, out _)) continue;
+                if (!OpenGround(px, pz, out _)) continue;
                 if (patch.GetNoise2D(px, pz) < -0.25f + _rng.Randf() * 0.2f) continue; // 군락 사이 빈 땅
                 var h = World.HeightAt(px, pz);
                 var s = _rng.RandfRange(0.7f, 1.35f) * (0.85f + patch.GetNoise2D(px * 3, pz * 3) * 0.3f);
