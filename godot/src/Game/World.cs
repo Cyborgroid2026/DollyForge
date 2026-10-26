@@ -61,7 +61,7 @@ public partial class World : Node3D
             GlowIntensity = 0.25f,
             GlowBloom = 0.02f,
             VolumetricFogEnabled = true,
-            VolumetricFogDensity = 0.004f,
+            VolumetricFogDensity = 0.0006f,
             VolumetricFogAlbedo = new Color(0.9f, 0.92f, 0.95f),
             VolumetricFogLength = 120f,
         };
@@ -70,7 +70,7 @@ public partial class World : Node3D
         // 태양: HDRI 의 해 방향(오후, 남서쪽 높이 약 45°)에 맞춘 실제 일사 수준 조명
         _sun = new DirectionalLight3D
         {
-            LightEnergy = 2.4f,
+            LightEnergy = 1.6f,
             LightColor = new Color(1.0f, 0.96f, 0.9f),
             ShadowEnabled = true,
             DirectionalShadowMaxDistance = 80f,
@@ -187,7 +187,7 @@ public partial class World : Node3D
         Catalog = Box(new Vector3(0.30f, 0.035f, 0.22f), desk + new Vector3(-0.2f, 0.018f, 0),
             new StandardMaterial3D { AlbedoColor = new Color(0.12f, 0.2f, 0.35f), Roughness = 0.7f });
         Catalog.SetMeta("interact", "catalog");
-        var title = Look.Tag("부품 카탈로그 · 주문서", 0.0012f);
+        var title = Look.Tag("부품 카탈로그", 0.0005f);
         title.Modulate = new Color(0.92f, 0.88f, 0.75f);
         title.RotationDegrees = new Vector3(-90, 0, 0);
         title.Position = new Vector3(0, 0.019f, 0);

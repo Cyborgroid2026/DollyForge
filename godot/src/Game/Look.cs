@@ -76,19 +76,21 @@ public static class Look
         return m;
     }
 
-    static FontVariation? _pen, _stamp;
+    static readonly string[] PenNames = ["NanumBarunpen", "Nanum Pen Script", "NanumGothic"];
+    static readonly string[] StampNames = ["NanumBarunGothic", "NanumGothic", "Noto Sans CJK KR"];
+    static FontVariation? _pen, _penUi, _stamp;
 
-    /// <summary>손글씨 (종이 도면·메모)</summary>
-    public static Font Pen => _pen ??= Variation(["NanumBarunpen", "Nanum Pen Script", "NanumGothic"], 0);
+    /// <summary>손글씨 — 월드 안 종이(3D, 거리장 글꼴)</summary>
+    public static Font Pen => _pen ??= Variation(PenNames, 400, msdf: true);
+
+    /// <summary>손글씨 — 눈앞에 펼친 종이(2D). 거리장 글꼴은 일부 숫자 획이 깨져 일반 래스터를 쓴다.</summary>
+    public static Font PenUi => _penUi ??= Variation(PenNames, 400, msdf: false);
 
     /// <summary>찍어 새긴 글씨 (금속 꼬리표·기계 명판)</summary>
-    public static Font Stamp => _stamp ??= Variation(["NanumBarunGothic", "NanumGothic", "Noto Sans CJK KR"], 600);
+    public static Font Stamp => _stamp ??= Variation(StampNames, 600, msdf: true);
 
-    static FontVariation Variation(string[] names, int weight)
-    {
-        var sys = new SystemFont { FontNames = names, FontWeight = weight > 0 ? weight : 400, MultichannelSignedDistanceField = true };
-        return new FontVariation { BaseFont = sys };
-    }
+    static FontVariation Variation(string[] names, int weight, bool msdf) =>
+        new() { BaseFont = new SystemFont { FontNames = names, FontWeight = weight, MultichannelSignedDistanceField = msdf } };
 
     /// <summary>사물 표면에 붙는 꼬리표 글씨</summary>
     public static Label3D Tag(string text, float size = 0.004f, Font? font = null)

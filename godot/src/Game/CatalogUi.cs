@@ -25,9 +25,9 @@ public partial class CatalogUi : Control
 
     public override void _Ready()
     {
-        SetAnchorsPreset(LayoutPreset.FullRect);
+        SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Stop;
-        var theme = new Theme { DefaultFont = Look.Pen, DefaultFontSize = 22 };
+        var theme = new Theme { DefaultFont = Look.PenUi, DefaultFontSize = 22 };
         theme.SetColor("font_color", "Label", Ink);
         theme.SetColor("font_color", "Button", Ink);
         theme.SetColor("font_color", "ItemList", Ink);

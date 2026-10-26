@@ -88,7 +88,7 @@ public partial class Main : Node3D
             ContentMarginLeft = 18, ContentMarginRight = 18, ContentMarginTop = 10, ContentMarginBottom = 10,
         });
         _slip = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, HorizontalAlignment = HorizontalAlignment.Center };
-        _slip.AddThemeFontOverride("font", Look.Pen);
+        _slip.AddThemeFontOverride("font", Look.PenUi);
         _slip.AddThemeFontSizeOverride("font_size", 22);
         _slip.AddThemeColorOverride("font_color", new Color(0.1f, 0.12f, 0.22f));
         slipBox.AddChild(_slip);
@@ -199,6 +199,7 @@ public partial class Main : Node3D
                     _player.Camera.RotationDegrees = new Vector3(l[1], 0, 0);
                     break;
                 case "--catalog": CallDeferred(nameof(OpenCatalog)); break;
+                case "--selftest": AddChild(new SelfTest { Devices = _devices }); break;
             }
         }
         if (_shotPath is not null && _shotFrames <= 0) _shotFrames = 120;
