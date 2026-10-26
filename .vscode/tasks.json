@@ -7,7 +7,16 @@
         {
             "label": "Dolly Forge: 실행",
             "dependsOrder": "sequence",
-            "dependsOn": ["Dolly Forge: 서버+클라이언트", "Dolly Forge: 통합 브라우저 열기"],
+            "dependsOn": ["assets: 실사 에셋 내려받기", "Dolly Forge: 서버+클라이언트", "Dolly Forge: 통합 브라우저 열기"],
+            "problemMatcher": []
+        },
+        {
+            // Poly Haven CC0 텍스처·HDRI (처음 한 번만 받고, 이후에는 건너뛴다)
+            "label": "assets: 실사 에셋 내려받기",
+            "type": "shell",
+            "command": "./tools/fetch-assets.sh",
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "silent" },
             "problemMatcher": []
         },
         {

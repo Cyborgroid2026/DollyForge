@@ -17,3 +17,4 @@ obj/
 # OS / 에디터
 .DS_Store
 *.swp
+/client/wwwroot/assets/

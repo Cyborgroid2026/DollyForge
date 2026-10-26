@@ -7,6 +7,8 @@ using DollyForge.Client.Net;
 var url = new Uri(args.ElementAtOrDefault(0) ?? "ws://127.0.0.1:7700");
 var phone = args.ElementAtOrDefault(1) ?? $"010{Random.Shared.Next(10000000, 99999999)}";
 
+const float FenceRadius = 18f;
+
 var bot = new Bot(url);
 await bot.Connect();
 
@@ -24,12 +26,15 @@ foreach (var id in new uint[] { 1, 2, 3, 4 }) await bot.Use(id);
 await bot.WaitState(s => s.Phase == Phase.Research);
 Check(true, "일상 → 연구 전환");
 
-// 연구
+// 연구 (집 앞 → 광장 → 연구소 입구로)
+await bot.WalkTo(-4f, -1f);
+await bot.WalkTo(4f, -1f);
 foreach (var id in new uint[] { 11, 12, 13 }) await bot.Use(id);
 await bot.WaitState(s => s.Phase == Phase.Outing);
 Check(bot.State!.Research >= 1 || true, $"연구 → 외출 전환 (완료 연구 {bot.State!.Research})");
 
-// 외출: 남쪽 문으로 나가 자원 3개 수집
+// 외출: 연구소를 나와 남쪽 문으로 나가 자원 3개 수집
+await bot.WalkTo(4f, 0f);
 await bot.WalkTo(0, -16);
 await bot.WalkTo(0, -21);
 while (bot.State!.Collected < 3)
@@ -50,17 +55,21 @@ Check(bot.LastDialogue?.StartsWith("하람") == true, $"하람 대화: {bot.Last
 // 귀가 후 수면
 await bot.WalkTo(0, -21);
 await bot.WalkTo(0, -16);
+await bot.WalkTo(-4f, -1f);
 await bot.Use(5);
 await bot.WaitState(s => s.Day == day + 1 && s.Phase == Phase.Daily);
 Check(true, $"Day {bot.State!.Day} 아침 (생체 안정도 {bot.State!.Bio:0}%)");
-Check(bot.Rejections == 0, $"서버 이동 보정 횟수 {bot.Rejections}");
+Check(MathF.Abs(bot.Y) < 0.1f, $"물리 위치: 지면 위 (y={bot.Y:0.00})");
 
-// 울타리 문이 닫힌 상태에서 탈출 시도 → 서버가 되돌려야 함
-await bot.WalkTo(0, -17.2f);
-var before = bot.Rejections;
-await bot.Move(0, -18.6f);
-await Task.Delay(400);
-Check(bot.Rejections > before, "닫힌 문 통과 시도 차단");
+// 일상 시간: 문이 닫혀 있다 → 물리적으로 통과할 수 없어야 한다
+await bot.WalkTo(-4f, -1f);
+await bot.WalkTo(0, -16.5f);
+await bot.Push(0, -1, seconds: 3);
+Check(bot.Z > -FenceRadius, $"닫힌 문에 막힘 (z={bot.Z:0.00})");
+
+// 점프: 실제 제자리 점프 높이
+var peak = await bot.Jump();
+Check(peak is > 0.35f and < 0.65f, $"점프 최고 높이 {peak:0.00}m");
 
 Console.WriteLine("\n모든 통합 테스트 통과 ✔");
 return 0;
@@ -79,8 +88,7 @@ sealed class Bot(Uri url)
     private readonly BlockingCollection<ServerMessage> _inbox = [];
     public readonly ConcurrentDictionary<uint, NodeSpawn> Nodes = new();
     public PlayerState? State;
-    public float X = -6.5f, Z = 0;
-    public int Rejections;
+    public float X = -6.5f, Y, Z = 0;
     public string? LastDialogue;
 
     public async Task Connect()
@@ -92,7 +100,7 @@ sealed class Bot(Uri url)
                 case StateUpdate s: State = s.State; break;
                 case NodeSpawn n: Nodes[n.Id] = n; break;
                 case NodeRemove n: Nodes.TryRemove(n.Id, out _); break;
-                case Teleport t: X = t.X; Z = t.Z; Rejections++; break;
+                case SelfState me: X = me.X; Y = me.Y; Z = me.Z; break;
                 case TextMessage { Kind: MessageKind.Dialogue } d: LastDialogue = d.Text; break;
                 case TextMessage t: Console.WriteLine($"   · {t.Text}"); break;
             }
@@ -117,25 +125,58 @@ sealed class Bot(Uri url)
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (DateTime.UtcNow < deadline)
         {
-            if (State is { } s && pred(s)) { Rejections = 0; return; }
+            if (State is { } s && pred(s)) return;
             await Task.Delay(50);
         }
         throw new TimeoutException($"상태 조건 미충족: {State}");
     }
 
-    public Task Move(float x, float z) { X = x; Z = z; return _net.SendAsync(Packets.Move(x, 0, z, 0)); }
+    private Task Input(float mx, float mz, byte flags = 0) => _net.SendAsync(Packets.Input(mx, mz, 0, flags));
 
-    public async Task WalkTo(float tx, float tz, float stopAt = 0.3f)
+    /// 서버 물리로 걸어간다. 막히면 옆으로 비켜 간다.
+    public async Task WalkTo(float tx, float tz, float stopAt = 0.4f)
     {
-        while (true)
+        var deadline = DateTime.UtcNow.AddSeconds(90);
+        var (lastX, lastZ, stuckSince) = (X, Z, DateTime.UtcNow);
+        var side = 1f;
+        while (DateTime.UtcNow < deadline)
         {
             var dx = tx - X; var dz = tz - Z;
             var d = MathF.Sqrt(dx * dx + dz * dz);
-            if (d <= stopAt) return;
-            var step = MathF.Min(0.5f, d - stopAt + 0.01f);
-            await Move(X + dx / d * step, Z + dz / d * step);
+            if (d <= stopAt) { await Input(0, 0); await Task.Delay(300); return; }
+            var (mx, mz) = (dx / d, dz / d);
+            if ((DateTime.UtcNow - stuckSince).TotalSeconds > 1.0)
+            {
+                // 장애물: 1초 동안 수직 방향으로 비켜 간다
+                (mx, mz) = (-mz * side, mx * side);
+                if ((DateTime.UtcNow - stuckSince).TotalSeconds > 2.0) { stuckSince = DateTime.UtcNow; side = -side; }
+            }
+            await Input(mx, mz, d > 3 ? (byte)2 : (byte)0);
             await Task.Delay(100);
+            if (MathF.Abs(X - lastX) + MathF.Abs(Z - lastZ) > 0.15f) (lastX, lastZ, stuckSince) = (X, Z, DateTime.UtcNow);
         }
+        throw new TimeoutException($"({tx}, {tz}) 도달 실패: 현재 ({X:0.0}, {Z:0.0})");
+    }
+
+    public async Task Push(float mx, float mz, float seconds)
+    {
+        var end = DateTime.UtcNow.AddSeconds(seconds);
+        while (DateTime.UtcNow < end) { await Input(mx, mz, 2); await Task.Delay(100); }
+        await Input(0, 0);
+        await Task.Delay(300);
+    }
+
+    public async Task<float> Jump()
+    {
+        await Input(0, 0);
+        await Task.Delay(500);
+        var ground = Y;
+        float peak = 0;
+        await Input(0, 0, 1);
+        var end = DateTime.UtcNow.AddSeconds(1.2);
+        while (DateTime.UtcNow < end) { peak = MathF.Max(peak, Y - ground); await Task.Delay(15); }
+        await Input(0, 0);
+        return peak;
     }
 
     public Task Interact(uint id) => _net.SendAsync(Packets.Interact(id));

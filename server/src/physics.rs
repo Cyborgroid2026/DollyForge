@@ -27,10 +27,12 @@ pub struct Input {
 
 pub struct Avatar {
     body: RigidBodyHandle,
-    collider: ColliderHandle,
     half: f32,
     radius: f32,
+    /// 의도한 속도 (입력 + 가속 + 중력). 벽에 막혀도 사람이 계속 밀듯 유지된다.
     pub vel: Vector<Real>,
+    /// 실제로 움직인 속도 (보고·애니메이션용)
+    pub actual: Vector<Real>,
     pub grounded: bool,
     pub input: Input,
     jump_latch: bool,
@@ -199,7 +201,8 @@ impl Physics {
                 offset: CharacterLength::Absolute(0.02),
                 autostep: Some(CharacterAutostep {
                     max_height: CharacterLength::Absolute(0.28), // 계단 한 칸 정도
-                    min_width: CharacterLength::Absolute(0.15),
+                    // 계단 위 착지 확인 폭: 캡슐 반경보다 넓어야 모서리를 경사로로 오인하지 않는다
+                    min_width: CharacterLength::Absolute(0.3),
                     include_dynamic_bodies: false,
                 }),
                 snap_to_ground: Some(CharacterLength::Absolute(0.3)),
@@ -352,14 +355,16 @@ impl Physics {
         let (radius, half) = if gender == 1 { (0.27, 0.62) } else { (0.24, 0.59) };
         let center = vector![feet[0], feet[1] + half + radius + 0.02, feet[2]];
         let body = self.bodies.insert(RigidBodyBuilder::kinematic_position_based().translation(center).build());
-        let collider = self.colliders.insert_with_parent(
-            ColliderBuilder::capsule_y(half, radius).collision_groups(InteractionGroups::new(G_PLAYER, Group::ALL)),
+        self.colliders.insert_with_parent(
+            // 소품과의 직접 접촉은 끈다: 키네마틱 몸체는 무한 질량으로 취급되기 때문.
+            // 소품은 캐릭터 컨트롤러가 70kg 질량으로 계산한 충격량으로만 밀린다.
+            ColliderBuilder::capsule_y(half, radius).collision_groups(InteractionGroups::new(G_PLAYER, Group::ALL ^ G_PROP)),
             body,
             &mut self.bodies,
         );
         self.avatars.insert(
             id,
-            Avatar { body, collider, half, radius, vel: Vector::zeros(), grounded: false, input: Input::default(), jump_latch: false },
+            Avatar { body, half, radius, vel: Vector::zeros(), actual: Vector::zeros(), grounded: false, input: Input::default(), jump_latch: false },
         );
     }
 
@@ -381,6 +386,7 @@ impl Physics {
             self.bodies[a.body].set_translation(center, true);
             self.bodies[a.body].set_next_kinematic_translation(center);
             a.vel = Vector::zeros();
+            a.actual = Vector::zeros();
         }
     }
 
@@ -388,10 +394,11 @@ impl Physics {
     pub fn add_node(&mut self, id: u32, kind: u8, x: f32, z: f32) -> f32 {
         let y = self.terrain.height_at(x, z) + 0.6;
         let (collider, size) = match kind {
-            0 => (ColliderBuilder::ball(0.32).density(DENSITY_TITANIUM), 0.32),
-            1 => (ColliderBuilder::ball(0.25).density(DENSITY_QUARTZ), 0.25),
-            2 => (ColliderBuilder::ball(0.28).density(DENSITY_COPPER), 0.28),
-            _ => (ColliderBuilder::ball(0.18).density(DENSITY_HERB), 0.18),
+            // 광석은 바닥이 평평한 거친 덩어리 — 구처럼 굴러가지 않는다
+            0 => (ColliderBuilder::round_cuboid(0.26, 0.17, 0.22, 0.06).density(DENSITY_TITANIUM), 0.32),
+            1 => (ColliderBuilder::round_cuboid(0.18, 0.2, 0.16, 0.05).density(DENSITY_QUARTZ), 0.25),
+            2 => (ColliderBuilder::round_cuboid(0.22, 0.15, 0.2, 0.06).density(DENSITY_COPPER), 0.28),
+            _ => (ColliderBuilder::round_cuboid(0.12, 0.1, 0.12, 0.04).density(DENSITY_HERB), 0.18),
         };
         let body = self.bodies.insert(RigidBodyBuilder::dynamic().translation(vector![x, y, z]).angular_damping(1.5).build());
         self.colliders.insert_with_parent(
@@ -464,10 +471,9 @@ impl Physics {
                 DT, &self.bodies, &self.colliders, &self.query, shape.as_ref(), &pos, desired, filter,
                 |c| hits.push(c),
             );
+            let push_vel = self.avatars[&id].vel;
             for hit in &hits {
-                self.controller.solve_character_collision_impulses(
-                    DT, &mut self.bodies, &self.colliders, &self.query, shape.as_ref(), BODY_MASS, hit, filter,
-                );
+                self.push(hit, push_vel);
             }
             let a = self.avatars.get_mut(&id).unwrap();
             a.grounded = moved.grounded;
@@ -477,9 +483,7 @@ impl Physics {
             if a.vel.y > 0.0 && moved.translation.y < desired.y * 0.5 {
                 a.vel.y = 0.0; // 천장에 부딪힘
             }
-            // 벽에 막힌 수평 성분은 사라진다
-            a.vel.x = moved.translation.x / DT;
-            a.vel.z = moved.translation.z / DT;
+            a.actual = moved.translation / DT;
             let mut next = pos.translation.vector + moved.translation;
             if next.y < -30.0 {
                 next = vector![SPAWN.0, SPAWN.1 + 2.0, SPAWN.2];
@@ -513,6 +517,29 @@ impl Physics {
         }
     }
 
+    /// 사람이 낼 수 있는 힘으로만 민다: 수평 PUSH_FORCE 이하, 그리고 사람보다 빠르게 밀 수는 없다.
+    /// 나머지(마찰, 무게)는 강체 시뮬레이션이 처리한다.
+    fn push(&mut self, hit: &CharacterCollision, char_vel: Vector<Real>) {
+        let Some(parent) = self.colliders.get(hit.handle).and_then(|c| c.parent()) else { return };
+        let body = &mut self.bodies[parent];
+        if !body.is_dynamic() {
+            return;
+        }
+        // 사람 → 물체 방향 (수평)
+        let mut n = body.translation() - hit.character_pos.translation.vector;
+        n.y = 0.0;
+        if n.norm() < 1e-3 {
+            return;
+        }
+        n = n.normalize();
+        let closing = char_vel.dot(&n) - body.linvel().dot(&n);
+        if closing <= 0.0 {
+            return;
+        }
+        let j = (PUSH_FORCE * DT).min(body.mass() * closing);
+        body.apply_impulse(n * j, true);
+    }
+
     pub fn set_input(&mut self, id: u32, input: Input) {
         if let Some(a) = self.avatars.get_mut(&id) {
             a.input = input;
@@ -520,11 +547,7 @@ impl Physics {
     }
 
     pub fn velocity(&self, id: u32) -> Option<(Vector<Real>, bool)> {
-        self.avatars.get(&id).map(|a| (a.vel, a.grounded))
-    }
-
-    pub fn collider_of(&self, id: u32) -> Option<ColliderHandle> {
-        self.avatars.get(&id).map(|a| a.collider)
+        self.avatars.get(&id).map(|a| (a.actual, a.grounded))
     }
 }
 
@@ -600,7 +623,7 @@ mod tests {
         assert!((b1[0] - b0[0]) > 0.5, "ball moved {:?} -> {:?}", b0, b1);
 
         let mut p = Physics::new();
-        p.add_node(5000, 0, 30.0, 0.0);
+        p.add_node(5000, 0, 3.0, -9.0); // 평평한 광장
         for _ in 0..120 {
             p.step(|_| true);
         }
@@ -609,5 +632,15 @@ mod tests {
         settle(&mut p, 1, 150, Input { mx: 1.0, run: true, ..Default::default() });
         let n1 = p.prop_pos(5000).unwrap();
         assert!((n1[0] - n0[0]).abs() < 0.05, "titanium moved {:?} -> {:?}", n0, n1);
+    }
+
+    #[test]
+    fn steps_up_onto_building_floor() {
+        let mut p = Physics::new();
+        p.add_avatar(1, 0, [3.5, 0.0, 0.0]);
+        settle(&mut p, 1, 30, Input::default());
+        settle(&mut p, 1, 180, Input { mx: 1.0, ..Default::default() });
+        let f = p.feet(1).unwrap();
+        assert!(f[0] > 6.0 && f[1] > 0.15, "stuck at {:?}", f);
     }
 }

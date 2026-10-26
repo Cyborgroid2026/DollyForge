@@ -31,7 +31,13 @@ public sealed class Engine(IJSRuntime js) : IAsyncDisposable
         Call("upsertPlayer", id, gender, x, y, z, yaw);
     public ValueTask MovePlayer(uint id, float x, float y, float z, float yaw) => Call("movePlayer", id, x, y, z, yaw);
     public ValueTask RemovePlayer(uint id) => Call("removePlayer", id);
-    public ValueTask AddNode(uint id, byte kind, float x, float z) => Call("addNode", id, kind, x, z);
+    public ValueTask AddNode(uint id, byte kind, float x, float y, float z) => Call("addNode", id, kind, x, y, z);
+    public ValueTask InitWorld(int n, float size, float[] heights, float[] trees, float[] rocks) =>
+        Call("initWorld", n, size, heights, trees, rocks);
+    public ValueTask AddProp(uint id, byte kind, float[] size, float[] pose) => Call("addProp", id, kind, size, pose);
+    public ValueTask SetPropPoses(float[] poses) => Call("setPropPoses", poses);
+    public ValueTask SetSelf(float x, float y, float z, float vx, float vy, float vz, bool grounded) =>
+        Call("setSelf", x, y, z, vx, vy, vz, grounded);
     public ValueTask RemoveNode(uint id) => Call("removeNode", id);
     public ValueTask ClearWorld() => Call("clearWorld");
     public ValueTask SetVrHud(IEnumerable<string> lines) => Call("setVrHud", lines.ToArray());

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# 실사 렌더링용 CC0 에셋(Poly Haven, https://polyhaven.com — CC0 1.0)을 내려받는다.
+# 용량이 커서 git 에는 넣지 않는다 (client/wwwroot/assets 는 .gitignore). 이미 있는 파일은 건너뛴다.
+set -euo pipefail
+cd "$(dirname "$0")/../client/wwwroot"
+BASE=https://dl.polyhaven.org/file/ph-assets
+
+fetch() { # url dest
+  [ -s "$2" ] && return 0
+  mkdir -p "$(dirname "$2")"
+  echo "  ↓ $2"
+  curl -sfL --retry 3 -o "$2.part" "$1" && mv "$2.part" "$2"
+}
+
+echo "[assets] 하늘 HDRI"
+for h in kloofendal_48d_partly_cloudy_puresky kloppenheim_06_puresky; do
+  fetch "$BASE/HDRIs/hdr/2k/${h}_2k.hdr" "assets/hdri/$h.hdr"
+done
+
+echo "[assets] PBR 텍스처 (색·노멀·거칠기)"
+for t in aerial_grass_rock rocky_trail weathered_planks white_plaster_02 bark_brown_02 rock_boulder_dry plywood metal_plate; do
+  for m in diff nor_gl rough; do
+    fetch "$BASE/Textures/jpg/1k/$t/${t}_${m}_1k.jpg" "assets/tex/$t/$m.jpg"
+  done
+done
+
+echo "[assets] 소나무 잎 카드 (pine_tree_01 의 실사 가지 텍스처)"
+for m in twig_diff twig_alpha twig_nor_gl; do
+  fetch "$BASE/Models/jpg/1k/pine_tree_01/pine_tree_01_${m}_1k.jpg" "assets/tex/pine/$m.jpg"
+done
+
+cat > assets/LICENSE.txt <<'TXT'
+이 폴더의 텍스처와 HDRI 는 Poly Haven (https://polyhaven.com) 의 CC0 1.0 에셋입니다.
+tools/fetch-assets.sh 로 내려받습니다.
+TXT
+echo "[assets] 완료"

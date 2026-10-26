@@ -197,7 +197,19 @@ public sealed class GameSession(Engine engine, IJSRuntime js, NavigationManager 
                 _ = engine.RemovePlayer(p.Id);
                 break;
             case NodeSpawn n:
-                _ = engine.AddNode(n.Id, n.Kind, n.X, n.Z);
+                _ = engine.AddNode(n.Id, n.Kind, n.X, n.Y, n.Z);
+                return;
+            case WorldInit w:
+                _ = engine.InitWorld(w.N, w.Size, w.Heights, w.Trees, w.Rocks);
+                return;
+            case PropSpawn p:
+                _ = engine.AddProp(p.Id, p.Kind, p.Size, p.Pose);
+                return;
+            case PropState p:
+                _ = engine.SetPropPoses(p.Poses);
+                return;
+            case SelfState me:
+                _ = engine.SetSelf(me.X, me.Y, me.Z, me.Vx, me.Vy, me.Vz, me.Grounded);
                 return;
             case NodeRemove n:
                 _ = engine.RemoveNode(n.Id);
@@ -245,7 +257,7 @@ public sealed class GameSession(Engine engine, IJSRuntime js, NavigationManager 
     // ---------- 렌더러 콜백 ----------
 
     [JSInvokable]
-    public Task OnLocalMove(float x, float y, float z, float yaw) => _net.SendAsync(Packets.Move(x, y, z, yaw));
+    public Task OnInput(float mx, float mz, float yaw, byte flags) => _net.SendAsync(Packets.Input(mx, mz, yaw, flags));
 
     [JSInvokable]
     public Task OnInteract(uint target)
