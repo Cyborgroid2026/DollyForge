@@ -5,7 +5,7 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
   "mainAssemblyName": "DollyForge.Client",
   "applicationEnvironment": "Development",
   "resources": {
-    "hash": "sha256-RqpN3p2ALTvlNZkH/vOatkf+tAyeyPCBSmsefzL72/c=",
+    "hash": "sha256-CHZp93/8xGk5h3/RogfFtTiYU69LdEgmpLgwxNTWe/c=",
     "jsModuleNative": [
       {
         "name": "dotnet.native.b6l13xorvf.js"
@@ -212,6 +212,12 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
         "virtualPath": "Microsoft.JSInterop.WebAssembly.wasm",
         "name": "Microsoft.JSInterop.WebAssembly.wrc8eavzcp.wasm",
         "hash": "sha256-VCeDTHijW2LZG2I156kMtdK6hB6/aOgO0CadhOOUpaA=",
+        "cache": "force-cache"
+      },
+      {
+        "virtualPath": "QRCoder.wasm",
+        "name": "QRCoder.jqr4n2c9hc.wasm",
+        "hash": "sha256-ayRMl7l1GF4h65kNE0bKJ4lrGPZxmR+OkvPUFrQ11oU=",
         "cache": "force-cache"
       },
       {
@@ -1242,16 +1248,16 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
       },
       {
         "virtualPath": "DollyForge.Client.wasm",
-        "name": "DollyForge.Client.2uvjr342ip.wasm",
-        "hash": "sha256-6s5g+9oZ22chwFbTv3v5JpGVKXrhcBhcwpOnj2ceVzs=",
+        "name": "DollyForge.Client.dbstxtkgpr.wasm",
+        "hash": "sha256-ZzYSeWDhkkb0mBsxIQBvQBLE4lhvFlJ17xXY3kOsJKE=",
         "cache": "force-cache"
       }
     ],
     "pdb": [
       {
         "virtualPath": "DollyForge.Client.pdb",
-        "name": "DollyForge.Client.c7aejr2gia.pdb",
-        "hash": "sha256-2HVzkoWnh3iIHENBvdaewxRBIhFQ0WhYfB23y1KK+B4=",
+        "name": "DollyForge.Client.nbrj1d1smv.pdb",
+        "hash": "sha256-7el9hk79dPnR6CbZLhTRu9BlJUmaojiS85zn9HoME0k=",
         "cache": "force-cache"
       }
     ],

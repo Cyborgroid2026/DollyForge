@@ -1,0 +1,10 @@
+<div class="meter @Kind @(Value < 25 ? "low" : "")">
+    <div class="meter-label"><span>@Label</span><b>@Value.ToString("0")%</b></div>
+    <div class="meter-bar"><div style="width:@(Math.Clamp(Value, 0, 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%"></div></div>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public float Value { get; set; }
+    [Parameter] public string Kind { get; set; } = "";
+}

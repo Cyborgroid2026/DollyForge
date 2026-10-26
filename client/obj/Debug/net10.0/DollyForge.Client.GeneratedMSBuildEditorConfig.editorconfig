@@ -33,6 +33,30 @@ build_property.EnableCodeStyleSeverity =
 build_metadata.AdditionalFiles.TargetPath = QXBwLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
+[/home/a71143055/Desktop/DollyForge/client/Components/ChatBox.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9DaGF0Qm94LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/a71143055/Desktop/DollyForge/client/Components/EndingPanel.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9FbmRpbmdQYW5lbC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/a71143055/Desktop/DollyForge/client/Components/Hud.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9IdWQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/a71143055/Desktop/DollyForge/client/Components/LoginPanel.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9Mb2dpblBhbmVsLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/a71143055/Desktop/DollyForge/client/Components/Meter.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9NZXRlci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/a71143055/Desktop/DollyForge/client/Components/QrCard.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9RckNhcmQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
 [/home/a71143055/Desktop/DollyForge/client/Layout/MainLayout.razor]
 build_metadata.AdditionalFiles.TargetPath = TGF5b3V0L01haW5MYXlvdXQucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 

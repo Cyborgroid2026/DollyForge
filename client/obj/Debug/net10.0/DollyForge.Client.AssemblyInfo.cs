@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("DollyForge.Client")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+aea5a2cfc31e5ba3e390f7461079897bad3fb9be")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c12684845cb5c913745c70ff8589f08ae1dc8fcf")]
 [assembly: System.Reflection.AssemblyProductAttribute("DollyForge.Client")]
 [assembly: System.Reflection.AssemblyTitleAttribute("DollyForge.Client")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

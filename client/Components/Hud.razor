@@ -1,0 +1,66 @@
+@if (Game.State is { } s)
+{
+    var next = s.Research < GameData.Projects.Length ? GameData.Projects[s.Research] : null;
+    var tasks = GameData.TaskNames(s);
+
+    <div class="hud-stats panel">
+        <div class="hud-day">Day @s.Day <span class="phase phase-@((int)s.Phase)">@GameData.PhaseName(s.Phase)</span></div>
+        <Meter Label="배터리" Value="s.Battery" Kind="battery" />
+        <Meter Label="생체 안정도" Value="s.Bio" Kind="bio" />
+        <div class="hud-row"><span>기억 조각</span><b>@s.Memory</b></div>
+        <div class="hud-row"><span>동면 누적</span><b>@(s.Years)년</b></div>
+        <div class="hud-row"><span>하람</span><b>@(s.HaramAlive ? $"{s.HaramAge}세" : "영면")</b></div>
+        @if (Game.OnlineOthers > 0)
+        {
+            <div class="hud-row"><span>주변 사이보그</span><b>@Game.OnlineOthers</b></div>
+        }
+    </div>
+
+    <div class="hud-tasks panel">
+        <div class="panel-title">@GameData.PhaseName(s.Phase) 과제</div>
+        @for (var i = 0; i < tasks.Count; i++)
+        {
+            <div class="task @(s.HasTask(i) ? "done" : "")">@(s.HasTask(i) ? "✔" : "○") @tasks[i]</div>
+        }
+        @if (s.Phase == Phase.Daily)
+        {
+            <div class="task optional">◇ (선택) 인공 동면 포드 — 생체 100%, 10년 경과</div>
+        }
+    </div>
+
+    <div class="hud-inv panel">
+        @for (var i = 0; i < GameData.ResourceNames.Length; i++)
+        {
+            <span class="res res-@i">@GameData.ResourceNames[i] <b>@s.Inv[i]</b></span>
+        }
+        @if (next is not null)
+        {
+            <span class="next">다음 연구: <b>@next.Name</b> (@GameData.CostText(next.Cost))</span>
+        }
+    </div>
+}
+
+<div class="crosshair @(Game.HoverLabel is null ? "" : "active")"></div>
+@if (Game.HoverLabel is not null)
+{
+    <div class="prompt"><kbd>E</kbd> / 클릭 · @Game.HoverLabel</div>
+}
+
+@if (Game.Toast is not null)
+{
+    <div class="toast">@Game.Toast</div>
+}
+
+@if (Game.Dialogue is not null)
+{
+    <div class="dialogue panel" @onclick="Game.CloseDialogue">
+        <div class="dialogue-text">@Game.Dialogue</div>
+        <div class="dialogue-hint">클릭하여 닫기</div>
+    </div>
+}
+
+<div class="help">클릭: 시점 고정 · WASD 이동 · Shift 달리기 · E/클릭 상호작용 · T 채팅 · Esc 해제 · VR: 왼쪽 스틱 이동, 오른쪽 스틱 회전, 트리거 상호작용</div>
+
+@code {
+    [Parameter, EditorRequired] public GameSession Game { get; set; } = default!;
+}

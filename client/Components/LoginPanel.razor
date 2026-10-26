@@ -1,0 +1,72 @@
+<div class="login">
+    <div class="login-card">
+        <div class="brand">DOLLY FORGE</div>
+        <div class="tagline">얼굴 없는 티타늄 사이보그, 돌리로 깨어나세요.</div>
+
+        @switch (Game.Step)
+        {
+            case LoginStep.Connecting:
+                <p class="muted">월드 서버에 연결 중…</p>
+                break;
+
+            case LoginStep.Disconnected:
+                <p class="error">@Game.Error</p>
+                <button class="primary" @onclick="Game.ConnectAsync">다시 연결</button>
+                break;
+
+            case LoginStep.Phone:
+                <label class="field">
+                    <span>전화번호</span>
+                    <input type="tel" placeholder="010-1234-5678" @bind="phone" @bind:event="oninput"
+                           @onkeydown="@(e => e.Key == "Enter" ? Game.Register(phone) : Task.CompletedTask)" />
+                </label>
+                <div class="field">
+                    <span>사이보그 성별</span>
+                    <div class="toggle">
+                        <button class="@(Game.Gender == 0 ? "on" : "")" @onclick="() => Game.SetGender(0)">여성</button>
+                        <button class="@(Game.Gender == 1 ? "on" : "")" @onclick="() => Game.SetGender(1)">남성</button>
+                    </div>
+                </div>
+                <button class="primary" @onclick="() => Game.Register(phone)">QR 계정 발급</button>
+                <p class="hint">QR 계정은 전화번호에 묶입니다. 로그인할 때마다 이 번호로 인증 코드가 전송됩니다.</p>
+                break;
+
+            case LoginStep.QrIssued:
+                <QrCard Game="Game" />
+                <button class="primary" @onclick="Game.RequestCode">인증 코드 받기</button>
+                <button class="link" @onclick="Game.ForgetAccount">다른 번호로 시작</button>
+                break;
+
+            case LoginStep.CodeSent:
+                <QrCard Game="Game" />
+                <p class="muted">@Game.MaskedPhone 로 인증 코드를 보냈습니다.</p>
+                @if (Game.DevCode is not null)
+                {
+                    <div class="sms">
+                        <div class="sms-head">📱 개발 모드 · 수신 문자</div>
+                        <div>[Dolly Forge] 인증코드 <b>@Game.DevCode</b></div>
+                    </div>
+                }
+                <label class="field">
+                    <span>인증 코드 6자리</span>
+                    <input inputmode="numeric" maxlength="6" @bind="code" @bind:event="oninput"
+                           @onkeydown="@(e => e.Key == "Enter" ? Game.Login(code) : Task.CompletedTask)" />
+                </label>
+                <button class="primary" @onclick="() => Game.Login(code)">입장</button>
+                <button class="link" @onclick="Game.RequestCode">코드 다시 받기</button>
+                break;
+        }
+
+        @if (Game.Step is not LoginStep.Disconnected && Game.Error is not null)
+        {
+            <p class="error">@Game.Error</p>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public GameSession Game { get; set; } = default!;
+
+    private string phone = "";
+    private string code = "";
+}

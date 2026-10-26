@@ -1,0 +1,32 @@
+@implements IDisposable
+
+<div class="chat">
+    <div class="feed">
+        @foreach (var line in Game.Feed)
+        {
+            <div class="feed-line @(line.IsChat ? "chat-line" : $"kind-{(int)line.Kind}")">@line.Text</div>
+        }
+    </div>
+    <input @ref="input" class="chat-input" placeholder="T 로 채팅 · Enter 전송" maxlength="120"
+           @bind="text" @bind:event="oninput" @onkeydown="OnKey" />
+</div>
+
+@code {
+    [Parameter, EditorRequired] public GameSession Game { get; set; } = default!;
+
+    private ElementReference input;
+    private string text = "";
+
+    protected override void OnInitialized() => Game.ChatRequested += Focus;
+
+    private void Focus() => InvokeAsync(() => input.FocusAsync());
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        await Game.SendChat(text);
+        text = "";
+    }
+
+    public void Dispose() => Game.ChatRequested -= Focus;
+}

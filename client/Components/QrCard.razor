@@ -1,0 +1,11 @@
+@if (Game.QrDataUrl is not null)
+{
+    <div class="qr">
+        <img src="@Game.QrDataUrl" alt="Dolly Forge 계정 QR" />
+        <div class="qr-caption">당신의 QR 계정 · 이 브라우저에 저장됨</div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public GameSession Game { get; set; } = default!;
+}

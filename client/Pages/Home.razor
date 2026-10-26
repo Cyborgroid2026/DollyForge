@@ -1,7 +1,35 @@
 ﻿@page "/"
+@implements IDisposable
+@inject GameSession Game
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Dolly Forge</PageTitle>
 
-<h1>Hello, world!</h1>
+<div id="viewport"></div>
 
-Welcome to your new app.
+@if (Game.Step == LoginStep.InGame)
+{
+    <Hud Game="Game" />
+    <ChatBox Game="Game" />
+}
+else
+{
+    <LoginPanel Game="Game" />
+}
+
+@if (Game.Ending is not null)
+{
+    <EndingPanel Game="Game" />
+}
+
+@code {
+    protected override void OnInitialized() => Game.Changed += Refresh;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Game.StartAsync("viewport");
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Game.Changed -= Refresh;
+}
