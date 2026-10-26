@@ -315,7 +315,7 @@ public partial class FutureCity : Node3D
     void BuildMasts()
     {
         var steel = (StandardMaterial3D)Look.For(Core.Materials.Steel);
-        foreach (var p in new[] { new Vector3(-55, 0, -40), new Vector3(60, 0, -30), new Vector3(-30, 0, 62) })
+        foreach (var p in new[] { new Vector3(-62, 0, -40), new Vector3(64, 0, -34), new Vector3(-70, 0, 22) })
         {
             var y0 = World.HeightAt(p.X, p.Z);
             var mast = new Node3D { Position = p with { Y = y0 } };

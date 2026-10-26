@@ -19,15 +19,17 @@ public partial class BrowserStream : Node
 {
     public int Port { get; set; } = 7780;
     public int Fps { get; set; } = 30;
-    public float Quality { get; set; } = 0.8f;
-    /// <summary>브라우저로 보내는 화면 해상도</summary>
-    public Vector2I Size { get; set; } = new(1280, 720);
+    public float Quality { get; set; } = 0.78f;
+    /// <summary>브라우저로 보내는 화면 해상도 (종이 양식들이 설계된 기준 해상도와 같게)</summary>
+    public Vector2I Size { get; set; } = new(1600, 900);
 
     HttpListener? _http;
     WebSocket? _ws;
     readonly SemaphoreSlim _sendLock = new(1, 1);
     readonly ConcurrentQueue<string> _inbox = new();
-    volatile bool _sending;
+    int _inFlight;       // 인코딩 중인 화면 수 (여러 장을 동시에 JPEG 로 굽는다)
+    long _frameSeq, _lastSent;
+    const int MaxInFlight = 3;
     double _frameTimer;
     string _page = "";
     string? _lastStatus;
@@ -165,14 +167,22 @@ public partial class BrowserStream : Node
         }
 
         _frameTimer += delta;
-        if (_sending || _frameTimer < 1.0 / Fps) return;
+        if (Volatile.Read(ref _inFlight) >= MaxInFlight || _frameTimer < 1.0 / Fps) return;
         _frameTimer = 0;
         var image = GetViewport().GetTexture().GetImage();
-        _sending = true;
+        var seq = ++_frameSeq;
+        Interlocked.Increment(ref _inFlight);
         _ = Task.Run(async () =>
         {
-            try { await Send(ws, image.SaveJpgToBuffer(Quality), WebSocketMessageType.Binary); }
-            finally { _sending = false; }
+            try
+            {
+                var jpg = image.SaveJpgToBuffer(Quality);
+                // 더 새 화면이 먼저 나갔으면 이 화면은 버린다 (순서가 뒤바뀌지 않게)
+                if (Interlocked.Read(ref _lastSent) > seq) return;
+                Interlocked.Exchange(ref _lastSent, seq);
+                await Send(ws, jpg, WebSocketMessageType.Binary);
+            }
+            finally { Interlocked.Decrement(ref _inFlight); }
         });
     }
 

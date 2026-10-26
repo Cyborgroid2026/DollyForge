@@ -204,7 +204,10 @@ public partial class LoginUi : Control
             Texture = ImageTexture.CreateFromImage(img), CustomMinimumSize = new Vector2(180, 180),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
         });
-        row.AddChild(Paper.Note($"QR 신분 계정\n{token[..8]}…{token[^4..]}\n이 기기에 저장됨"));
+        var note = Paper.Note($"QR 신분 계정\n{token[..8]}…{token[^4..]}\n이 기기에 저장됨");
+        note.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        note.CustomMinimumSize = new Vector2(160, 0);
+        row.AddChild(note);
         return row;
     }
 }

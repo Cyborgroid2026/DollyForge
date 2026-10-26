@@ -22,7 +22,7 @@ public partial class Settlement : Node3D
 
     public override void _Ready()
     {
-        _white = Look.Scanned("white_plaster_02", 2.5f, new Color(0.98f, 0.96f, 0.92f));
+        _white = Look.Painted("white_plaster_02", 2.5f, new Color(0.9f, 0.88f, 0.84f));
         _pavers = Look.Scanned("concrete_pavers", 1.6f, new Color(0.93f, 0.91f, 0.87f));
         _red = new StandardMaterial3D { AlbedoColor = new Color(0.66f, 0.09f, 0.07f), Roughness = 0.38f, Metallic = 0.15f };
         _brass = new StandardMaterial3D { AlbedoColor = new Color(0.86f, 0.66f, 0.36f), Roughness = 0.28f, Metallic = 1f };
@@ -84,6 +84,25 @@ public partial class Settlement : Node3D
         // 마당 가장자리 연석 (흰 콘크리트)
         foreach (var x in new[] { r.Position.X, r.End.X })
             Solid(new Vector3(0.18f, 0.16f, r.Size.Y), new Transform3D(Basis.Identity, new Vector3(x, y, r.GetCenter().Y)), _white);
+
+        // 시험장: 매끈한 콘크리트 판, 둘레에 진홍·흰 줄무늬 경계선, 1 m 눈금 (거리를 재며 기기를 굴린다)
+        var t = Site.TestPad;
+        var ty = World.HeightAt(t.GetCenter().X, t.GetCenter().Y) + 0.03f;
+        var slab = Look.Scanned("rock_boulder_dry", 2.5f, new Color(0.86f, 0.86f, 0.84f));
+        Solid(new Vector3(t.Size.X, 0.08f, t.Size.Y), new Transform3D(Basis.Identity, new Vector3(t.GetCenter().X, ty - 0.04f, t.GetCenter().Y)), slab);
+        for (var k = 0; k < 24; k++)
+        {
+            var mat = k % 2 == 0 ? _red : _white;
+            var along = (k + 0.5f) / 24f;
+            Place(new BoxMesh { Size = new Vector3(t.Size.X / 24f, 0.005f, 0.12f) }, mat, new Vector3(t.Position.X + t.Size.X * along, ty + 0.003f, t.Position.Y + 0.1f));
+            Place(new BoxMesh { Size = new Vector3(t.Size.X / 24f, 0.005f, 0.12f) }, mat, new Vector3(t.Position.X + t.Size.X * along, ty + 0.003f, t.End.Y - 0.1f));
+            Place(new BoxMesh { Size = new Vector3(0.12f, 0.005f, t.Size.Y / 24f) }, mat, new Vector3(t.Position.X + 0.1f, ty + 0.003f, t.Position.Y + t.Size.Y * along));
+            Place(new BoxMesh { Size = new Vector3(0.12f, 0.005f, t.Size.Y / 24f) }, mat, new Vector3(t.End.X - 0.1f, ty + 0.003f, t.Position.Y + t.Size.Y * along));
+        }
+        var tick = new StandardMaterial3D { AlbedoColor = new Color(0.25f, 0.25f, 0.27f), Roughness = 0.8f };
+        for (var x = t.Position.X + 1; x < t.End.X; x += 1)
+            Place(new BoxMesh { Size = new Vector3(0.02f, 0.004f, (int)(x - t.Position.X) % 5 == 0 ? 0.5f : 0.25f) }, tick, new Vector3(x, ty + 0.002f, t.End.Y - 0.45f));
+        Sign("시험장", new Vector3(t.GetCenter().X, ty + 0.01f, t.End.Y - 1.1f), 0, 0.006f, new Color(0.62f, 0.08f, 0.06f)).RotationDegrees = new Vector3(-90, 0, 0);
     }
 
     /// <summary>오솔길 중심선 (모서리를 두 번 깎아 부드럽게)</summary>
@@ -215,7 +234,7 @@ public partial class Settlement : Node3D
         Place(new TorusMesh { InnerRadius = 0.6f, OuterRadius = 0.68f, Rings = 48, RingSegments = 8 }, _brass, new Vector3(0, 2.75f, 0), new Vector3(Mathf.Pi / 2, 0, 0), board);
         foreach (var (yaw, dz) in new[] { (0f, -0.04f), (180f, 0.04f) })
         {
-            var t = Sign("들꽃\n정류장", new Vector3(boardX, top + 2.78f, z0 + 0.4f + dz), yaw, 0.0021f, new Color(0.62f, 0.08f, 0.06f));
+            var t = Sign("들꽃\n정류장", new Vector3(boardX, top + 2.78f, z0 + 0.4f + dz), yaw, 0.0042f, new Color(0.62f, 0.08f, 0.06f));
             t.HorizontalAlignment = HorizontalAlignment.Center;
         }
 
@@ -348,7 +367,7 @@ public partial class Settlement : Node3D
         for (var i = 0; i < pillars.Count; i++) pm.SetInstanceTransform(i, pillars[i]);
         AddChild(new MultiMeshInstance3D { Multimesh = pm, MaterialOverride = _white });
 
-        // 객차 3량: 흰 유선형 몸체, 진홍색 띠, 짙은 창 띠, 놋쇠 앞코
+        // 객차 3량: 흰 유선형 앞뒤 코, 진홍색 몸통, 짙은 창 띠, 놋쇠 앞코
         _train = new Node3D();
         var windows = new StandardMaterial3D { AlbedoColor = new Color(0.07f, 0.09f, 0.11f), Metallic = 0.7f, Roughness = 0.08f };
         var gloss = new StandardMaterial3D { AlbedoColor = new Color(0.95f, 0.94f, 0.9f), Roughness = 0.22f, Metallic = 0.1f, ClearcoatEnabled = true, Clearcoat = 0.6f };
@@ -356,7 +375,7 @@ public partial class Settlement : Node3D
         {
             var z = car * 13.6f;
             Place(new CapsuleMesh { Radius = 1.35f, Height = 13f, RadialSegments = 32, Rings = 12 }, gloss, new Vector3(0, 1.55f, z), new Vector3(Mathf.Pi / 2, 0, 0), _train);
-            Place(new CylinderMesh { TopRadius = 1.37f, BottomRadius = 1.37f, Height = 0.32f, RadialSegments = 32 }, _red, new Vector3(0, 1.55f, z), new Vector3(Mathf.Pi / 2, 0, 0), _train).Scale = new Vector3(1, 30f, 1);
+            Place(new CylinderMesh { TopRadius = 1.37f, BottomRadius = 1.37f, Height = 9.6f, RadialSegments = 32 }, _red, new Vector3(0, 1.55f, z), new Vector3(Mathf.Pi / 2, 0, 0), _train);
             Place(new BoxMesh { Size = new Vector3(2.62f, 0.62f, 9.6f) }, windows, new Vector3(0, 2.05f, z), parent: _train);
         }
         Place(new SphereMesh { Radius = 0.32f, Height = 0.64f }, _brass, new Vector3(0, 1.55f, -6.75f), parent: _train);
@@ -412,7 +431,7 @@ public partial class Settlement : Node3D
         const float halfW = 6.4f, rise = 2.0f, wallTop = 3.5f;
         var radius = (halfW * halfW + rise * rise) / (2 * rise);
         var half = Mathf.Asin(halfW / radius);
-        var roofMat = Look.Scanned("white_plaster_02", 3f, new Color(0.96f, 0.94f, 0.9f));
+        var roofMat = Look.Painted("white_plaster_02", 3f, new Color(0.88f, 0.86f, 0.82f));
         // 볼트 지붕 (축 Z)
         var vault = Place(ArcShell(radius, half, 11.2f, 0.12f), roofMat, new Vector3(0, wallTop + rise - radius, -5f), new Vector3(0, Mathf.Pi / 2, 0));
         var roofBody = new StaticBody3D { CollisionLayer = PartBody.LayerWorld, CollisionMask = 0 };
@@ -453,9 +472,13 @@ public partial class Settlement : Node3D
             Place(new TorusMesh { InnerRadius = 0.42f, OuterRadius = 0.52f, Rings = 40, RingSegments = 10 }, _brass, new Vector3(x, 2.1f, z), new Vector3(0, 0, Mathf.Pi / 2));
         }
         // 문 위 곡면 차양 (반원판) 과 이름
-        Place(HalfDisc(2.7f, 0.1f), _white, new Vector3(0, 3.05f, 0.21f));
+        var canopy = (StandardMaterial3D)_white.Duplicate();
+        canopy.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
+        Place(HalfDisc(2.7f, 0.1f), canopy, new Vector3(0, 3.05f, 0.21f));
         Place(new BoxMesh { Size = new Vector3(4.1f, 0.05f, 0.05f) }, _brass, new Vector3(0, 3.0f, 0.24f));
-        Sign("작업장 · 조립 · 정비", new Vector3(0, wallTop - 0.2f, 0.29f), 0, 0.0019f);
+        // 문 옆 놋쇠 명판 (차양 밑에서도 읽히는 눈높이)
+        Place(new BoxMesh { Size = new Vector3(1.5f, 0.5f, 0.03f) }, _brass, new Vector3(-3.1f, 1.75f, 0.23f));
+        Sign("작업장\n조립 · 정비", new Vector3(-3.1f, 1.75f, 0.26f), 0, 0.0028f, new Color(0.18f, 0.12f, 0.06f)).HorizontalAlignment = HorizontalAlignment.Center;
         // 구리 배관 (동쪽 벽): 세로 두 줄과 가로 한 줄, 플랜지
         var copper = new StandardMaterial3D { AlbedoColor = new Color(0.78f, 0.45f, 0.3f), Metallic = 1, Roughness = 0.35f };
         foreach (var z in new[] { -1.2f, -1.5f })

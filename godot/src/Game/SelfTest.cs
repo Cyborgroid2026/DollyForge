@@ -51,6 +51,9 @@ public partial class SelfTest : Node
         return mine;
     }
 
+    /// <summary>작업장 동쪽 시험장 바닥 위의 점</summary>
+    System.Numerics.Vector3 Pad(float x, float z) => new(x, World().HeightAt(x, z) + 0.04f, z);
+
     static PartBody Find(List<PartBody> parts, PartRole role) => parts.First(b => b.Part.Def.Role == role);
     static PartBody Chassis(List<PartBody> parts) => parts.First(b => b.Part.Def.Sku == "PL-AL6061-5");
 
@@ -78,7 +81,7 @@ public partial class SelfTest : Node
         Check(!bad.Ok, $"지름이 다른 바퀴 거부: {bad.Message}");
 
         // 3. 견본 로봇: 같은 배선 → 제자리 회전, 한쪽 반전 → 직진
-        var r1 = PlaceRobot(new(-4, 0.02f, 10));
+        var r1 = PlaceRobot(Pad(11, -8));
         var c1 = Chassis(r1);
         var battery = Find(r1, PartRole.Battery);
         await Wait(1.0);
@@ -99,7 +102,7 @@ public partial class SelfTest : Node
         Check(Devices.ExportDevice(c1).StartsWith("내보냄"), "내보내기 (URDF·USDA·STL·BOM)");
 
         // 4. 진공관 서보 증폭기: 손잡이 50 % → 속도 절반
-        var r2 = PlaceRobot(new(4, 0.02f, 10), "QA-SERVO-1", "QA-NIXIE-4");
+        var r2 = PlaceRobot(Pad(17.5f, -8), "QA-SERVO-1", "QA-NIXIE-4");
         var c2 = Chassis(r2);
         var amp = Find(r2, PartRole.Controller);
         Devices.FlipWiring(r2.First(b => b.Part.Def.Role == PartRole.Motor));
@@ -117,7 +120,7 @@ public partial class SelfTest : Node
         Devices.TogglePower(c2);
 
         // 5. 캠 드럼: 4초 전진 · 1초 정지 · 2초 후진 · 1초 정지 → 8초 동안 순전진은 약 2초어치, 도중에 실제로 뒤로 간다
-        var r3 = PlaceRobot(new(0, 0.02f, 16), "QA-DRUM-8");
+        var r3 = PlaceRobot(Pad(14, -3), "QA-DRUM-8");
         var c3 = Chassis(r3);
         Devices.FlipWiring(r3.First(b => b.Part.Def.Role == PartRole.Motor));
         await Wait(1.0);

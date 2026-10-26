@@ -24,6 +24,8 @@ public static class Site
 
     /// <summary>작업장 앞 콘크리트 마당 (택배 하차장 포함)</summary>
     public static readonly Rect2 Apron = new(-6.2f, 0.2f, 12.4f, 8.6f);
+    /// <summary>작업장 동쪽의 평평한 콘크리트 시험장: 만든 기기를 굴려 보는 곳</summary>
+    public static readonly Rect2 TestPad = new(8.5f, -11f, 12f, 12f);
     /// <summary>작업장 건물 바닥 (벽 포함)</summary>
     public static readonly Rect2 Building = new(-6.3f, -10.3f, 12.6f, 10.6f);
 
@@ -83,6 +85,7 @@ public static class Site
         var p = new Vector2(x, z);
         if (RectDistance(Building, p) < 0.6f + margin) return false;
         if (RectDistance(Apron, p) < 0.3f + margin) return false;
+        if (RectDistance(TestPad, p) < 0.3f + margin) return false;
         if (RectDistance(StationPad, p) < margin) return false;
         if (Mathf.Abs(z - RailZ) < 3.2f + margin) return false;
         if (PathDistance(p).Distance < PathHalfWidth + 0.25f + margin) return false;
@@ -142,6 +145,8 @@ public static class Site
             // 정류장 터
             var pad = Mathf.SmoothStep(7f, 0.5f, RectDistance(StationPad, p));
             y = Mathf.Lerp(y, stationGround, pad);
+            // 시험장 (마당 높이로 평평하게)
+            y = Mathf.Lerp(y, yardGround, Mathf.SmoothStep(6f, 0.3f, RectDistance(TestPad, p)));
             // 오솔길: 정류장 높이 → 마당 높이로 고르게
             var (d, along) = PathDistance(p);
             // 길 자체는 정확히, 그 둘레 16 m 는 언덕을 대부분 낮춰 정류장에서 작업장까지 트인 풀밭 골짜기로

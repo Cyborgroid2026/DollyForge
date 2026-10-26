@@ -203,7 +203,7 @@ public partial class World : Node3D
     {
         var concrete = Look.Scanned("rock_boulder_dry", 2.5f, new Color(0.78f, 0.78f, 0.76f));
         concrete.Roughness = 0.9f;
-        var plaster = Look.Scanned("white_plaster_02", 2.5f, new Color(0.98f, 0.96f, 0.92f));
+        var plaster = Look.Painted("white_plaster_02", 2.5f, new Color(0.9f, 0.88f, 0.84f));
         var steel = (StandardMaterial3D)Look.For(Core.Materials.Steel);
         var plywood = Look.For(Core.Materials.Pine);
 

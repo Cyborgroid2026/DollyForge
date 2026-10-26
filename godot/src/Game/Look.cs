@@ -40,6 +40,17 @@ public static class Look
         return m;
     }
 
+    /// <summary>
+    /// 도장면: 색은 고른 도료색이고, 바탕 재질의 요철(노멀)과 거칠기만 스캔 텍스처에서 빌린다.
+    /// 흰 에나멜 외벽처럼 깨끗하지만 손으로 칠한 미세한 결이 남는다.
+    /// </summary>
+    public static StandardMaterial3D Painted(string name, float tile, Color paint)
+    {
+        var m = Scanned(name, tile, paint);
+        m.AlbedoTexture = null;
+        return m;
+    }
+
     /// <summary>재료 → 표면. 금속은 가공된 금속 광택, 나무·돌은 스캔 텍스처.</summary>
     public static Material For(MaterialDef mat)
     {

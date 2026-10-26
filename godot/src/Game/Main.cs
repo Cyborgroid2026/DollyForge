@@ -125,11 +125,13 @@ public partial class Main : Node3D
         Pointer.Mode = Input.MouseModeEnum.Captured;
     }
 
+    const string StartHint = "들꽃 정류장. 오솔길 끝 볼트 지붕 건물이 작업장입니다 — 카탈로그로 주문하고, 조립하고, 수술대에서 몸을 고칩니다. " +
+                             "WASD 이동 · E 카탈로그·수술대 · 1–9 공구 · F5/F6 창고 · F7 내 몸 · F8 기기 내보내기";
+
     void StartOffline(bool quiet)
     {
         CloseLogin();
-        if (!quiet) Notify("오프라인 작업 — 예산·재고는 이 기기 안에서만 계산됩니다.");
-        else Notify("작업장입니다. 1–9 공구 · E 카탈로그·수술대 · Q 전원 · R 배선 반전 · F5 창고에 넣기 · F6 창고 · F7 내 몸 내보내기 · F8 기기 내보내기 · F9 물성");
+        Notify(quiet ? StartHint : "오프라인 작업 — 예산·재고는 이 기기 안에서만 계산됩니다. " + StartHint);
     }
 
     void OnServer(ServerMessage m)
@@ -139,7 +141,7 @@ public partial class Main : Node3D
             case LoginOk ok:
                 _player.ApplyBody(BodyConfig.Default(ok.Gender)); // 저장된 몸 구성(BodyData)이 곧 이어서 온다
                 CloseLogin();
-                Notify($"통신망 접속 — 전신 사이보그 #{ok.PlayerId}. E 카탈로그 · F5 창고에 넣기 · F6 창고 · F8 내보내기");
+                Notify($"통신망 접속 — 전신 사이보그 #{ok.PlayerId}. " + StartHint);
                 break;
             case Profile p:
                 _devices.Shop.Sync(p.BalanceKrw, p.Consumables);
@@ -384,7 +386,7 @@ public partial class Main : Node3D
     {
         _slip.Text = text;
         ((Control)_slip.GetMeta("box").AsGodotObject()).Visible = true;
-        _slipTimer = 6;
+        _slipTimer = Math.Max(6, text.Length / 10.0); // 긴 쪽지는 더 오래
         UpdateLedger();
     }
 
