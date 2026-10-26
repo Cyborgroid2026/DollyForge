@@ -1,0 +1,11 @@
+{
+  "name": "dollyforge-browser",
+  "displayName": "Dolly Forge: 통합 브라우저 열기",
+  "description": "run.sh 가 보낸 localhost 주소를 VS Code 통합 브라우저(Open Integrated Browser)로 연다.",
+  "publisher": "dollyforge",
+  "version": "0.0.1",
+  "engines": { "vscode": "^1.90.0" },
+  "activationEvents": ["onUri"],
+  "main": "./extension.js",
+  "contributes": {}
+}
