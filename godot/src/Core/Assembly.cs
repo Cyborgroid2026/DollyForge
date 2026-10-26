@@ -17,7 +17,23 @@ public sealed record PartDef(
 {
     public float Mass => MassOverride ?? Material.Density * Shape.Volume;
     public Vector3 Inertia => Shape.PrincipalInertia(Mass);
+
+    /// <summary>카탈로그 품번 (구매한 부품일 때)</summary>
+    public string? Sku { get; init; }
+    /// <summary>구매 단가 (원). 길이 재단품은 재단비 포함.</summary>
+    public int PriceKrw { get; init; }
+    public PartRole Role { get; init; } = PartRole.Structure;
+    /// <summary>축 지름 mm (축·모터 출력축)</summary>
+    public float ShaftMm { get; init; }
+    /// <summary>구멍 지름 mm (바퀴 허브·베어링 내경)</summary>
+    public float BoreMm { get; init; }
+    public ElectricalSpec? Electrical { get; init; }
 }
+
+public enum PartRole { Structure, Profile, Shaft, Bearing, Wheel, Motor, Battery }
+
+/// <summary>전기 사양: 정격 전압 V, 배터리 용량 Wh, 모터 정격 전류 A</summary>
+public sealed record ElectricalSpec(float Volts, float CapacityWh = 0, float RatedCurrentA = 0);
 
 public sealed class PartInstance(int id, PartDef def, Pose pose)
 {
@@ -25,7 +41,8 @@ public sealed class PartInstance(int id, PartDef def, Pose pose)
     public PartDef Def { get; } = def;
     /// <summary>월드 자세 (게임 좌표: Y-up, 미터)</summary>
     public Pose Pose { get; set; } = pose;
-    public string LinkName => $"{Def.Id}_{Id}";
+    /// <summary>URDF 링크·USD 프림 이름. USD 식별자 규칙([A-Za-z_][A-Za-z0-9_]*)을 따른다.</summary>
+    public string LinkName => new string($"{Def.Id}_{Id}".Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_').ToArray());
 }
 
 /// <summary>
@@ -75,7 +92,7 @@ public sealed class JointInstance(int id, JointKind kind, int parent, int child,
     };
 
     /// <summary>두 번째 기준 방향 (Pin-Slot 의 슬롯 방향 등). Axis 와 직교화된다.</summary>
-    public Vector3 Secondary { get; init; } = Vector3.Zero;
+    public Vector3 Secondary { get; set; } = Vector3.Zero;
 
     /// <summary>월드 기준 관절 프레임 (X = Axis, Y = Secondary 직교화)</summary>
     public Quaternion FrameRotation
@@ -100,12 +117,17 @@ public sealed class JointInstance(int id, JointKind kind, int parent, int child,
     public JointKind Kind { get; } = kind;
     public int Parent { get; set; } = parent;
     public int Child { get; set; } = child;
-    public Vector3 Pivot { get; } = pivot;
-    public Vector3 Axis { get; } = Vector3.Normalize(axis);
+    /// <summary>월드 기준 관절 위치. 기기가 움직이면 게임 쪽에서 갱신한다.</summary>
+    public Vector3 Pivot { get; set; } = pivot;
+    private Vector3 _axis = Vector3.Normalize(axis);
+    public Vector3 Axis { get => _axis; set => _axis = Vector3.Normalize(value); }
     public float Lower { get; init; } = -MathF.PI;
     public float Upper { get; init; } = MathF.PI;
     public float Effort { get; set; } = 0;
     public float Velocity { get; set; } = 0;
+    /// <summary>체결에 쓰인 소모품 (품번 → 수량). BOM 에 들어간다.</summary>
+    public Dictionary<string, int> Consumed { get; init; } = new();
+
     /// <summary>이 관절을 구동하는 구동기 부품 id (없으면 수동)</summary>
     public int? DrivenBy { get; set; }
     public string Name => $"{Kind.ToString().ToLowerInvariant()}_{Id}";
@@ -205,6 +227,7 @@ public sealed class Assembly(string name)
             var nj = sub.AddJoint(j.Kind, map[j.Parent], map[j.Child], j.Pivot, j.Axis, j.Lower, j.Upper, j.Secondary);
             nj.Effort = j.Effort;
             nj.Velocity = j.Velocity;
+            foreach (var (k, v) in j.Consumed) nj.Consumed[k] = v;
             if (j.DrivenBy is { } m && map.TryGetValue(m, out var motor)) nj.DrivenBy = motor.Id;
         }
         return sub;

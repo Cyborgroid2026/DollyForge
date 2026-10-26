@@ -118,6 +118,15 @@ public class ExportTests
     }
 
     [Fact]
+    public void RobotCartExports()
+    {
+        var (robot, _) = Samples.RobotCart();
+        Write("two_wheel_robot", robot);
+        File.WriteAllText(Path.Combine(OutDir, "two_wheel_robot.bom.md"), Export.Bom(robot).Markdown);
+        Assert.Contains("drive:angular:physics:maxForce = 0.45", Export.Usda(robot));
+    }
+
+    [Fact]
     public void StlIsClosedWithOutwardNormals()
     {
         // 닫힌 메시의 부호 있는 부피 = 실제 부피 (법선이 바깥을 향할 때 양수)

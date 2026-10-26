@@ -13,7 +13,8 @@ namespace DollyForge.Core;
 public static class Export
 {
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
-    static string F(double v) => (Math.Abs(v) < 1e-12 ? 0 : v).ToString("0.#########", Inv);
+    /// <summary>수치 출력: 원래 값이 float 이므로 유효숫자 7자리 (지수 표기 허용)</summary>
+    static string F(double v) => Math.Abs(v) < 1e-12 ? "0" : ((float)v).ToString("G7", Inv);
     static string V(Vector3 v) => $"{F(v.X)} {F(v.Y)} {F(v.Z)}";
 
     /// <summary>자식 링크가 관절 프레임에 놓일 때, 부품 형상이 관절 프레임 안에서 갖는 자세</summary>
@@ -422,6 +423,46 @@ public static class Export
     {
         var free = j.Dofs.Select(d => (d.Kind == DofKind.Rotate ? "rot" : "trans") + (d.Axis == Vector3.UnitX ? "X" : d.Axis == Vector3.UnitY ? "Y" : "Z")).ToHashSet();
         return new[] { "transX", "transY", "transZ", "rotX", "rotY", "rotZ" }.Where(d => !free.Contains(d));
+    }
+
+    // ------------------------------------------------------------------ BOM
+
+    /// <summary>
+    /// 자재 명세서 (Fusion 360 의 BOM). 같은 부품은 묶고, 체결 소모품은 사용 수량만큼 묶음 단가로 환산한다.
+    /// </summary>
+    public static (string Markdown, string Csv, long TotalKrw) Bom(Assembly a)
+    {
+        var rows = a.Parts
+            .GroupBy(p => p.Def.Id)
+            .Select(g => (Sku: g.First().Def.Sku ?? "(자작)", Name: g.First().Def.NameKo,
+                Material: g.First().Def.Role is PartRole.Structure or PartRole.Profile or PartRole.Shaft ? g.First().Def.Material.NameKo : "구매 부품",
+                Qty: g.Count(), Mass: g.First().Def.Mass, Unit: (long)g.First().Def.PriceKrw))
+            .OrderBy(r => r.Sku)
+            .ToList();
+        var used = new Dictionary<string, int>();
+        foreach (var j in a.Joints)
+            foreach (var (sku, n) in j.Consumed) used[sku] = used.GetValueOrDefault(sku) + n;
+        foreach (var (sku, n) in used.OrderBy(kv => kv.Key))
+        {
+            var item = Catalog.Get(sku);
+            var perPiece = (double)item.PriceKrw / item.PackQty;
+            rows.Add((sku, item.NameKo, "체결 소모품", n, 0, (long)Math.Round(perPiece)));
+        }
+        var total = rows.Sum(r => r.Unit * r.Qty);
+        var md = new StringBuilder();
+        md.AppendLine($"# 자재 명세서 — {a.Name}");
+        md.AppendLine();
+        md.AppendLine($"총질량 {F(a.TotalMass)} kg · 부품 {a.Parts.Count}개 · 관절 {a.Joints.Count}개 · 재료비 ₩{total:N0}");
+        md.AppendLine();
+        md.AppendLine("| 품번 | 품명 | 재질 | 수량 | 개당 질량 (kg) | 단가 (₩) | 금액 (₩) |");
+        md.AppendLine("| :--- | :--- | :--- | ---: | ---: | ---: | ---: |");
+        foreach (var r in rows)
+            md.AppendLine($"| {r.Sku} | {r.Name} | {r.Material} | {r.Qty} | {(r.Mass > 0 ? F(Math.Round(r.Mass, 3)) : "-")} | {r.Unit:N0} | {r.Unit * r.Qty:N0} |");
+        md.AppendLine($"| | **합계** | | | **{F(Math.Round(a.TotalMass, 3))}** | | **{total:N0}** |");
+        var csv = new StringBuilder("sku,name,material,qty,mass_kg,unit_krw,amount_krw\n");
+        foreach (var r in rows)
+            csv.AppendLine($"{r.Sku},\"{r.Name}\",\"{r.Material}\",{r.Qty},{F(r.Mass)},{r.Unit},{r.Unit * r.Qty}");
+        return (md.ToString(), csv.ToString(), total);
     }
 
     // ------------------------------------------------------------------ STL

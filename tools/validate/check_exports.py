@@ -89,7 +89,7 @@ def parse_usda(path):
         block = m.group(0)
         t = tuple(map(float, re.search(r'xformOp:translate = \(([^)]*)\)', block).group(1).split(',')))
         q = tuple(map(float, re.search(r'xformOp:orient = \(([^)]*)\)', block).group(1).split(',')))
-        mass = float(re.search(r'physics:mass = ([-\d.e]+)', block).group(1))
+        mass = float(re.search(r'physics:mass = ([-\d.eE+]+)', block).group(1))
         bodies[m.group(1)] = ((t, q), mass)
     for m in re.finditer(r'def (Physics\w*Joint) "(\w+)"[^{]*\{(.*?)\n        \}', text, re.S):
         block = m.group(3)
