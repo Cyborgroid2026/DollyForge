@@ -12,6 +12,8 @@ uniform sampler2D rock_albedo : source_color, filter_linear_mipmap_anisotropic, 
 uniform sampler2D rock_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D rock_rough : hint_roughness_r, filter_linear_mipmap, repeat_enable;
 uniform float grass_tile = 4.0;
+uniform vec3 grass_tint = vec3(0.62, 0.78, 0.42);
+uniform vec3 soil_tint = vec3(0.8, 0.78, 0.74);
 uniform float soil_tile = 2.5;
 uniform float rock_tile = 3.0;
 
@@ -57,7 +59,7 @@ void fragment() {
 	w.r *= flat_ground;
 	w /= max(w.r + w.g + w.b, 1e-4);
 
-	vec3 albedo = tri_color(grass_albedo, grass_tile, b) * w.r + tri_color(soil_albedo, soil_tile, b) * w.g + tri_color(rock_albedo, rock_tile, b) * w.b;
+	vec3 albedo = tri_color(grass_albedo, grass_tile, b) * grass_tint * w.r + tri_color(soil_albedo, soil_tile, b) * soil_tint * w.g + tri_color(rock_albedo, rock_tile, b) * w.b;
 	float rough = tri_rough(grass_rough, grass_tile, b) * w.r + tri_rough(soil_rough, soil_tile, b) * w.g + tri_rough(rock_rough, rock_tile, b) * w.b;
 	vec3 n = normalize(tri_normal(grass_normal, grass_tile, b) * w.r + tri_normal(soil_normal, soil_tile, b) * w.g + tri_normal(rock_normal, rock_tile, b) * w.b);
 

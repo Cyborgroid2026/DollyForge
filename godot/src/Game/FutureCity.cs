@@ -27,7 +27,7 @@ public partial class FutureCity : Node3D
         BuildForest();
         BuildRocks();
         BuildSkyline();
-        BuildResonanceTower(new Vector3(40, 0, -520));
+        BuildResonanceTower(new Vector3(60, 0, -950));
         BuildFloatingPlatforms();
         BuildMonorail();
         BuildMasts();
@@ -50,89 +50,101 @@ public partial class FutureCity : Node3D
         });
     }
 
-    /// <summary>소나무 잎: 실사 가지 텍스처의 색과 알파를 한 장으로 합친다</summary>
+    /// <summary>
+    /// 소나무 가지: pine_tree_01 텍스처는 솔방울·껍질·잎·가지가 모인 아틀라스라서
+    /// 왼쪽 위의 잔가지 한 송이(220×430 px)만 잘라 색과 알파를 합친다. 카드의 +Y 가 가지 끝.
+    /// </summary>
     static Material? Foliage()
     {
         const string diff = "res://assets/tex/pine/twig_diff.jpg", alpha = "res://assets/tex/pine/twig_alpha.jpg";
         if (!ResourceLoader.Exists(diff) || !ResourceLoader.Exists(alpha)) return null;
-        var img = GD.Load<Texture2D>(diff).GetImage();
-        var a = GD.Load<Texture2D>(alpha).GetImage();
-        if (img.IsCompressed()) img.Decompress();
-        if (a.IsCompressed()) a.Decompress();
-        img.Convert(Image.Format.Rgba8);
-        a.Resize(img.GetWidth(), img.GetHeight());
-        for (var y = 0; y < img.GetHeight(); y++)
-        for (var x = 0; x < img.GetWidth(); x++)
+        var src = GD.Load<Texture2D>(diff).GetImage();
+        var mask = GD.Load<Texture2D>(alpha).GetImage();
+        if (src.IsCompressed()) src.Decompress();
+        if (mask.IsCompressed()) mask.Decompress();
+        var scale = src.GetWidth() / 1024f;
+        var rect = new Rect2I((int)(20 * scale), (int)(30 * scale), (int)(220 * scale), (int)(430 * scale));
+        mask.Resize(src.GetWidth(), src.GetHeight());
+        var img = Image.CreateEmpty(rect.Size.X, rect.Size.Y, false, Image.Format.Rgba8);
+        for (var y = 0; y < rect.Size.Y; y++)
+        for (var x = 0; x < rect.Size.X; x++)
         {
-            var c = img.GetPixel(x, y);
-            c.A = a.GetPixel(x, y).R;
+            var c = src.GetPixel(rect.Position.X + x, rect.Position.Y + y);
+            c.A = mask.GetPixel(rect.Position.X + x, rect.Position.Y + y).R;
             img.SetPixel(x, y, c);
         }
         img.GenerateMipmaps();
-        return new StandardMaterial3D
-        {
-            AlbedoTexture = ImageTexture.CreateFromImage(img),
-            Transparency = BaseMaterial3D.TransparencyEnum.AlphaScissor,
-            AlphaScissorThreshold = 0.45f,
-            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-            Roughness = 0.85f,
-            TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
-        };
+        // 바람에 흔들리는 가지 (shaders/foliage.gdshader)
+        var mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/foliage.gdshader") };
+        mat.SetShaderParameter("albedo_tex", ImageTexture.CreateFromImage(img));
+        return mat;
     }
 
     /// <summary>
     /// 소나무 숲: 노이즈가 높은 곳에만 군락을 이루고(자연스러운 숲 경계), 나무마다 크기·기울기·회전이 다르다.
-    /// 줄기(실사 나무껍질)와 가지 카드(실사 소나무 가지)를 GPU 인스턴싱으로 그린다.
+    /// 가지는 줄기에서 바깥으로 뻗어 끝이 처지며, 아래 가지일수록 길다. 가지마다 길이·방향·처짐·색이 제각각.
     /// </summary>
     void BuildForest()
     {
         var noise = new FastNoiseLite { Seed = 7, Frequency = 0.02f };
-        var trees = new List<Transform3D>();
-        for (var tries = 0; tries < 6000 && trees.Count < 420; tries++)
+        var trees = new List<(Transform3D X, float H)>();
+        for (var tries = 0; tries < 6000 && trees.Count < 380; tries++)
         {
             var x = _rng.RandfRange(-78, 78);
             var z = _rng.RandfRange(-78, 78);
             if (new Vector2(x, z - 2).Length() < 22) continue; // 작업장과 자갈 마당은 비운다
+            if (new Vector2(x - World.PondCenter.X, z - World.PondCenter.Y).Length() < World.PondRadius + 3) continue;
             if (noise.GetNoise2D(x, z) < 0.05f + _rng.Randf() * 0.25f) continue;
-            var s = _rng.RandfRange(0.7f, 1.5f);
+            var s = _rng.RandfRange(0.7f, 1.4f);
             var basis = new Basis(Vector3.Up, _rng.RandfRange(0, Mathf.Tau))
-                * new Basis(new Vector3(1, 0, 0), Jitter(0.06f)) * new Basis(new Vector3(0, 0, 1), Jitter(0.06f));
-            trees.Add(new Transform3D(basis.Scaled(Vector3.One * s), new Vector3(x, World.HeightAt(x, z) - 0.15f, z)));
+                * new Basis(new Vector3(1, 0, 0), Jitter(0.05f)) * new Basis(new Vector3(0, 0, 1), Jitter(0.05f));
+            trees.Add((new Transform3D(basis.Scaled(Vector3.One * s), new Vector3(x, World.HeightAt(x, z) - 0.15f, z)), _rng.RandfRange(7.5f, 11f)));
         }
 
-        var trunkMesh = new CylinderMesh { TopRadius = 0.08f, BottomRadius = 0.25f, Height = 7f, RadialSegments = 10 };
+        var trunkMesh = new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.24f, Height = 1f, RadialSegments = 10 };
         var bark = Look.Scanned("bark_brown_02", 1.2f, Colors.White);
         var trunks = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = trunkMesh, InstanceCount = trees.Count };
-        for (var i = 0; i < trees.Count; i++) trunks.SetInstanceTransform(i, trees[i].TranslatedLocal(new Vector3(0, 3.4f, 0)));
+        for (var i = 0; i < trees.Count; i++)
+            trunks.SetInstanceTransform(i, trees[i].X * new Transform3D(Basis.Identity.Scaled(new Vector3(1, trees[i].H, 1)), new Vector3(0, trees[i].H / 2, 0)));
         AddChild(new MultiMeshInstance3D { Multimesh = trunks, MaterialOverride = bark });
 
         if (Foliage() is not { } leaf) return;
-        const int layers = 7, perLayer = 4;
-        var cards = new MultiMesh
+        var cards = new List<(Transform3D X, Color C)>();
+        foreach (var (t, height) in trees)
         {
-            TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = true,
-            Mesh = new QuadMesh { Size = Vector2.One }, InstanceCount = trees.Count * layers * perLayer,
-        };
-        var c = 0;
-        foreach (var t in trees)
-        {
-            for (var l = 0; l < layers; l++)
+            // 줄기 아래 30 % 는 가지가 없다 (숲속 소나무처럼). 위로 갈수록 가지가 짧고 촘촘하다.
+            for (var y = height * 0.3f; y < height; y += _rng.RandfRange(0.28f, 0.45f))
             {
-                var h = 1.9f + l * 0.72f;
-                var width = 2.8f - l * 0.34f + Jitter(0.25f);
-                for (var k = 0; k < perLayer; k++)
+                var u = (y - height * 0.3f) / (height * 0.7f);
+                var count = _rng.RandiRange(4, 6);
+                for (var k = 0; k < count; k++)
                 {
-                    var a = k * Mathf.Pi / perLayer + l * 0.7f + Jitter(0.3f);
-                    var local = new Transform3D(new Basis(Vector3.Up, a) * new Basis(Vector3.Right, -0.3f + Jitter(0.12f)), new Vector3(0, h, 0))
-                        .ScaledLocal(new Vector3(width, width * 0.7f, 1));
-                    cards.SetInstanceTransform(c, t * local);
-                    var tone = 0.85f + _rng.Randf() * 0.25f; // 잎 색의 미세한 편차
-                    cards.SetInstanceColor(c++, new Color(tone, tone, tone * 0.95f));
+                    var a = _rng.RandfRange(0, Mathf.Tau);
+                    var len = Mathf.Lerp(2.0f, 0.5f, u) * _rng.RandfRange(0.75f, 1.2f);
+                    var droop = _rng.RandfRange(0.15f, 0.45f) + (1 - u) * 0.2f;
+                    var dir = new Vector3(Mathf.Cos(a) * Mathf.Cos(droop), -Mathf.Sin(droop), Mathf.Sin(a) * Mathf.Cos(droop));
+                    var side = new Vector3(-Mathf.Sin(a), 0, Mathf.Cos(a));
+                    var normal = side.Cross(dir).Normalized();
+                    var center = new Vector3(0, y, 0) + dir * len * 0.5f;
+                    var tone = 0.85f + _rng.Randf() * 0.3f;
+                    var color = new Color(tone, tone * 1.02f, tone * 0.92f);
+                    // 가지 하나 = 수평 카드 + 세로 카드 (어느 방향에서 봐도 비어 보이지 않게)
+                    foreach (var (bx, bz) in new[] { (side, normal), (normal, -side) })
+                    {
+                        var basis = new Basis(bx * len * 0.55f, dir * len, bz);
+                        cards.Add((t * new Transform3D(basis, center), color));
+                    }
                 }
             }
         }
-        if (leaf is StandardMaterial3D sm) sm.VertexColorUseAsAlbedo = true;
-        AddChild(new MultiMeshInstance3D { Multimesh = cards, MaterialOverride = leaf });
+        var mm = new MultiMesh
+        {
+            TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = true,
+            Mesh = new QuadMesh { Size = Vector2.One }, InstanceCount = cards.Count,
+        };
+        for (var i = 0; i < cards.Count; i++) { mm.SetInstanceTransform(i, cards[i].X); mm.SetInstanceColor(i, cards[i].C); }
+        AddChild(new MultiMeshInstance3D { Multimesh = mm, MaterialOverride = leaf });
+        GD.Print($"[nature] 소나무 {trees.Count}그루, 가지 카드 {cards.Count}장");
     }
 
     /// <summary>불규칙한 바위: 찌그러뜨린 다면체, 크기·회전·묻힌 깊이가 제각각</summary>
@@ -172,8 +184,8 @@ public partial class FutureCity : Node3D
         var cols = new[] { -1, 1 };
         for (var ring = 0; ring < 3; ring++)
         {
-            var r = 260 + ring * 110;
-            var count = 9 + ring * 3;
+            var r = 620 + ring * 160;
+            var count = 6 + ring * 2;
             for (var i = 0; i < count; i++)
             foreach (var side in cols)
             {
@@ -239,7 +251,7 @@ public partial class FutureCity : Node3D
     {
         var concrete = Look.Scanned("rock_boulder_dry", 5f, new Color(0.78f, 0.77f, 0.74f));
         var lamp = new StandardMaterial3D { AlbedoColor = new Color(1, 0.85f, 0.6f), EmissionEnabled = true, Emission = new Color(1, 0.75f, 0.45f), EmissionEnergyMultiplier = 3 };
-        var spots = new[] { new Vector3(-260, 150, -300), new Vector3(220, 190, -360), new Vector3(-60, 230, -620) };
+        var spots = new[] { new Vector3(-520, 230, -640), new Vector3(470, 280, -720), new Vector3(-80, 320, -1100) };
         foreach (var p in spots)
         {
             var r = _rng.RandfRange(38, 60);
@@ -273,7 +285,7 @@ public partial class FutureCity : Node3D
         for (var i = -10; i <= 10; i++)
         {
             var x = i * 40f;
-            _rail.AddPoint(new Vector3(x, 22 + Mathf.Sin(i * 0.4f) * 2, 120 + Mathf.Cos(i * 0.3f) * 25));
+            _rail.AddPoint(new Vector3(x, 26 + Mathf.Sin(i * 0.4f) * 2, 210 + Mathf.Cos(i * 0.3f) * 30));
         }
         _railLength = _rail.GetBakedLength();
         var beams = new List<Transform3D>();

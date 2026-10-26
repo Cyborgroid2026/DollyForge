@@ -19,7 +19,7 @@ public partial class World : Node3D
     const int TerrainN = 161;
     /// <summary>연못: 작업장 문(남쪽) 너머 언덕 사이의 오목한 곳</summary>
     public static readonly Vector2 PondCenter = new(22f, 34f);
-    public const float PondRadius = 9f, PondDepth = 2.2f;
+    public const float PondRadius = 9f, PondDepth = 2.2f, PondBank = 1.4f;
     float[] _heights = [];
 
     /// <summary>지형 높이 (1 m 격자 보간). 격자 밖은 0.</summary>
@@ -41,6 +41,7 @@ public partial class World : Node3D
         BuildTerrain();
         BuildWorkshop();
         AddChild(new FutureCity { World = this });
+        AddChild(new Nature { World = this });
     }
 
     void BuildEnvironment()
@@ -83,6 +84,13 @@ public partial class World : Node3D
             VolumetricFogDensity = 0.0006f,
             VolumetricFogAlbedo = new Color(0.9f, 0.92f, 0.95f),
             VolumetricFogLength = 120f,
+            // 공기 원근: 멀수록 하늘빛에 잠기는 실제 대기 산란
+            FogEnabled = true,
+            FogLightColor = new Color(0.66f, 0.75f, 0.86f),
+            FogDensity = 0.0011f,
+            FogAerialPerspective = 0.75f,
+            FogSunScatter = 0.25f,
+            FogSkyAffect = 0.0f,
         };
         AddChild(new WorldEnvironment { Environment = env });
 
@@ -120,8 +128,12 @@ public partial class World : Node3D
             var ux = wx + warp.GetNoise2D(wx, wz) * 22f;
             var uz = wz + warp.GetNoise2D(wz + 137f, wx - 59f) * 22f;
             var hills = noise.GetNoise2D(ux, uz) * 7f + ridge.GetNoise2D(ux, uz) * 3.5f + fine.GetNoise2D(wx, wz) * 0.35f;
-            var pond = Mathf.SmoothStep(PondRadius + 4f, PondRadius * 0.35f, new Vector2(wx - PondCenter.X, wz - PondCenter.Y).Length());
-            heights[z * n + x] = yard * (hills + 2.5f * yard) - 0.02f - pond * PondDepth;
+            // 연못: 둘레는 고른 둑으로 가라앉고, 안쪽은 우묵한 바닥
+            var pd = new Vector2(wx - PondCenter.X, wz - PondCenter.Y).Length();
+            var bank = Mathf.SmoothStep(PondRadius + 9f, PondRadius + 2f, pd);
+            var bowl = Mathf.SmoothStep(PondRadius + 1f, PondRadius * 0.3f, pd);
+            var ground = yard * (hills + 2.5f * yard) - 0.02f;
+            heights[z * n + x] = Mathf.Lerp(ground, PondBank, bank) - bowl * PondDepth;
         }
 
         var shape = new HeightMapShape3D { MapWidth = n, MapDepth = n, MapData = heights };
