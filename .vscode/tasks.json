@@ -32,7 +32,7 @@
             // 게임 본체. 창은 보이지 않는 자리에 두고 화면은 통합 브라우저로 보낸다. 끝낼 때는 이 작업을 종료(Terminate Task)한다.
             "label": "game: Godot 게임 (화면 보내기)",
             "type": "shell",
-            "command": "\"$GODOT\" --path godot -- --stream",
+            "command": "./tools/run-game.sh",
             "options": { "cwd": "${workspaceFolder}" },
             "isBackground": true,
             "presentation": { "group": "dolly", "panel": "dedicated" },

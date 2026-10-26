@@ -4,7 +4,7 @@
 #   1. 실사 에셋 내려받기 (처음 한 번)
 #   2. Rust 월드 서버 (이미 떠 있으면 그대로 쓴다)
 #   3. C# 빌드와 Godot 에셋 가져오기
-#   4. Godot 게임을 화면 보내기 모드로 실행 → 통합 브라우저 주소를 알려 준다
+#   4. Godot 게임을 모니터 없는 가상 화면에서 실행 → 통합 브라우저 주소를 알려 준다 (창은 뜨지 않는다)
 # 끝낼 때는 Ctrl+C. 이 스크립트가 띄운 서버와 게임을 함께 정리한다.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -73,7 +73,7 @@ echo "[run] 3/4 C# 빌드 · Godot 에셋 가져오기"
 (cd godot && dotnet build --nologo -v quiet && "$GODOT" --headless --path . --import >"$LOG_DIR/import.log" 2>&1)
 
 echo "[run] 4/4 게임 (화면 보내기)"
-"$GODOT" --path godot -- --stream 2>&1 | while IFS= read -r line; do
+GODOT="$GODOT" ./tools/run-game.sh 2>&1 | while IFS= read -r line; do
   printf '%s\n' "$line"
   [[ "$line" == *"[stream] http"* ]] && banner
 done

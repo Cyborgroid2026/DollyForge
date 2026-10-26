@@ -73,6 +73,8 @@ public partial class BrowserStream : Node
         root.ContentScaleMode = Window.ContentScaleModeEnum.Viewport;
         root.ContentScaleAspect = Window.ContentScaleAspectEnum.Keep;
         root.ContentScaleSize = Size;
+        // tools/run-game.sh 가 모니터 없는 가상 화면(cage)에서 띄웠으면 숨길 창이 없다
+        if (OS.GetEnvironment("DOLLY_OFFSCREEN") == "1") return;
         DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.Borderless, true);
         DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.NoFocus, true);
         var tiny = new Vector2I(16, 9);
