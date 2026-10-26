@@ -1,14 +1,42 @@
 //! 게임 규칙 상수와 월드 배치. C# 쪽 GameData.cs 와 값이 같아야 한다.
 
-pub const TICK_HZ: u32 = 10;
+pub const PHYSICS_HZ: u32 = 60;
+pub const SNAPSHOT_EVERY: u32 = 2; // 30Hz 스냅샷
 pub const WORLD_RADIUS: f32 = 60.0;
 pub const FENCE_RADIUS: f32 = 18.0;
 pub const GATE_HALF_WIDTH: f32 = 1.6;
 pub const AOI_RADIUS: f32 = 80.0;
-pub const MAX_SPEED: f32 = 7.0; // m/s, 달리기 + 지연 여유
 pub const INTERACT_RANGE: f32 = 4.5; // 클라이언트 3.5m + 지연 여유
 
 pub const SPAWN: (f32, f32, f32) = (-6.5, 0.0, 0.0);
+pub const MIRROR: (f32, f32) = (-3.2, 3.4);
+pub const HARAM_HOUSE: (f32, f32) = (-27.0, -37.0);
+
+// ---------- 물리 (실제 값) ----------
+pub const GRAVITY: f32 = 9.81; // m/s²
+pub const WALK_SPEED: f32 = 1.6; // 사람 보통 걸음 m/s
+pub const RUN_SPEED: f32 = 4.0; // 가벼운 달리기 m/s
+pub const JUMP_SPEED: f32 = 3.1; // 제자리 점프 높이 ≈ v²/2g ≈ 0.49m
+pub const GROUND_ACCEL: f32 = 8.0; // m/s²
+pub const AIR_ACCEL: f32 = 1.5; // 공중에서는 방향을 거의 못 바꾼다
+pub const BODY_MASS: f32 = 70.0; // kg (밀어낼 때 사용)
+pub const DENSITY_WOOD: f32 = 600.0; // kg/m³
+pub const DENSITY_TITANIUM: f32 = 4506.0;
+pub const DENSITY_QUARTZ: f32 = 2650.0;
+pub const DENSITY_COPPER: f32 = 8960.0;
+pub const DENSITY_HERB: f32 = 300.0;
+
+pub const TERRAIN_N: usize = 161; // 1m 격자
+pub const TERRAIN_SIZE: f32 = 160.0;
+pub const TERRAIN_SEED: u32 = 20261026;
+pub const TREE_COUNT: usize = 150;
+pub const ROCK_COUNT: usize = 40;
+
+pub const PROP_ID_BASE: u32 = 500;
+pub const PROP_CRATE: u8 = 10;
+pub const PROP_BARREL: u8 = 11;
+pub const PROP_BALL: u8 = 12;
+pub const PROP_BIG_BALL: u8 = 13;
 pub const SPAWN_YAW: f32 = std::f32::consts::FRAC_PI_2;
 
 pub const CRYO_YEARS: u16 = 10;

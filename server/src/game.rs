@@ -1,8 +1,10 @@
 //! 서버 권위 게임 상태. 단일 게임 루프 스레드가 소유한다.
 //! 마을 시설과 자원 노드는 모든 플레이어가 공유하고, 일상·연구·외출 진행과
 //! 하람의 나이(개인 시간선)는 플레이어별로 따로 흐른다.
+//! 위치는 클라이언트가 보내지 않는다. 입력만 받아 physics.rs 가 시뮬레이션한다.
 
 use crate::data::*;
+use crate::physics::{Input, Physics};
 use crate::protocol::{op, Writer, C2S};
 use crate::store::{Account, Store};
 use crate::ws;
@@ -33,7 +35,6 @@ struct OnlinePlayer {
     y: f32,
     z: f32,
     yaw: f32,
-    last_move: Instant,
     moved: bool,
     dirty: bool,
     cryo_armed: Option<Instant>,
@@ -49,12 +50,6 @@ impl Session {
     fn send(&self, payload: &[u8]) {
         let _ = self.out.send(ws::binary(payload));
     }
-}
-
-struct Node {
-    kind: u8,
-    x: f32,
-    z: f32,
 }
 
 struct PendingCode {
@@ -73,8 +68,10 @@ enum Dest {
 pub struct Game {
     sessions: HashMap<u32, Session>,
     store: Store,
-    nodes: HashMap<u32, Node>,
+    physics: Physics,
+    nodes: HashMap<u32, u8>, // 자원 노드 id -> 종류 (위치·자세는 physics)
     next_node: u32,
+    ticks: u32,
     node_timer: f32,
     codes: HashMap<String, PendingCode>,
     rng: Rng,
@@ -120,8 +117,33 @@ fn msg_moved(id: u32, p: &OnlinePlayer) -> Vec<u8> {
     Writer::new(op::PLAYER_MOVED).u32(id).f32(p.x).f32(p.y).f32(p.z).f32(p.yaw).finish()
 }
 
-fn msg_node_spawn(id: u32, n: &Node) -> Vec<u8> {
-    Writer::new(op::NODE_SPAWN).u32(id).u8(n.kind).f32(n.x).f32(n.z).finish()
+fn msg_node_spawn(id: u32, kind: u8, pos: [f32; 3]) -> Vec<u8> {
+    Writer::new(op::NODE_SPAWN).u32(id).u8(kind).f32(pos[0]).f32(pos[1]).f32(pos[2]).finish()
+}
+
+/// 지형 높이(cm, i16)와 나무·바위 배치. 클라이언트가 같은 지면을 그리도록 서버가 보낸다.
+fn msg_world_init(ph: &Physics) -> Vec<u8> {
+    let t = &ph.terrain;
+    let mut w = Writer::new(op::WORLD_INIT).u16(t.n as u16).f32(t.size);
+    for h in &t.heights {
+        w = w.i16((h * 100.0).round().clamp(-32000.0, 32000.0) as i16);
+    }
+    w = w.u16(ph.trees.len() as u16);
+    for tr in &ph.trees {
+        w = w.f32(tr.x).f32(tr.y).f32(tr.z).f32(tr.scale);
+    }
+    w = w.u16(ph.rocks.len() as u16);
+    for r in &ph.rocks {
+        w = w.f32(r.x).f32(r.y).f32(r.z).f32(r.size);
+    }
+    w.finish()
+}
+
+fn msg_prop_spawn(ph: &Physics, id: u32) -> Option<Vec<u8>> {
+    let prop = ph.props.get(&id)?;
+    let (p, q, _) = ph.prop_pose(id)?;
+    let w = Writer::new(op::PROP_SPAWN).u32(id).u8(prop.kind).f32(prop.size[0]).f32(prop.size[1]).f32(prop.size[2]);
+    Some(w.f32(p[0]).f32(p[1]).f32(p[2]).f32(q[0]).f32(q[1]).f32(q[2]).f32(q[3]).finish())
 }
 
 // ---------- 규칙 도우미 ----------
@@ -137,19 +159,8 @@ fn complete_task(a: &mut Account, bit: u8) -> bool {
     fresh
 }
 
-fn gate_open(phase: Phase) -> bool {
-    phase == Phase::Outing
-}
-
 fn inside_fence(x: f32, z: f32) -> bool {
     x.hypot(z) < FENCE_RADIUS
-}
-
-fn crosses_fence(ox: f32, oz: f32, x: f32, z: f32, open: bool) -> bool {
-    if inside_fence(ox, oz) == inside_fence(x, z) {
-        return false;
-    }
-    !(open && x.abs() < GATE_HALF_WIDTH && z < 0.0)
 }
 
 fn normalize_phone(raw: &str) -> Option<String> {
@@ -193,8 +204,10 @@ impl Game {
         Game {
             sessions: HashMap::new(),
             store,
+            physics: Physics::new(),
             nodes: HashMap::new(),
             next_node: NODE_ID_BASE,
+            ticks: 0,
             node_timer: 0.0,
             codes: HashMap::new(),
             rng: Rng::seeded(),
@@ -214,28 +227,87 @@ impl Game {
         self.flush();
     }
 
+    /// 물리 한 스텝 (1/60초)
     pub fn tick(&mut self, dt: f32) {
+        self.ticks = self.ticks.wrapping_add(1);
         // 자원 노드 리스폰
         self.node_timer -= dt;
         if self.nodes.len() < NODE_TARGET && self.node_timer <= 0.0 {
             self.node_timer = NODE_RESPAWN_SECS;
             self.spawn_node();
         }
-        // 이동 브로드캐스트 + 변경된 상태 전송
+
+        let sessions = &self.sessions;
+        self.physics.step(|id| {
+            sessions.get(&id).and_then(|s| s.player.as_ref()).map_or(false, |p| p.acc.phase == Phase::Outing)
+        });
+
+        // 실제 이동 거리만큼 배터리 소모
+        let mut drained = Vec::new();
+        for (&id, s) in self.sessions.iter_mut() {
+            let Some(p) = s.player.as_mut() else { continue };
+            let Some([x, y, z]) = self.physics.feet(id) else { continue };
+            let dist = (x - p.x).hypot(z - p.z);
+            if dist > 1e-4 || (y - p.y).abs() > 1e-4 {
+                p.moved = true;
+            }
+            if dist > 1e-4 && p.acc.phase != Phase::Finished {
+                let rate = if inside_fence(x, z) { BATTERY_PER_M_INSIDE } else { BATTERY_PER_M_OUTSIDE };
+                let rate = if p.acc.research >= P_SPRING { rate * 0.5 } else { rate };
+                p.acc.battery = (p.acc.battery - dist * rate).max(0.0);
+                p.dirty = true;
+                if p.acc.battery <= 0.0 {
+                    drained.push(id);
+                }
+            }
+            p.x = x;
+            p.y = y;
+            p.z = z;
+        }
+        for id in drained {
+            self.shutdown(id);
+        }
+
+        if self.ticks % SNAPSHOT_EVERY == 0 {
+            self.snapshot();
+        }
+        let now = Instant::now();
+        self.codes.retain(|_, c| c.expires > now);
+        self.flush();
+    }
+
+    /// 30Hz 스냅샷: 다른 플레이어 위치, 내 물리 상태, 움직이는 소품
+    fn snapshot(&mut self) {
         for (&id, s) in self.sessions.iter_mut() {
             let Some(p) = s.player.as_mut() else { continue };
             if p.moved {
                 p.moved = false;
                 self.outbox.push((Dest::Others { except: id, near: Some((p.x, p.z)) }, msg_moved(id, p)));
             }
-            if p.dirty {
+            if let Some((v, grounded)) = self.physics.velocity(id) {
+                let me = Writer::new(op::SELF_STATE)
+                    .f32(p.x).f32(p.y).f32(p.z).f32(v.x).f32(v.y).f32(v.z).u8(grounded as u8)
+                    .finish();
+                self.outbox.push((Dest::One(id), me));
+            }
+            if p.dirty && self.ticks % (SNAPSHOT_EVERY * 3) == 0 {
                 p.dirty = false;
                 self.outbox.push((Dest::One(id), msg_state(p)));
             }
         }
-        let now = Instant::now();
-        self.codes.retain(|_, c| c.expires > now);
-        self.flush();
+        let awake: Vec<(u32, [f32; 3], [f32; 4])> = self
+            .physics
+            .props
+            .keys()
+            .filter_map(|&id| self.physics.prop_pose(id).filter(|(_, _, a)| *a).map(|(p, q, _)| (id, p, q)))
+            .collect();
+        for chunk in awake.chunks(100) {
+            let mut w = Writer::new(op::PROP_STATE).u16(chunk.len() as u16);
+            for (id, p, q) in chunk {
+                w = w.u32(*id).f32(p[0]).f32(p[1]).f32(p[2]).f32(q[0]).f32(q[1]).f32(q[2]).f32(q[3]);
+            }
+            self.outbox.push((Dest::All, w.finish()));
+        }
     }
 
     fn flush(&mut self) {
@@ -283,6 +355,7 @@ impl Game {
         if let Some(s) = self.sessions.remove(&conn) {
             let _ = s.stream.shutdown(Shutdown::Both);
             if let Some(p) = s.player {
+                self.physics.remove_avatar(conn);
                 self.store.save(&p.acc);
                 self.outbox.push((Dest::All, Writer::new(op::PLAYER_LEFT).u32(conn).finish()));
                 println!("[game] 퇴장 #{conn} ({})", mask_phone(&p.acc.phone));
@@ -297,7 +370,7 @@ impl Game {
             C2S::RequestCode { token } => self.on_request_code(conn, &token),
             C2S::Login { token, code } => self.on_login(conn, &token, &code),
             _ if !logged_in => self.reply(conn, msg_error("로그인이 필요합니다.")),
-            C2S::Move { x, y, z, yaw } => self.on_move(conn, x, y, z, yaw),
+            C2S::Input { mx, mz, yaw, flags } => self.on_input(conn, mx, mz, yaw, flags),
             C2S::Interact { target } => self.on_interact(conn, target),
             C2S::Chat { text } => {
                 let text: String = text.trim().chars().take(120).collect();
@@ -386,14 +459,25 @@ impl Game {
             y,
             z,
             yaw: SPAWN_YAW,
-            last_move: Instant::now(),
             moved: false,
             dirty: false,
             cryo_armed: None,
         };
         println!("[game] 입장 #{conn} ({})", mask_phone(&player.acc.phone));
 
+        self.physics.add_avatar(conn, player.acc.gender, [x, y, z]);
         self.reply(conn, Writer::new(op::LOGIN_OK).u32(conn).u8(player.acc.gender).finish());
+        self.reply(conn, msg_world_init(&self.physics));
+        let props: Vec<Vec<u8>> = self
+            .physics
+            .props
+            .keys()
+            .filter(|id| !self.nodes.contains_key(id))
+            .filter_map(|&id| msg_prop_spawn(&self.physics, id))
+            .collect();
+        for m in props {
+            self.reply(conn, m);
+        }
         self.reply(conn, msg_state(&player));
         self.reply(conn, msg_teleport(x, y, z, SPAWN_YAW));
         let others: Vec<Vec<u8>> = self
@@ -404,7 +488,11 @@ impl Game {
         for m in others {
             self.reply(conn, m);
         }
-        let nodes: Vec<Vec<u8>> = self.nodes.iter().map(|(&id, n)| msg_node_spawn(id, n)).collect();
+        let nodes: Vec<Vec<u8>> = self
+            .nodes
+            .iter()
+            .filter_map(|(&id, &kind)| self.physics.prop_pos(id).map(|pos| msg_node_spawn(id, kind, pos)))
+            .collect();
         for m in nodes {
             self.reply(conn, m);
         }
@@ -418,45 +506,25 @@ impl Game {
 
     // ---------- 이동 ----------
 
-    fn on_move(&mut self, conn: u32, x: f32, y: f32, z: f32, yaw: f32) {
+    fn on_input(&mut self, conn: u32, mx: f32, mz: f32, yaw: f32, flags: u8) {
         let Some(p) = self.sessions.get_mut(&conn).and_then(|s| s.player.as_mut()) else { return };
-        if matches!(p.acc.phase, Phase::Finished) {
-            return;
-        }
-        let now = Instant::now();
-        let dt = now.duration_since(p.last_move).as_secs_f32().min(1.0);
-        p.last_move = now;
-        let dist = (x - p.x).hypot(z - p.z);
-        let invalid = dist > MAX_SPEED * dt.max(0.05) + 0.5
-            || x.hypot(z) > WORLD_RADIUS + 0.5
-            || y.abs() > 5.0
-            || crosses_fence(p.x, p.z, x, z, gate_open(p.acc.phase));
-        if invalid {
-            let tp = msg_teleport(p.x, p.y, p.z, p.yaw);
-            return self.reply(conn, tp);
-        }
-        let rate = if inside_fence(x, z) { BATTERY_PER_M_INSIDE } else { BATTERY_PER_M_OUTSIDE };
-        let rate = if p.acc.research >= P_SPRING { rate * 0.5 } else { rate };
-        p.x = x;
-        p.y = y;
-        p.z = z;
+        let frozen = p.acc.phase == Phase::Finished;
         p.yaw = yaw;
-        p.moved = true;
-        if dist > 0.001 {
-            p.acc.battery = (p.acc.battery - dist * rate).max(0.0);
-            p.dirty = true;
+        let (mx, mz) = if frozen { (0.0, 0.0) } else { (mx.clamp(-1.0, 1.0), mz.clamp(-1.0, 1.0)) };
+        self.physics.set_input(conn, Input { mx, mz, yaw, jump: flags & 1 != 0 && !frozen, run: flags & 2 != 0 });
+    }
+
+    fn shutdown(&mut self, conn: u32) {
+        let Some(p) = self.sessions.get_mut(&conn).and_then(|s| s.player.as_mut()) else { return };
+        for i in 0..4 {
+            p.acc.inv[i] = p.acc.inv[i].saturating_sub(p.acc.today[i]);
         }
-        if p.acc.battery <= 0.0 {
-            for i in 0..4 {
-                p.acc.inv[i] = p.acc.inv[i].saturating_sub(p.acc.today[i]);
-            }
-            p.acc.battery = 100.0;
-            self.outbox.push((
-                Dest::One(conn),
-                msg_text(MSG_SYSTEM, "배터리 방전! 비상 귀환 프로토콜 가동 — 오늘 수집한 자원을 잃었습니다."),
-            ));
-            self.end_day(conn);
-        }
+        p.acc.battery = 100.0;
+        self.outbox.push((
+            Dest::One(conn),
+            msg_text(MSG_SYSTEM, "배터리 방전! 비상 귀환 프로토콜 가동 — 오늘 수집한 자원을 잃었습니다."),
+        ));
+        self.end_day(conn);
     }
 
     // ---------- 하루 진행 ----------
@@ -516,6 +584,7 @@ impl Game {
         p.dirty = false;
         p.cryo_armed = None;
         let state = msg_state(p);
+        self.physics.teleport(conn, [x, y, z]);
         self.store.save(&p.acc);
         self.reply(conn, msg_teleport(x, y, z, SPAWN_YAW));
         self.reply(conn, state);
@@ -561,15 +630,17 @@ impl Game {
 
     fn collect(&mut self, conn: u32, id: u32) {
         let Some(p) = self.sessions.get_mut(&conn).and_then(|s| s.player.as_mut()) else { return };
-        let Some(node) = self.nodes.get(&id) else { return };
-        if (node.x - p.x).hypot(node.z - p.z) > INTERACT_RANGE {
+        let Some(&kind) = self.nodes.get(&id) else { return };
+        let Some([nx, _, nz]) = self.physics.prop_pos(id) else { return };
+        if (nx - p.x).hypot(nz - p.z) > INTERACT_RANGE {
             return self.toast(conn, "너무 멉니다.");
         }
         if p.acc.phase != Phase::Outing {
             return self.toast(conn, "지금은 외출 시간이 아닙니다.");
         }
-        let kind = node.kind as usize;
+        let kind = kind as usize;
         self.nodes.remove(&id);
+        self.physics.remove_prop(id);
         let a = &mut p.acc;
         a.inv[kind] += 1;
         a.today[kind] += 1;
@@ -748,7 +819,8 @@ impl Game {
             let t = self.rng.unit() * std::f32::consts::TAU;
             let (x, z) = (r * t.cos(), r * t.sin());
             let (hx, hz) = station_pos(target::HARAM).unwrap();
-            if (x - hx).hypot(z - hz) < 8.0 || self.nodes.values().any(|n| (n.x - x).hypot(n.z - z) < 3.0) {
+            let crowded = self.nodes.keys().filter_map(|&id| self.physics.prop_pos(id)).any(|p| (p[0] - x).hypot(p[2] - z) < 3.0);
+            if (x - hx).hypot(z - hz) < 8.0 || crowded {
                 continue;
             }
             let total: u32 = RESOURCE_WEIGHTS.iter().sum();
@@ -763,9 +835,9 @@ impl Game {
             }
             let id = self.next_node;
             self.next_node += 1;
-            let node = Node { kind, x, z };
-            self.outbox.push((Dest::All, msg_node_spawn(id, &node)));
-            self.nodes.insert(id, node);
+            let y = self.physics.add_node(id, kind, x, z);
+            self.outbox.push((Dest::All, msg_node_spawn(id, kind, [x, y, z])));
+            self.nodes.insert(id, kind);
             return;
         }
     }
@@ -853,14 +925,6 @@ impl Rng {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn fence_blocks_unless_gate_open() {
-        assert!(crosses_fence(0.0, -17.0, 0.0, -19.0, false));
-        assert!(!crosses_fence(0.0, -17.0, 0.0, -19.0, true));
-        assert!(crosses_fence(10.0, -13.0, 10.0, -16.0, true)); // 문이 아닌 곳
-        assert!(!crosses_fence(0.0, 0.0, 1.0, 1.0, false));
-    }
 
     #[test]
     fn phone_normalization() {

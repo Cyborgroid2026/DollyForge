@@ -5,6 +5,8 @@ edition = "2021"
 description = "Dolly Forge VR MMORPG authoritative game server"
 
 [dependencies]
+# 0.18 은 Rust 1.75 에서 빌드되는 마지막 계열 (spade 는 Cargo.lock 에서 2.6.0 으로 고정)
+rapier3d = "=0.18.0"
 
 [profile.release]
 opt-level = 3

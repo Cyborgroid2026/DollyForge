@@ -10,7 +10,7 @@ pub mod op {
     pub const REGISTER: u8 = 0x01;
     pub const REQUEST_CODE: u8 = 0x02;
     pub const LOGIN: u8 = 0x03;
-    pub const MOVE: u8 = 0x10;
+    pub const INPUT: u8 = 0x15;
     pub const INTERACT: u8 = 0x11;
     pub const CHAT: u8 = 0x12;
     pub const RESTART: u8 = 0x14;
@@ -30,6 +30,10 @@ pub mod op {
     pub const NODE_SPAWN: u8 = 0x94;
     pub const NODE_REMOVE: u8 = 0x95;
     pub const CHAT_BROADCAST: u8 = 0x96;
+    pub const WORLD_INIT: u8 = 0x98;
+    pub const PROP_SPAWN: u8 = 0x99;
+    pub const PROP_STATE: u8 = 0x9A;
+    pub const SELF_STATE: u8 = 0x9B;
 }
 
 pub const MAX_FRAME: usize = 4096;
@@ -39,7 +43,8 @@ pub enum C2S {
     Register { phone: String, gender: u8 },
     RequestCode { token: String },
     Login { token: String, code: String },
-    Move { x: f32, y: f32, z: f32, yaw: f32 },
+    /// 이동 의도: 월드 좌표 방향(mx, mz, 길이 0..1), 바라보는 방향, 플래그(1 점프, 2 달리기)
+    Input { mx: f32, mz: f32, yaw: f32, flags: u8 },
     Interact { target: u32 },
     Chat { text: String },
     Restart,
@@ -62,6 +67,10 @@ impl Writer {
         self
     }
     pub fn u32(mut self, v: u32) -> Self {
+        self.buf.extend_from_slice(&v.to_le_bytes());
+        self
+    }
+    pub fn i16(mut self, v: i16) -> Self {
         self.buf.extend_from_slice(&v.to_le_bytes());
         self
     }
@@ -136,7 +145,7 @@ pub fn decode(frame: &[u8]) -> io::Result<C2S> {
         op::REGISTER => C2S::Register { phone: r.str()?, gender: r.u8()? },
         op::REQUEST_CODE => C2S::RequestCode { token: r.str()? },
         op::LOGIN => C2S::Login { token: r.str()?, code: r.str()? },
-        op::MOVE => C2S::Move { x: r.f32()?, y: r.f32()?, z: r.f32()?, yaw: r.f32()? },
+        op::INPUT => C2S::Input { mx: r.f32()?, mz: r.f32()?, yaw: r.f32()?, flags: r.u8()? },
         op::INTERACT => C2S::Interact { target: r.u32()? },
         op::CHAT => C2S::Chat { text: r.str()? },
         op::RESTART => C2S::Restart,
@@ -155,10 +164,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn roundtrip_move() {
-        let frame = Writer::new(op::MOVE).f32(1.5).f32(0.0).f32(-3.0).f32(0.25).finish();
+    fn roundtrip_input() {
+        let frame = Writer::new(op::INPUT).f32(1.0).f32(-0.5).f32(0.25).u8(3).finish();
         match decode(&frame).unwrap() {
-            C2S::Move { x, z, yaw, .. } => assert_eq!((x, z, yaw), (1.5, -3.0, 0.25)),
+            C2S::Input { mx, mz, yaw, flags } => assert_eq!((mx, mz, yaw, flags), (1.0, -0.5, 0.25, 3)),
             m => panic!("unexpected {m:?}"),
         }
     }

@@ -3,6 +3,7 @@
 
 mod data;
 mod game;
+mod physics;
 mod protocol;
 mod store;
 mod ws;
@@ -44,7 +45,7 @@ fn main() {
         }
     });
 
-    let tick = Duration::from_secs_f32(1.0 / data::TICK_HZ as f32);
+    let tick = Duration::from_secs_f32(1.0 / data::PHYSICS_HZ as f32);
     let mut next_tick = Instant::now() + tick;
     let mut last_report = Instant::now();
     loop {

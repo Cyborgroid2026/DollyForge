@@ -1,8 +1,9 @@
 // 돌리(티타늄 사이보그) 신체 생성.
 // 캡슐을 이어 붙이지 않고, 해부학적 단면(타원)을 높이별로 정의한 뒤 Catmull-Rom 으로 보간해
-// 하나의 매끈한 곡면으로 이어 만든다(loft). 성별마다 키, 어깨/골반 비율, 허리, 가슴·흉근,
-// 엉덩이, 허벅지·종아리 근육, 턱선이 다르다.
-// 디자인 언어: 거울처럼 닦인 크롬, 얼굴 없는 머리, 관절의 가는 분할선, 늘씬한 비례.
+// 하나의 매끈한 곡면으로 이어 만든다(loft).
+// 디자인 원칙: 특징이 거의 없는 완벽한 사이보그. 얼굴·문양·발광 표식 없이 균일한 새틴 티타늄,
+// 관절에는 정밀 가공을 암시하는 아주 가는 분할선만 둔다. 성별은 실루엣과 비례(키, 어깨/골반,
+// 허리, 절제된 가슴·골반 곡선)로만 구분된다.
 import * as THREE from '../lib/three/three.module.min.js';
 
 // ---------- 로프트 ----------
@@ -98,16 +99,16 @@ const BODY = {
         torso: [
             { y: 0.735, rx: 0.03, f: 0.03, b: 0.04, cz: -0.005 },
             { y: 0.765, rx: 0.1, f: 0.065, b: 0.08 },
-            { y: 0.815, rx: 0.165, f: 0.088, b: 0.105, glute: 0.03 },
-            { y: 0.87, rx: 0.185, f: 0.095, b: 0.12, glute: 0.04 },
-            { y: 0.93, rx: 0.175, f: 0.09, b: 0.105, glute: 0.02 },
+            { y: 0.815, rx: 0.165, f: 0.088, b: 0.105, glute: 0.014 },
+            { y: 0.87, rx: 0.185, f: 0.095, b: 0.12, glute: 0.02 },
+            { y: 0.93, rx: 0.175, f: 0.09, b: 0.105, glute: 0.01 },
             { y: 1.0, rx: 0.14, f: 0.08, b: 0.08 },
             { y: 1.05, rx: 0.125, f: 0.075, b: 0.072 },
             { y: 1.11, rx: 0.132, f: 0.078, b: 0.076 },
             { y: 1.17, rx: 0.142, f: 0.083, b: 0.082 },
-            { y: 1.22, rx: 0.15, f: 0.085, b: 0.084, bust: 0.045 },
-            { y: 1.265, rx: 0.155, f: 0.083, b: 0.085, bust: 0.04 },
-            { y: 1.31, rx: 0.158, f: 0.075, b: 0.08, bust: 0.008 },
+            { y: 1.22, rx: 0.15, f: 0.085, b: 0.084, bust: 0.026 },
+            { y: 1.265, rx: 0.155, f: 0.083, b: 0.085, bust: 0.024 },
+            { y: 1.31, rx: 0.158, f: 0.075, b: 0.08, bust: 0.004 },
             { y: 1.35, rx: 0.155, f: 0.06, b: 0.07 },
             { y: 1.385, rx: 0.1, f: 0.05, b: 0.055 },
             { y: 1.4, rx: 0.05, f: 0.045, b: 0.045 },
@@ -120,20 +121,19 @@ const BODY = {
         hip: { x: 0.088, y: 0.84 },
         leg: { thigh: 0.4, shin: 0.38, r: 1.04, q: 0.045 },
         foot: 0.225,
-        core: { y: 1.16, z: 0.085 },
     },
     1: {
         torso: [
             { y: 0.785, rx: 0.035, f: 0.035, b: 0.04 },
             { y: 0.815, rx: 0.105, f: 0.07, b: 0.08 },
-            { y: 0.87, rx: 0.17, f: 0.095, b: 0.1, glute: 0.015 },
-            { y: 0.92, rx: 0.176, f: 0.098, b: 0.108, glute: 0.022 },
+            { y: 0.87, rx: 0.17, f: 0.095, b: 0.1, glute: 0.008 },
+            { y: 0.92, rx: 0.176, f: 0.098, b: 0.108, glute: 0.012 },
             { y: 0.99, rx: 0.156, f: 0.094, b: 0.095 },
             { y: 1.06, rx: 0.138, f: 0.092, b: 0.088 },
             { y: 1.14, rx: 0.15, f: 0.098, b: 0.094 },
             { y: 1.22, rx: 0.172, f: 0.104, b: 0.102 },
-            { y: 1.3, rx: 0.192, f: 0.11, b: 0.106, pec: 0.022 },
-            { y: 1.37, rx: 0.203, f: 0.108, b: 0.102, pec: 0.016 },
+            { y: 1.3, rx: 0.192, f: 0.11, b: 0.106, pec: 0.014 },
+            { y: 1.37, rx: 0.203, f: 0.108, b: 0.102, pec: 0.01 },
             { y: 1.425, rx: 0.205, f: 0.085, b: 0.09 },
             { y: 1.465, rx: 0.14, f: 0.065, b: 0.07 },
             { y: 1.49, rx: 0.065, f: 0.055, b: 0.055 },
@@ -146,26 +146,24 @@ const BODY = {
         hip: { x: 0.09, y: 0.9 },
         leg: { thigh: 0.44, shin: 0.42, r: 1.07, q: 0.02 },
         foot: 0.26,
-        core: { y: 1.3, z: 0.118 },
     },
 };
 
 // ---------- 재질 ----------
 
-export function chromeMaterials() {
+export function shellMaterials() {
     return {
-        chrome: new THREE.MeshPhysicalMaterial({
-            color: 0xeef1f4, metalness: 1, roughness: 0.16, clearcoat: 0.5, clearcoatRoughness: 0.1,
+        // 새틴 마감 티타늄: 거울 반사가 아닌, 정밀 가공된 금속의 부드러운 광택
+        shell: new THREE.MeshPhysicalMaterial({
+            color: 0xc3c7cc, metalness: 1, roughness: 0.36, clearcoat: 0.15, clearcoatRoughness: 0.4,
         }),
-        seam: new THREE.MeshStandardMaterial({ color: 0x15181c, metalness: 0.6, roughness: 0.6 }),
-        glow: new THREE.MeshStandardMaterial({ color: 0x9fefff, emissive: 0x33ccff, emissiveIntensity: 1.4 }),
-        visor: new THREE.MeshStandardMaterial({ color: 0x223038, emissive: 0x2fb8e6, emissiveIntensity: 0.55, metalness: 0.8, roughness: 0.2 }),
+        seam: new THREE.MeshStandardMaterial({ color: 0x3a3f45, metalness: 0.8, roughness: 0.5 }),
     };
 }
 
 // ---------- 반사 환경 ----------
 
-// 하늘·지평선·땅과 태양, 부드러운 반사판이 있는 실외 반사 환경. 크롬이 주변을 비추며 은빛으로 보이게 한다.
+// 하늘·지평선·땅과 태양, 부드러운 반사판이 있는 실외 반사 환경. 금속 표면이 주변을 자연스럽게 반사하게 한다.
 export function outdoorEnvironment(renderer) {
     const env = new THREE.Scene();
     const sky = new THREE.SphereGeometry(50, 48, 24);
@@ -207,9 +205,9 @@ function mesh(geo, mat, parent, x = 0, y = 0, z = 0) {
 
 // 관절 분할선: 단면 타원을 따라 감는 얇은 고리
 function seamRing(parent, mat, y, rx, rz, cz = 0) {
-    const ring = mesh(new THREE.TorusGeometry(1, 0.06, 6, 40), mat, parent, 0, y, cz);
+    const ring = mesh(new THREE.TorusGeometry(1, 0.025, 6, 48), mat, parent, 0, y, cz);
     ring.rotation.x = Math.PI / 2;
-    ring.scale.set(rx, rz, 0.05);
+    ring.scale.set(rx * 1.004, rz * 1.004, 0.05);
     return ring;
 }
 
@@ -233,10 +231,7 @@ function buildHead(P, M, g) {
         { y: 0.226, rx: 0.042, f: 0.044, b: 0.062, cz: -0.012 },
         { y: 0.238, rx: 0.006, f: 0.006, b: 0.008, cz: -0.014 },
     ].map(s => ({ ...s, y: s.y * k, rx: s.rx * k, f: s.f * k, b: s.b * k, cz: (s.cz ?? 0) * k }));
-    mesh(loft(sections, 56, 7), M.chrome, head);
-    // 희미한 바이저 선 (돌리의 표식)
-    const visor = mesh(new THREE.CylinderGeometry(1, 1, 0.012 * k, 40, 1, true, -1.0, 2.0), M.visor, head, 0, 0.13 * k, 0);
-    visor.scale.set(0.0745 * k, 1, 0.094 * k);
+    mesh(loft(sections, 56, 7), M.shell, head);
     g.add(head);
     return head;
 }
@@ -246,7 +241,7 @@ function buildArm(P, M, side) {
     const arm = new THREE.Group();
     arm.position.set(side * P.shoulder.x, P.shoulder.y, 0);
     arm.rotation.z = side * 0.09;
-    mesh(new THREE.SphereGeometry(P.shoulder.delt, 24, 16), M.chrome, arm).scale.set(1, 1.1, 1.05);
+    mesh(new THREE.SphereGeometry(P.shoulder.delt, 24, 16), M.shell, arm).scale.set(1, 1.1, 1.05);
 
     const U = A.upper;
     const upper = scaleSections([
@@ -256,7 +251,7 @@ function buildArm(P, M, side) {
         { y: U * 0.85, rx: 0.042, f: 0.04, b: 0.042 },
         { y: U, rx: 0.043, f: 0.04, b: 0.042 },
     ], r);
-    mesh(loft(upper, 32, 5), M.chrome, arm, 0, -U, 0);
+    mesh(loft(upper, 32, 5), M.shell, arm, 0, -U, 0);
 
     const elbow = new THREE.Group();
     elbow.position.y = -U;
@@ -272,7 +267,7 @@ function buildArm(P, M, side) {
         { y: F * 0.92, rx: 0.035, f: 0.032, b: 0.033 },
         { y: F, rx: 0.031, f: 0.031, b: 0.031 },
     ], r);
-    mesh(loft(fore, 32, 5), M.chrome, elbow, 0, -F, 0);
+    mesh(loft(fore, 32, 5), M.shell, elbow, 0, -F, 0);
     seamRing(elbow, M.seam, -F + 0.004, 0.026 * r, 0.02 * r);
 
     const hand = buildHand(M, r);
@@ -293,7 +288,7 @@ function buildHand(M, r) {
         { y: -0.03, rx: 0.015, f: 0.038, b: 0.037 },
         { y: 0, rx: 0.013, f: 0.026, b: 0.026 },
     ], k);
-    mesh(loft(palm, 28, 4), M.chrome, hand);
+    mesh(loft(palm, 28, 4), M.shell, hand);
     const fingers = [[0.026, 0.072], [0.009, 0.082], [-0.009, 0.077], [-0.026, 0.062]];
     for (const [z, len] of fingers) {
         const L = len * k;
@@ -304,7 +299,7 @@ function buildHand(M, r) {
             { y: 0, rx: 0.0055, f: 0.006, b: 0.006 },
             { y: L * 0.5, rx: 0.0075, f: 0.0078, b: 0.0078 },
             { y: L, rx: 0.0085, f: 0.009, b: 0.009 },
-        ], 12, 3), M.chrome, f, 0, -L, 0);
+        ], 12, 3), M.shell, f, 0, -L, 0);
         hand.add(f);
     }
     const thumb = new THREE.Group();
@@ -314,7 +309,7 @@ function buildHand(M, r) {
         { y: 0, rx: 0.0065, f: 0.0068, b: 0.0068 },
         { y: 0.03 * k, rx: 0.009, f: 0.0095, b: 0.0095 },
         { y: 0.058 * k, rx: 0.011, f: 0.012, b: 0.012 },
-    ], 12, 3), M.chrome, thumb, 0, -0.058 * k, 0);
+    ], 12, 3), M.shell, thumb, 0, -0.058 * k, 0);
     hand.add(thumb);
     return hand;
 }
@@ -335,7 +330,7 @@ function buildLeg(P, M, side) {
         { y: T + 0.05, rx: 0.06, f: 0.058, b: 0.064, cx: -0.012 },
         { y: T + 0.09, rx: 0.025, f: 0.025, b: 0.025, cx: -0.02 },
     ], r);
-    mesh(loft(thigh, 40, 5), M.chrome, leg, 0, -T, 0);
+    mesh(loft(thigh, 40, 5), M.shell, leg, 0, -T, 0);
 
     const knee = new THREE.Group();
     knee.position.y = -T;
@@ -351,7 +346,7 @@ function buildLeg(P, M, side) {
         { y: N * 0.92, rx: 0.043, f: 0.045, b: 0.043 },
         { y: N, rx: 0.044, f: 0.046, b: 0.043 },
     ], r);
-    mesh(loft(shin, 40, 5), M.chrome, knee, 0, -N, 0);
+    mesh(loft(shin, 40, 5), M.shell, knee, 0, -N, 0);
     seamRing(knee, M.seam, -N + 0.004, 0.027 * r, 0.029 * r);
 
     // 발: 로컬 y(발끝 방향) → 월드 +z 로 회전, f(앞)=발바닥
@@ -363,7 +358,7 @@ function buildLeg(P, M, side) {
         { y: FL * 0.72, rx: 0.042, f: 0.024, b: 0.02 },
         { y: FL * 0.92, rx: 0.036, f: 0.016, b: 0.014 },
         { y: FL, rx: 0.012, f: 0.006, b: 0.005 },
-    ], r ** 0.5), 28, 4), M.chrome, knee, 0, -N - 0.032, -0.05);
+    ], r ** 0.5), 28, 4), M.shell, knee, 0, -N - 0.032, -0.05);
     foot.rotation.x = Math.PI / 2;
     if (side < 0) leg.scale.x = -1; // 왼다리는 거울 대칭 (허벅지 안쪽 방향 유지)
     leg.userData.knee = knee;
@@ -376,23 +371,19 @@ const SHARED = {};
 
 export function makeCyborg(gender, materials) {
     const P = BODY[gender === 1 ? 1 : 0];
-    const M = materials ?? (SHARED.m ??= chromeMaterials());
+    const M = materials ?? (SHARED.m ??= shellMaterials());
     const g = new THREE.Group();
 
     const torso = P.torso.map(s => ({ ...s, sq: P.sq }));
-    mesh(loft(torso, 64, 7), M.chrome, g);
+    mesh(loft(torso, 64, 7), M.shell, g);
 
     const waistY = gender === 1 ? 1.06 : 1.05;
     const waist = P.torso.reduce((a, s) => (Math.abs(s.y - waistY) < Math.abs(a.y - waistY) ? s : a));
     seamRing(g, M.seam, waistY, waist.rx * 1.01, (waist.f + waist.b) / 2 * 1.01);
 
-    mesh(new THREE.CylinderGeometry(P.neck.r * 0.92, P.neck.r * 1.15, P.neck.y1 - P.neck.y0, 24), M.chrome, g,
+    mesh(new THREE.CylinderGeometry(P.neck.r * 0.92, P.neck.r * 1.15, P.neck.y1 - P.neck.y0, 24), M.shell, g,
         0, (P.neck.y0 + P.neck.y1) / 2, -0.008);
     seamRing(g, M.seam, P.neck.y1 - 0.03, P.neck.r * 0.98, P.neck.r * 0.98, -0.008);
-
-    // 가슴 코어 (돌리의 동력원)
-    const core = mesh(new THREE.SphereGeometry(0.018, 16, 12), M.glow, g, 0, P.core.y, P.core.z);
-    core.scale.z = 0.4;
 
     const head = buildHead(P, M, g);
     const armL = buildArm(P, M, -1), armR = buildArm(P, M, 1);
