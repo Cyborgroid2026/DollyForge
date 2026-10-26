@@ -19,9 +19,8 @@ public partial class SelfTest : Node
         if (!ok) _failures++;
     }
 
-    Task Wait(double seconds) => ToSignal(GetTree().CreateTimer(seconds, processAlways: true, processInPhysics: true), "timeout").AsTask();
-
-    static Task AsTask(this SignalAwaiter a) => Task.Run(async () => await a);
+    async Task Wait(double seconds) =>
+        await ToSignal(GetTree().CreateTimer(seconds, processAlways: true, processInPhysics: true), SceneTreeTimer.SignalName.Timeout);
 
     public override async void _Ready()
     {
