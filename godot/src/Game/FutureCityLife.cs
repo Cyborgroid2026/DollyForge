@@ -134,8 +134,8 @@ public partial class FutureCity
             }
             else
             {
-                // 재질 비율은 도시 사진 1,298장의 건물 색 분포를 따른다: 따뜻한 벽돌·황토 44 %, 밝은 회백 16 %,
-                // 어두운 회색 12 %, 차가운 유리 10 % — 유리 빌딩은 도심의 높은 건물에 몰린다
+                // 재질 비율은 도시 사진 9,262장의 건물 색 분포를 따른다: 따뜻한 벽돌·황토 49 %, 밝은 회백 12 %,
+                // 어두운 회색 12 %, 차가운 유리 8 % — 유리 빌딩은 도심의 높은 건물에 몰린다
                 var kind = h > 90 ? (_rng.Randf() < 0.5f ? FacadeKind.Curtain : FacadeKind.Concrete)
                     : _rng.Randf() switch { < 0.1f => FacadeKind.Curtain, < 0.35f => FacadeKind.Concrete, < 0.65f => FacadeKind.Brick, _ => FacadeKind.Plaster };
                 bodies[kind].Add((new Transform3D(basis.Scaled(new Vector3(w, h, d)), new Vector3(p.X, ground + h / 2, p.Y)), Tint(kind)));
