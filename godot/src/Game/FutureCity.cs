@@ -27,6 +27,10 @@ public partial class FutureCity : Node3D
         BuildResonanceTower(new Vector3(60, 0, -950));
         BuildFloatingPlatforms();
         BuildMasts();
+        BuildDrones();
+        BuildGreenhouses(new Vector3(-150, -0.6f, -175));
+        BuildMonument(new Vector3(-210, -1, -500), 46);
+        BuildBalloons();
     }
 
     float Jitter(float amount) => _rng.RandfRange(-amount, amount);
@@ -306,6 +310,7 @@ public partial class FutureCity : Node3D
                     Position = new Vector3(Jitter(r * 0.5f), 9 + h / 2, Jitter(r * 0.5f)),
                 });
             }
+            BuildHangingPods(plat, r);
             AddChild(plat);
             _floaters.Add((plat, p, _rng.Randf() * Mathf.Tau));
         }
@@ -333,6 +338,7 @@ public partial class FutureCity : Node3D
         var dt = (float)delta;
         _time += dt;
         foreach (var (node, speed) in _spinners) node.RotateY(speed * dt);
+        AnimateLife(dt);
         foreach (var (node, b, phase) in _floaters) node.Position = b + new Vector3(0, Mathf.Sin(_time * 0.1f + phase) * 2.5f, 0);
     }
 }
