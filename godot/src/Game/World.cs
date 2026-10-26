@@ -72,8 +72,10 @@ public partial class World : Node3D
             SkyRotation = new Vector3(0, SkyYaw, 0),
             AmbientLightSource = Godot.Environment.AmbientSource.Sky,
             ReflectedLightSource = Godot.Environment.ReflectionSource.Sky,
-            TonemapMode = Godot.Environment.ToneMapper.Agx,
+            // 언리얼 4 의 필르믹(ACES) 톤매핑: Atomic Heart 처럼 대비가 있고 밝은 곳이 부드럽게 눌린다
+            TonemapMode = Godot.Environment.ToneMapper.Aces,
             TonemapExposure = 1.0f,
+            TonemapWhite = 6.0f,
             SsaoEnabled = true,
             SsaoRadius = 1.2f,
             SsaoIntensity = 1.6f,
@@ -85,9 +87,13 @@ public partial class World : Node3D
             SdfgiCascades = 4,
             SdfgiMinCellSize = 0.1f,
             SdfgiEnergy = 1.0f,
+            // 언리얼 4 블룸: 문턱 없이 밝은 곳이 여러 크기로 넓게 번진다 (진공관·등·해)
             GlowEnabled = true,
-            GlowIntensity = 0.25f,
-            GlowBloom = 0.02f,
+            GlowIntensity = 0.5f,
+            GlowStrength = 1.0f,
+            GlowBloom = 0.04f,
+            GlowHdrThreshold = 0.9f,
+            GlowBlendMode = Godot.Environment.GlowBlendModeEnum.Softlight,
             VolumetricFogEnabled = true,
             VolumetricFogDensity = 0.0012f,
             VolumetricFogAlbedo = new Color(0.95f, 0.93f, 0.9f),
@@ -107,7 +113,24 @@ public partial class World : Node3D
             AdjustmentSaturation = 1.12f,
             AdjustmentContrast = 1.05f,
         };
-        AddChild(new WorldEnvironment { Environment = env });
+        // 언리얼 4 의 눈 적응: 어두운 작업장에 들어가면 서서히 밝아지고 밖으로 나오면 눈이 부시다 잦아든다
+        var camera = new CameraAttributesPractical
+        {
+            AutoExposureEnabled = true,
+            AutoExposureMinSensitivity = 60f,
+            AutoExposureMaxSensitivity = 400f,
+            AutoExposureSpeed = 0.6f,
+            AutoExposureScale = 0.45f,
+        };
+        AddChild(new WorldEnvironment { Environment = env, CameraAttributes = camera });
+        var lens = new CanvasLayer { Layer = -1 };
+        lens.AddChild(new ColorRect
+        {
+            Material = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/lens.gdshader") },
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            AnchorRight = 1, AnchorBottom = 1,
+        });
+        AddChild(lens);
 
         // 태양: HDRI 의 해 방향에 맞춘 아침 햇빛 (약간 따뜻한 색)
         _sun = new DirectionalLight3D
