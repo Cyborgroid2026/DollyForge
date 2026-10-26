@@ -69,6 +69,7 @@ public partial class Main : Node3D
         _player.OpenCatalog = OpenCatalog;
         _player.OpenStorage = OpenStorage;
         _player.Stow = Stow;
+        _player.EditDrum = EditDrum;
         _player.Notify = Notify;
         AddChild(_player);
 
@@ -225,6 +226,27 @@ public partial class Main : Node3D
         device.Translate(offset);
         _devices.Adopt(device);
         Notify($"창고에서 꺼냈습니다: {data.Name} (부품 {device.Parts.Count}개)");
+    }
+
+    void EditDrum(PartBody drum)
+    {
+        Input.MouseMode = Input.MouseModeEnum.Visible;
+        DrumUi? ui = null;
+        ui = new DrumUi
+        {
+            Program = [.. _devices.Program(drum.Part.Id)],
+            Applied = p =>
+            {
+                _devices.SetProgram(drum.Part.Id, p);
+                Notify($"캠 핀 고정: {string.Concat(p.Select(v => v > 0 ? "+" : v < 0 ? "−" : "0"))}");
+            },
+            Closed = () =>
+            {
+                ui?.QueueFree();
+                Input.MouseMode = Input.MouseModeEnum.Captured;
+            },
+        };
+        Overlay(ui);
     }
 
     // ------------------------------------------------------------------ 화면

@@ -18,6 +18,40 @@ public partial class Devices : Node3D
     /// <summary>켜진 모터 (부품 id) → 배선 방향 (+1 / -1)</summary>
     readonly Dictionary<int, int> _wiring = new();
     readonly HashSet<int> _running = new();
+    /// <summary>서보 증폭기 손잡이 (부품 id → −1…+1)</summary>
+    readonly Dictionary<int, float> _knob = new();
+    /// <summary>캠 드럼 프로그램 (부품 id → 8단, 각 +1/0/−1)</summary>
+    readonly Dictionary<int, sbyte[]> _program = new();
+    double _clock, _readoutTimer;
+
+    public static readonly sbyte[] DefaultProgram = [1, 1, 1, 1, 0, -1, -1, 0];
+    public float Knob(int id) => _knob.GetValueOrDefault(id, 1f);
+    public sbyte[] Program(int id) => _program.TryGetValue(id, out var p) ? p : DefaultProgram;
+    public void SetProgram(int id, sbyte[] program) => _program[id] = program;
+
+    public string TurnKnob(PartBody amp, float delta)
+    {
+        if (amp.Part.Def.Role != PartRole.Controller) return "서보 증폭기가 아닙니다.";
+        var v = Mathf.Clamp(MathF.Round((Knob(amp.Part.Id) + delta) * 10) / 10, -1, 1);
+        _knob[amp.Part.Id] = v;
+        return $"서보 증폭기 출력 {v * 100:+0;-0;0} %";
+    }
+
+    /// <summary>
+    /// 기기 안 모터 하나의 지령 (−1…+1): 배선 극성 × 서보 손잡이 × 캠 드럼의 현재 단.
+    /// 아날로그 회로처럼 곱해서 정해진다.
+    /// </summary>
+    float Command(int motorId, HashSet<int> group)
+    {
+        float cmd = _wiring.GetValueOrDefault(motorId, 1);
+        foreach (var id in group)
+        {
+            var role = _bodies[id].Part.Def.Role;
+            if (role == PartRole.Controller) cmd *= Knob(id);
+            else if (role == PartRole.Sequencer) cmd *= Program(id)[(int)_clock % 8];
+        }
+        return cmd;
+    }
 
     public IEnumerable<PartBody> Bodies => _bodies.Values;
 
@@ -266,10 +300,12 @@ public partial class Devices : Node3D
             var battery = _running.Contains(motorId) ? PowerSource(group) : null;
             var spec = motor.Part.Def.Electrical!;
             var powered = battery is not null && Mathf.Abs(battery.Part.Def.Electrical!.Volts - spec.Volts) <= spec.Volts * 0.2f;
-            hinge.SetFlag(HingeJoint3D.Flag.EnableMotor, powered);
-            if (!powered) continue;
+            var cmd = powered ? Command(motorId, group) : 0;
+            // 지령 0 이면 모터를 풀어 관성으로 구른다 (DC 모터에 전압이 없을 때와 같다)
+            hinge.SetFlag(HingeJoint3D.Flag.EnableMotor, powered && MathF.Abs(cmd) > 1e-3f);
+            if (!powered || MathF.Abs(cmd) <= 1e-3f) continue;
             // 정극성: 하우징에 대해 출력축(자식)이 축 방향으로 +회전. 모터가 자식 쪽이면 부호를 뒤집는다.
-            var dir = _wiring.GetValueOrDefault(motorId, 1) * (j.Parent == motorId ? 1 : -1);
+            var dir = cmd * (j.Parent == motorId ? 1 : -1);
             hinge.SetParam(HingeJoint3D.Param.MotorTargetVelocity, dir * j.Velocity);
             hinge.SetParam(HingeJoint3D.Param.MotorMaxImpulse, j.Effort * (float)delta);
             // 소비 전력: 정격 전류 기준, 부하(상대 회전 속도)에 따라 15–100 %
@@ -277,7 +313,51 @@ public partial class Devices : Node3D
             var child = _bodies[j.Child];
             var rel = Mathf.Abs((child.AngularVelocity - parent.AngularVelocity).Dot(hinge.GlobalBasis.Z));
             var load = 0.15 + 0.85 * Math.Clamp(1 - rel / Math.Max(j.Velocity, 1e-3), 0, 1);
-            battery!.EnergyJ = Math.Max(0, battery.EnergyJ - spec.Volts * spec.RatedCurrentA * load * delta);
+            battery!.EnergyJ = Math.Max(0, battery.EnergyJ - spec.Volts * spec.RatedCurrentA * load * MathF.Abs(cmd) * delta);
+        }
+
+        // 진공관·캠 드럼·닉시관의 대기 전력 (배터리가 있는 기기에서 항상)
+        foreach (var b in _bodies.Values)
+        {
+            if (b.Part.Def.Role is not (PartRole.Controller or PartRole.Sequencer or PartRole.Display)) continue;
+            var bat = PowerSource(World.ConnectedTo(b.Part.Id));
+            var e = b.Part.Def.Electrical!;
+            if (bat is not null) bat.EnergyJ = Math.Max(0, bat.EnergyJ - e.Volts * e.RatedCurrentA * delta);
+        }
+    }
+
+    public override void _Process(double delta)
+    {
+        _clock += delta;
+        if ((_readoutTimer -= delta) > 0) return;
+        _readoutTimer = 0.2;
+        foreach (var b in _bodies.Values)
+        {
+            var role = b.Part.Def.Role;
+            if (role is not (PartRole.Controller or PartRole.Sequencer or PartRole.Display)) continue;
+            var group = World.ConnectedTo(b.Part.Id);
+            var bat = PowerSource(group);
+            switch (role)
+            {
+                case PartRole.Display when b.Readout is not null:
+                    if (bat is null) { b.Readout.Text = ""; break; }
+                    var e = bat.Part.Def.Electrical!;
+                    var soc = bat.EnergyJ / (e.CapacityWh * 3600);
+                    // 단자 전압: 만충 시 정격의 105 %, 방전 끝에서 90 % 로 내려가는 근사
+                    var volts = e.Volts * (0.9 + 0.15 * soc);
+                    b.Readout.Text = $"{volts:00.0}V {soc * 100:00}%";
+                    break;
+                case PartRole.Controller:
+                    var on = bat is not null && group.Any(_running.Contains);
+                    if (b.Glow is not null) b.Glow.EmissionEnergyMultiplier = on ? 2.5f : 0;
+                    if (b.Readout is not null) b.Readout.Text = $"출력 {Knob(b.Part.Id) * 100:+0;-0;0}%";
+                    break;
+                case PartRole.Sequencer when b.Readout is not null:
+                    var step = (int)_clock % 8;
+                    var v = Program(b.Part.Id)[step];
+                    b.Readout.Text = $"단 {step + 1}/8 [{(v > 0 ? "+" : v < 0 ? "−" : "0")}]";
+                    break;
+            }
         }
     }
 

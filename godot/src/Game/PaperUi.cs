@@ -329,3 +329,59 @@ public partial class RemotePlayers : Node3D
         }
     }
 }
+
+/// <summary>캠 드럼 핀 꽂기: 8단마다 정회전(+)·정지(0)·역회전(−) 핀을 꽂는다. 1단은 1초.</summary>
+public partial class DrumUi : Control
+{
+    public sbyte[] Program { get; set; } = [.. Devices.DefaultProgram];
+    public Action<sbyte[]>? Applied;
+    public Action? Closed;
+
+    public override void _Ready()
+    {
+        SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        MouseFilter = MouseFilterEnum.Stop;
+        Theme = Paper.Theme();
+        AddChild(new ColorRect { Color = new Color(0, 0, 0, 0.45f), AnchorRight = 1, AnchorBottom = 1 });
+        var sheet = Paper.Sheet_(this, 0.25f, 0.75f, 0.25f, 0.72f);
+        sheet.AddChild(Paper.Heading("캠 드럼 시퀀서 KD-8 — 핀 배치"));
+        sheet.AddChild(Paper.Note("단마다 핀을 눌러 바꾼다: + 정회전 · 0 정지 · − 역회전. 드럼은 1초에 한 단씩 돌고 8단 뒤 처음으로 돌아온다."));
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 8);
+        for (var i = 0; i < 8; i++)
+        {
+            var col = new VBoxContainer();
+            col.AddChild(new Label { Text = $"{i + 1}단", HorizontalAlignment = HorizontalAlignment.Center });
+            var b = new Button { Text = Sym(Program[i]), CustomMinimumSize = new Vector2(64, 64) };
+            b.AddThemeFontSizeOverride("font_size", 34);
+            var idx = i;
+            b.Pressed += () =>
+            {
+                Program[idx] = (sbyte)(Program[idx] == 1 ? 0 : Program[idx] == 0 ? -1 : 1);
+                b.Text = Sym(Program[idx]);
+            };
+            col.AddChild(b);
+            row.AddChild(col);
+        }
+        sheet.AddChild(row);
+        var actions = new HBoxContainer();
+        var apply = new Button { Text = "핀 고정" };
+        apply.Pressed += () => { Applied?.Invoke([.. Program]); Closed?.Invoke(); };
+        var close = new Button { Text = "취소 (Esc)" };
+        close.Pressed += () => Closed?.Invoke();
+        actions.AddChild(apply);
+        actions.AddChild(close);
+        sheet.AddChild(actions);
+    }
+
+    static string Sym(sbyte v) => v > 0 ? "+" : v < 0 ? "−" : "0";
+
+    public override void _UnhandledInput(InputEvent e)
+    {
+        if (e is InputEventKey { Pressed: true, PhysicalKeycode: Key.Escape })
+        {
+            Closed?.Invoke();
+            GetViewport().SetInputAsHandled();
+        }
+    }
+}

@@ -30,7 +30,7 @@ public partial class Player : CharacterBody3D
     public Devices Devices { get; set; } = null!;
     public Camera3D Camera { get; private set; } = null!;
     public Action? OpenCatalog, OpenStorage;
-    public Action<PartBody>? Stow;
+    public Action<PartBody>? Stow, EditDrum;
     public Action<string>? Notify;
 
     float _pitch;
@@ -117,6 +117,13 @@ public partial class Player : CharacterBody3D
                 break;
             case Key.E:
                 if (_aimObject is Node n && n.HasMeta("interact") && n.GetMeta("interact").AsString() == "catalog") OpenCatalog?.Invoke();
+                else if (_aimBody?.Part.Def.Role == PartRole.Sequencer) EditDrum?.Invoke(_aimBody);
+                break;
+            case Key.Bracketleft when _aimBody is not null:
+                Notify?.Invoke(Devices.TurnKnob(_aimBody, -0.1f));
+                break;
+            case Key.Bracketright when _aimBody is not null:
+                Notify?.Invoke(Devices.TurnKnob(_aimBody, 0.1f));
                 break;
             case Key.Q when _aimBody is not null:
                 Notify?.Invoke(Devices.TogglePower(_aimBody));
@@ -250,7 +257,10 @@ public partial class Player : CharacterBody3D
         if (_aimBody is not null)
         {
             var d = _aimBody.Part.Def;
-            var extra = d.Role == PartRole.Battery ? $"\n잔량 {_aimBody.EnergyJ / 3600:0.0} / {d.Electrical!.CapacityWh:0} Wh" :
+            var extra = d.Fictional ? $"\n가상 부품 · 현실 대체: {d.RealEquivalentKo}" : "";
+            extra += d.Role == PartRole.Battery ? $"\n잔량 {_aimBody.EnergyJ / 3600:0.0} / {d.Electrical!.CapacityWh:0} Wh" :
+                        d.Role == PartRole.Controller ? $"\n출력 {Devices.Knob(_aimBody.Part.Id) * 100:+0;-0;0}% · [ ] 로 조절" :
+                        d.Role == PartRole.Sequencer ? "\nE — 캠 핀 다시 꽂기" :
                         d.ShaftMm > 0 ? $"\n축 Ø{d.ShaftMm} mm" : d.BoreMm > 0 ? $"\n구멍 Ø{d.BoreMm} mm" : "";
             var sel = _selected == _aimBody ? "\n[기준 부품]" : "";
             _tag.Text = $"{d.NameKo}\n{d.Mass:0.###} kg · ₩{d.PriceKrw:N0}{extra}{sel}";
