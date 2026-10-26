@@ -56,7 +56,7 @@ public partial class CatalogUi : Control
         left.AddChild(Heading("부품 카탈로그"));
         _category = new OptionButton();
         _category.AddItem("전체");
-        foreach (var c in Catalog.Items.Select(i => i.Category).Distinct()) _category.AddItem(c);
+        foreach (var c in Catalog.All.Select(i => i.Category).Distinct()) _category.AddItem(c);
         _category.ItemSelected += _ => Refresh();
         left.AddChild(_category);
         _items = new ItemList { SizeFlagsVertical = SizeFlags.ExpandFill };
@@ -136,7 +136,7 @@ public partial class CatalogUi : Control
     void Refresh()
     {
         var cat = _category.Selected <= 0 ? null : _category.GetItemText(_category.Selected);
-        _shown = Catalog.Items.Where(i => cat is null || i.Category == cat).ToList();
+        _shown = Catalog.All.Where(i => cat is null || i.Category == cat).ToList();
         _items.Clear();
         foreach (var i in _shown)
             _items.AddItem($"{i.NameKo}   ₩{i.PriceKrw:N0}/{i.UnitKo}");

@@ -13,12 +13,12 @@ public static class Op
     // 클라이언트 → 서버
     public const byte Register = 0x01, RequestCode = 0x02, Login = 0x03;
     public const byte Pose = 0x10, Chat = 0x12;
-    public const byte Purchase = 0x20, Consume = 0x21, Refund = 0x22, StowDevice = 0x23, ListDevices = 0x24, RetrieveDevice = 0x25;
+    public const byte Purchase = 0x20, Consume = 0x21, Refund = 0x22, StowDevice = 0x23, ListDevices = 0x24, RetrieveDevice = 0x25, SaveBody = 0x26;
 
     // 서버 → 클라이언트
     public const byte Registered = 0x81, CodeSent = 0x82, LoginOk = 0x83, Profile = 0x84, Message = 0x85, Error = 0x8F;
     public const byte PlayerJoined = 0x91, PlayerMoved = 0x92, PlayerLeft = 0x93, ChatBroadcast = 0x96;
-    public const byte PurchaseResult = 0xA0, DeviceList = 0xA4, DeviceData = 0xA5;
+    public const byte PurchaseResult = 0xA0, DeviceList = 0xA4, DeviceData = 0xA5, BodyData = 0xA6;
 }
 
 public sealed class PacketWriter(byte opcode)
@@ -92,6 +92,8 @@ public sealed record ChatBroadcast(uint Id, string Text) : ServerMessage;
 public sealed record PurchaseResult(bool Ok, string Message, int TotalKrw, long BalanceKrw, List<ReceiptLine> Lines) : ServerMessage;
 public sealed record DeviceList(List<StoredDevice> Devices) : ServerMessage;
 public sealed record DeviceData(string Name, string Json) : ServerMessage;
+/// <summary>저장된 몸 구성: 표준이 아닌 모듈 품번, 몸에 찬 기기 품번</summary>
+public sealed record BodyData(List<string> Modules, List<string> Worn) : ServerMessage;
 
 public static class Packets
 {
@@ -114,6 +116,15 @@ public static class Packets
     public static byte[] ListDevices() => [Op.ListDevices];
     public static byte[] RetrieveDevice(string name) => new PacketWriter(Op.RetrieveDevice).Str(name).ToArray();
 
+    public static byte[] SaveBody(IReadOnlyList<string> modules, IReadOnlyList<string> worn)
+    {
+        var w = new PacketWriter(Op.SaveBody).U16((ushort)modules.Count);
+        foreach (var m in modules) w.Str(m);
+        w.U16((ushort)worn.Count);
+        foreach (var x in worn) w.Str(x);
+        return w.ToArray();
+    }
+
     public static ServerMessage? Parse(byte[] data)
     {
         if (data.Length == 0) return null;
@@ -133,8 +144,17 @@ public static class Packets
             Op.PurchaseResult => ReadPurchase(r),
             Op.DeviceList => ReadDeviceList(r),
             Op.DeviceData => new DeviceData(r.Str(), r.Blob()),
+            Op.BodyData => new BodyData(ReadList(r), ReadList(r)),
             _ => null,
         };
+    }
+
+    static List<string> ReadList(PacketReader r)
+    {
+        var n = r.U16();
+        var list = new List<string>(n);
+        for (var i = 0; i < n; i++) list.Add(r.Str());
+        return list;
     }
 
     static Profile ReadProfile(PacketReader r)

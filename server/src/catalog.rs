@@ -8,6 +8,7 @@ use std::collections::HashMap;
 pub struct Item {
     pub sku: String,
     pub name_ko: String,
+    pub category: String,
     pub price_krw: i64,
     pub pack_qty: i64,
     pub physical: bool,
@@ -71,6 +72,7 @@ impl Catalog {
             };
             let item = Item {
                 name_ko: it.get("nameKo").and_then(Json::str).unwrap_or(&sku).to_string(),
+                category: it.get("category").and_then(Json::str).unwrap_or("").to_string(),
                 price_krw: int(it, "priceKrw")?,
                 pack_qty: int(it, "packQty")?,
                 physical: it.get("physical").and_then(Json::bool).unwrap_or(true),

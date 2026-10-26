@@ -248,7 +248,17 @@ public static class Catalog
         new(Cyborg.Connector, "사이보그 모듈", "모듈 커넥터", "볼트 4개 + 전원·신호 접점. 몸 모듈 하나를 붙일 때 1개", 85000, "개") { PackQty = 1 },
     ];
 
-    public static CatalogItem Get(string sku) => Items.First(i => i.Sku == sku);
+    /// <summary>카탈로그 전체: 일반 품목 + 몸 모듈 (팔다리 × 종류 × 체형)</summary>
+    public static readonly IReadOnlyList<CatalogItem> All = [.. Items, .. Cyborg.PurchasableModules().Select(ModuleItem)];
+
+    static CatalogItem ModuleItem(PartDef m) => new(m.Sku!, "사이보그 모듈", m.NameKo,
+        $"{m.Mass:0.0} kg" + (m.Actuator is { } act ? $", 관절 최대 {act.MaxTorque:0} N·m" : "") + ". 정비 수술대에서 교체", m.PriceKrw, "개")
+    {
+        Make = (_, _) => m,
+    };
+
+    static readonly Dictionary<string, CatalogItem> BySku = All.ToDictionary(i => i.Sku);
+    public static CatalogItem Get(string sku) => BySku[sku];
 }
 
 /// <summary>주문 한 줄. 재단품은 길이(·폭) mm.</summary>
@@ -260,7 +270,11 @@ public sealed record OrderLine(CatalogItem Item, int Qty, int LengthMm = 0, int 
 /// <summary>예산과 소모품 재고. 물리 부품은 배송 상자로 월드에 나타난다.</summary>
 public sealed class ShopAccount(long balanceKrw)
 {
-    public const long StartBudgetKrw = 300_000;
+    /// <summary>
+    /// 시작 예산. 몸 모듈 하나가 수백만 원이라 개조까지 해 볼 수 있는 금액으로 잡았다
+    /// (수입 수단은 아직 없다 — 다음 버전 과제).
+    /// </summary>
+    public const long StartBudgetKrw = 30_000_000;
     public const int ShippingKrw = 3500;
     public const int FreeShippingOverKrw = 50000;
 

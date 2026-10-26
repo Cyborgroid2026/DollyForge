@@ -1,4 +1,5 @@
 using Godot;
+using DollyForge.Core;
 using DollyForge.Core.Net;
 using QRCoder;
 
@@ -253,6 +254,103 @@ public partial class StorageUi : Control
     public override void _UnhandledInput(InputEvent e)
     {
         if (e is InputEventKey { Pressed: true, PhysicalKeycode: Key.Escape or Key.F6 })
+        {
+            Closed?.Invoke();
+            GetViewport().SetInputAsHandled();
+        }
+    }
+}
+
+/// <summary>
+/// 정비 기록부: 정비 수술대 곁(2 m 안)에 둔 몸 모듈로 팔다리를 바꿔 끼운다.
+/// 떼어 낸 모듈은 실물 부품으로 수술대 위에 남는다 — 몸도 기기처럼 계속 개조할 수 있다.
+/// </summary>
+public partial class SurgeryUi : Control
+{
+    public Func<BodyConfig> Body = null!;
+    public Func<BodyCapabilities> Caps = null!;
+    public Func<List<PartBody>> Nearby = null!;
+    public Action<PartBody>? Install;
+    public Action<BodySlot>? Remove;
+    public List<string> Log = null!;
+    public Action? Closed;
+    Label _caps = null!;
+    VBoxContainer _slots = null!, _nearby = null!;
+    Label _log = null!;
+
+    public override void _Ready()
+    {
+        SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        MouseFilter = MouseFilterEnum.Stop;
+        Theme = Paper.Theme();
+        AddChild(new ColorRect { Color = new Color(0, 0, 0, 0.45f), AnchorRight = 1, AnchorBottom = 1 });
+        var sheet = Paper.Sheet_(this, 0.18f, 0.82f, 0.06f, 0.94f);
+        sheet.AddChild(Paper.Heading("정비 기록부 — 전신 사이보그 모듈"));
+        _caps = Paper.Note("");
+        sheet.AddChild(_caps);
+        var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        var v = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        scroll.AddChild(v);
+        sheet.AddChild(scroll);
+        v.AddChild(Paper.Note("지금 끼운 팔다리 모듈"));
+        _slots = new VBoxContainer();
+        v.AddChild(_slots);
+        v.AddChild(Paper.Note("수술대 곁의 모듈 (카탈로그 ‘사이보그 모듈’에서 주문)"));
+        _nearby = new VBoxContainer();
+        v.AddChild(_nearby);
+        _log = Paper.Note("");
+        v.AddChild(_log);
+        var close = new Button { Text = "기록부 덮기 (Esc)" };
+        close.Pressed += () => Closed?.Invoke();
+        sheet.AddChild(close);
+        Refresh();
+    }
+
+    public void Refresh()
+    {
+        var body = Body();
+        var b = Cyborg.Of(body.Gender);
+        var c = Caps();
+        _caps.Text = $"{b.NameKo} · 몸무게 {c.MassKg:0.0} kg (찬 기기 포함) · 두 팔로 들기 {c.LiftN:0} N (≈ {c.LiftN / 9.81f:0} kg) · " +
+                     $"제자리 점프 이륙 {c.JumpSpeed:0.0} m/s (높이 {c.JumpHeight:0.00} m)";
+        foreach (var n in _slots.GetChildren()) n.QueueFree();
+        foreach (var slot in Cyborg.Upgradable)
+        {
+            var def = Cyborg.Module(b, slot, body.VariantAt(slot));
+            var row = new HBoxContainer();
+            row.AddChild(new Label
+            {
+                Text = $"{def.NameKo} — {def.Mass:0.0} kg, {def.Actuator?.MaxTorque:0} N·m",
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            });
+            if (body.VariantAt(slot) != ModuleVariant.Standard)
+            {
+                var back = new Button { Text = "표준으로" };
+                back.Pressed += () => { Remove?.Invoke(slot); CallDeferred(nameof(Refresh)); };
+                row.AddChild(back);
+            }
+            _slots.AddChild(row);
+        }
+        foreach (var n in _nearby.GetChildren()) n.QueueFree();
+        var nearby = Nearby();
+        if (nearby.Count == 0) _nearby.AddChild(Paper.Note("(없음 — 배송된 모듈을 수술대 위나 곁에 가져다 두세요)"));
+        foreach (var m in nearby)
+        {
+            var fits = Cyborg.GenderOf(m.Part.Def) == body.Gender;
+            var btn = new Button
+            {
+                Text = fits ? $"이식: {m.Part.Def.NameKo}" : $"{m.Part.Def.NameKo} — 체형이 달라 이식할 수 없음",
+                Disabled = !fits, Alignment = HorizontalAlignment.Left,
+            };
+            btn.Pressed += () => { Install?.Invoke(m); CallDeferred(nameof(Refresh)); };
+            _nearby.AddChild(btn);
+        }
+        _log.Text = Log.Count == 0 ? "" : "기록:\n" + string.Join("\n", Log.TakeLast(6));
+    }
+
+    public override void _UnhandledInput(InputEvent e)
+    {
+        if (e is InputEventKey { Pressed: true, PhysicalKeycode: Key.Escape })
         {
             Closed?.Invoke();
             GetViewport().SetInputAsHandled();

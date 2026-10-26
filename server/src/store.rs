@@ -1,5 +1,6 @@
 //! 계정·창고 저장소 (파일). 운영 시 DB 로 교체한다.
-//!   data/accounts/<qr_token>.txt        key=value: 전화번호, 성별, 잔액, 소모품 재고, 설치된 체결 부품, 마지막 위치
+//!   data/accounts/<qr_token>.txt        key=value: 전화번호, 성별, 잔액, 소모품 재고, 설치된 체결 부품, 마지막 위치,
+//!                                        몸 구성(표준이 아닌 모듈 품번), 몸에 찬 기기 품번
 //!   data/devices/<qr_token>/<이름>.json 창고에 보관한 기기 (C# 코어의 기기 JSON)
 
 use std::collections::{BTreeMap, HashMap};
@@ -18,6 +19,10 @@ pub struct Account {
     /// 기기에 설치된 체결 부품 (해체하면 이만큼만 되돌릴 수 있다)
     pub installed: BTreeMap<String, i64>,
     pub pose: [f32; 4], // x, y, z, yaw
+    /// 표준이 아닌 몸 모듈 품번 (예: CY-F-SHINL-HD)
+    pub body: Vec<String>,
+    /// 몸에 찬 Android Tool 기기 품번
+    pub worn: Vec<String>,
 }
 
 impl Account {
@@ -30,6 +35,8 @@ impl Account {
             stock: BTreeMap::new(),
             installed: BTreeMap::new(),
             pose: [spawn.0, spawn.1, spawn.2, 0.0],
+            body: Vec::new(),
+            worn: Vec::new(),
         }
     }
 
@@ -44,10 +51,14 @@ impl Account {
             .collect()
     }
 
+    fn text_to_list(t: &str) -> Vec<String> {
+        t.split(',').filter(|s| !s.is_empty()).map(str::to_string).collect()
+    }
+
     fn serialize(&self) -> String {
         let p = self.pose;
         format!(
-            "phone={}\ngender={}\nbalance={}\nstock={}\ninstalled={}\npose={},{},{},{}\n",
+            "phone={}\ngender={}\nbalance={}\nstock={}\ninstalled={}\npose={},{},{},{}\nbody={}\nworn={}\n",
             self.phone,
             self.gender,
             self.balance_krw,
@@ -56,7 +67,9 @@ impl Account {
             p[0],
             p[1],
             p[2],
-            p[3]
+            p[3],
+            self.body.join(","),
+            self.worn.join(",")
         )
     }
 
@@ -76,6 +89,8 @@ impl Account {
             stock: Self::text_to_map(kv.get("stock").copied().unwrap_or("")),
             installed: Self::text_to_map(kv.get("installed").copied().unwrap_or("")),
             pose,
+            body: Self::text_to_list(kv.get("body").copied().unwrap_or("")),
+            worn: Self::text_to_list(kv.get("worn").copied().unwrap_or("")),
         })
     }
 }
@@ -207,6 +222,8 @@ mod tests {
         a.stock.insert("FS-BOLT-M8".into(), 8);
         a.installed.insert("FS-BOLT-M8".into(), 2);
         a.pose = [1.5, 0.2, -3.0, 0.7];
+        a.body = vec!["CY-M-SHINL-HD".into(), "CY-M-SHINR-HD".into()];
+        a.worn = vec!["ATE-HS-G".into()];
         let b = Account::deserialize(&a.token, &a.serialize()).unwrap();
         assert_eq!(a, b);
     }

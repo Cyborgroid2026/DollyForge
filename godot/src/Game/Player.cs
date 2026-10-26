@@ -4,13 +4,14 @@ using DollyForge.Core;
 namespace DollyForge.Game;
 
 /// <summary>
-/// 1인칭 사이보그. 이동·점프는 사람 기준 실제 값, 들기·밀기는 사람이 낼 수 있는 힘으로 제한된다.
-/// 무거운 물건(약 25 kg 이상)은 들리지 않고 끌기만 된다.
+/// 1인칭 사이보그. 걷기·달리기는 사람 기준 실제 값이고, 점프 이륙 속도와 들 수 있는 힘은
+/// 지금 끼운 몸 모듈의 관절 토크·질량에서 계산한다 (표준 여성형: 이륙 3.1 m/s, 약 240 N).
+/// 그보다 무거운 물건은 들리지 않고 끌기만 된다.
 /// </summary>
 public partial class Player : CharacterBody3D
 {
-    const float Walk = 1.6f, Run = 4.0f, JumpSpeed = 3.1f, Gravity = 9.81f, GroundAccel = 8f, AirAccel = 1.5f;
-    const float Reach = 2.5f, LiftForce = 250f, PushForce = 600f, HoldTorque = 20f;
+    const float Walk = 1.6f, Run = 4.0f, Gravity = 9.81f, GroundAccel = 8f, AirAccel = 1.5f;
+    const float Reach = 2.5f, PushForce = 600f, HoldTorque = 20f;
 
     public enum Tool { Hand, Bolt, Weld, Screw, Axle, Hinge, Slide, Ball, Wrench }
 
@@ -29,7 +30,7 @@ public partial class Player : CharacterBody3D
 
     public Devices Devices { get; set; } = null!;
     public Camera3D Camera { get; private set; } = null!;
-    public Action? OpenCatalog, OpenStorage;
+    public Action? OpenCatalog, OpenStorage, OpenSurgery, ExportBody, BodyChanged;
     public Action<PartBody>? Stow, EditDrum;
     public Action<string>? Notify;
 
@@ -44,16 +45,58 @@ public partial class Player : CharacterBody3D
     GodotObject? _aimObject;
 
     public string ToolName => Tools[_tool].NameKo;
-    public float EyeHeight { get; set; } = 1.55f;
+    /// <summary>눈 높이 (m). 접속 뒤 체형이 정해지면 몸통 충돌체와 카메라도 따라간다.</summary>
+    public float EyeHeight
+    {
+        get => _eyeHeight;
+        set
+        {
+            _eyeHeight = value;
+            if (_capsule is null) return;
+            ((CapsuleShape3D)_capsule.Shape).Height = value + 0.11f;
+            _capsule.Position = new Vector3(0, (value + 0.11f) / 2, 0);
+            Camera.Position = new Vector3(0, value, 0);
+        }
+    }
+    float _eyeHeight = 1.55f;
+    CollisionShape3D? _capsule;
 
     // ------------------------------------------------------------------ Android Tool Environment: 몸에 찬 기기·비행
 
+    /// <summary>지금 몸 구성 (체형·부위별 모듈). 찬 기기는 Worn 에 따로 둔다.</summary>
+    public BodyConfig Body { get; private set; } = BodyConfig.Default(0);
+    /// <summary>몸 구성 + 찬 기기에서 계산한 능력</summary>
+    public BodyCapabilities Caps { get; private set; } = Cyborg.Capabilities(BodyConfig.Default(0));
     /// <summary>몸 질량 (kg): Android Cyborg 모듈 합 = 실제 체중</summary>
-    public float BodyMassKg { get; set; } = Cyborg.Female.Mass;
+    public float BodyMassKg { get; private set; } = Cyborg.Female.Mass;
+    public List<string> WornSkus => [.. Worn.Select(w => w.Gear.Sku!)];
+    public BodyConfig FullBody => Body with { Worn = WornSkus };
+
+    /// <summary>몸 구성을 바꾼다 (접속 시 복원, 정비 수술대에서 모듈 교체)</summary>
+    public void ApplyBody(BodyConfig body)
+    {
+        Body = body with { Worn = [] };
+        EyeHeight = body.Gender == 1 ? 1.67f : 1.55f;
+        BodyMassKg = Cyborg.Assemble(Body, System.Numerics.Vector3.Zero).TotalMass;
+        RefreshCaps();
+    }
+
+    /// <summary>서버에 저장된 찬 기기를 다시 찬다 (연료는 가득)</summary>
+    public void RestoreWorn(IEnumerable<string> skus)
+    {
+        Worn.Clear();
+        foreach (var def in skus.Select(s => Catalog.Get(s).Build()!))
+            Worn.Add((def, def.ThrustN > 0 && !def.Fictional ? JetFuelKg : 0));
+        RefreshCaps();
+    }
+
+    void RefreshCaps() => Caps = Cyborg.Capabilities(FullBody);
     /// <summary>몸에 찬 기기들과 남은 연료 (kg, 제트 터빈만)</summary>
     public List<(PartDef Gear, float FuelKg)> Worn { get; } = new();
     /// <summary>자동 시험용: 참이면 추력 키를 누른 것으로 친다</summary>
     public bool ThrottleOverride { get; set; }
+    /// <summary>자동 시험용: 다음 물리 틱에 점프 키를 누른 것으로 친다</summary>
+    public bool JumpRequest { get; set; }
     readonly RandomNumberGenerator _wobble = new();
     const float JetFuelKg = 1.2f, JetBurnKgPerSec = 0.01f; // 등유 1.5 L, 최대 추력에서 분당 0.6 kg
 
@@ -68,6 +111,8 @@ public partial class Player : CharacterBody3D
             return slot == WearSlot.Wrist ? "두 손목이 모두 차 있습니다. (H 로 벗기)" : "이미 머리에 쓰고 있습니다. (H 로 벗기)";
         Worn.Add((def, def.Role == PartRole.Wearable && def.ThrustN > 0 && !def.Fictional ? JetFuelKg : 0));
         Devices.Remove(gear);
+        RefreshCaps();
+        BodyChanged?.Invoke();
         var lift = Cyborg.LiftAcceleration(BodyMassKg, Worn.Select(w => w.Gear));
         var thrust = Worn.Sum(w => w.Gear.ThrustN);
         return $"{def.NameKo} 착용 ({(slot == WearSlot.Wrist ? "손목" : "머리")}) — 추력 합 {thrust:0} N, 몸무게 {TotalMassKg * 9.81f:0} N → " +
@@ -82,6 +127,8 @@ public partial class Player : CharacterBody3D
         foreach (var (gear, _) in Worn) Devices.Spawn(gear, new Transform3D(Basis.Identity, front + GlobalBasis.X * (i++ * 0.25f - 0.25f)));
         var n = Worn.Count;
         Worn.Clear();
+        RefreshCaps();
+        BodyChanged?.Invoke();
         return $"기기 {n}개를 벗어 내려놓았습니다.";
     }
 
@@ -116,13 +163,11 @@ public partial class Player : CharacterBody3D
         CollisionMask = PartBody.LayerWorld | PartBody.LayerParts;
         FloorSnapLength = 0.3f;
         FloorMaxAngle = Mathf.DegToRad(38);
-        AddChild(new CollisionShape3D
-        {
-            Shape = new CapsuleShape3D { Radius = 0.24f, Height = EyeHeight + 0.11f },
-            Position = new Vector3(0, (EyeHeight + 0.11f) / 2, 0),
-        });
-        Camera = new Camera3D { Position = new Vector3(0, EyeHeight, 0), Fov = 75, Near = 0.03f, Current = true };
+        Camera = new Camera3D { Fov = 75, Near = 0.03f, Current = true };
         AddChild(Camera);
+        _capsule = new CollisionShape3D { Shape = new CapsuleShape3D { Radius = 0.24f } };
+        AddChild(_capsule);
+        EyeHeight = _eyeHeight;
         _tag = Look.Tag("", 0.0011f);
         _tag.Billboard = BaseMaterial3D.BillboardModeEnum.Enabled;
         _tag.Modulate = new Color(0.95f, 0.93f, 0.86f);
@@ -181,6 +226,7 @@ public partial class Player : CharacterBody3D
                 break;
             case Key.E:
                 if (_aimObject is Node n && n.HasMeta("interact") && n.GetMeta("interact").AsString() == "catalog") OpenCatalog?.Invoke();
+                else if (_aimObject is Node s && s.HasMeta("interact") && s.GetMeta("interact").AsString() == "surgery") OpenSurgery?.Invoke();
                 else if (_aimBody?.Part.Def.Role == PartRole.Sequencer) EditDrum?.Invoke(_aimBody);
                 break;
             case Key.Bracketleft when _aimBody is not null:
@@ -209,6 +255,9 @@ public partial class Player : CharacterBody3D
                 break;
             case Key.F6:
                 OpenStorage?.Invoke();
+                break;
+            case Key.F7:
+                ExportBody?.Invoke();
                 break;
             case Key.F9 when _aimBody is not null:
                 Notify?.Invoke(Devices.Properties(_aimBody));
@@ -262,7 +311,9 @@ public partial class Player : CharacterBody3D
         var target = wish.LimitLength(1) * speed;
         var horizontal = new Vector3(v.X, 0, v.Z).MoveToward(target, (IsOnFloor() ? GroundAccel : AirAccel) * dt);
         v = new Vector3(horizontal.X, v.Y, horizontal.Z);
-        if (IsOnFloor() && Input.IsActionJustPressed("jump") && Worn.All(w => w.Gear.ThrustN <= 0)) v.Y = JumpSpeed;
+        var jump = Input.IsActionJustPressed("jump") || JumpRequest;
+        JumpRequest = false;
+        if (IsOnFloor() && jump && Worn.All(w => w.Gear.ThrustN <= 0)) v.Y = Caps.JumpSpeed;
         var thrust = ThrustAcceleration(dt, wish);
         v += thrust * dt;
         if (!IsOnFloor() || thrust.Y > Gravity) v.Y -= Gravity * dt;
@@ -298,11 +349,11 @@ public partial class Player : CharacterBody3D
         }
         var target = Camera.GlobalPosition - Camera.GlobalBasis.Z * _holdDistance;
         var err = target - b.GlobalPosition;
-        // 질량에 비례한 임계 감쇠 스프링 + 중력 보상, 전체는 LiftForce 로 제한
+        // 질량에 비례한 임계 감쇠 스프링 + 중력 보상, 전체는 팔 모듈이 낼 수 있는 힘으로 제한
         var k = 60f * b.Mass;
         var c = 2 * Mathf.Sqrt(k * b.Mass);
         var f = err * k - b.LinearVelocity * c + Vector3.Up * b.Mass * Gravity;
-        f = f.LimitLength(LiftForce);
+        f = f.LimitLength(Caps.LiftN);
         b.ApplyCentralForce(f);
 
         var want = Camera.GlobalBasis * _holdRelative;
@@ -342,7 +393,7 @@ public partial class Player : CharacterBody3D
         }
         else if (_aimObject is Node n && n.HasMeta("interact"))
         {
-            _tag.Text = "E — 카탈로그 펼치기";
+            _tag.Text = n.GetMeta("interact").AsString() == "surgery" ? "E — 정비 기록부 펼치기" : "E — 카탈로그 펼치기";
             _tag.GlobalPosition = _aimPoint + Vector3.Up * 0.12f;
             _tag.Visible = true;
         }

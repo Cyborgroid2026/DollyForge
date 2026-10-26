@@ -12,6 +12,8 @@ public partial class World : Node3D
     public static readonly Vector3 DeliveryPoint = new(0, 0.15f, 5.5f);
     public static readonly Vector3 WorkbenchTop = new(-3f, 0.92f, -6.5f);
     public static readonly Vector3 PlayerSpawn = new(0, 0.2f, -2.5f);
+    /// <summary>정비 수술대 상판 중심. 바꿔 끼울 몸 모듈을 이 근처(2 m)에 둔다.</summary>
+    public static readonly Vector3 SurgeryTop = new(-4.6f, 0.86f, -3.0f);
 
     public StaticBody3D Catalog { get; private set; } = null!;
     public Label3D LedgerTag { get; private set; } = null!;
@@ -241,6 +243,32 @@ public partial class World : Node3D
         LedgerTag.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         LedgerTag.Width = 240;
         paper.AddChild(LedgerTag);
+
+        // 정비 수술대: 스테인리스 상판 0.7 × 2.0 m, 높이 0.86 m, 유압 기둥 하나. 위에 무영등.
+        var bed = Box(new Vector3(0.7f, 0.05f, 2.0f), SurgeryTop - new Vector3(0, 0.025f, 0),
+            new StandardMaterial3D { AlbedoColor = new Color(0.78f, 0.8f, 0.82f), Metallic = 1f, Roughness = 0.28f });
+        bed.SetMeta("interact", "surgery");
+        var column = new MeshInstance3D
+        {
+            Mesh = new CylinderMesh { TopRadius = 0.09f, BottomRadius = 0.12f, Height = SurgeryTop.Y - 0.05f },
+            Position = new Vector3(SurgeryTop.X, (SurgeryTop.Y - 0.05f) / 2, SurgeryTop.Z),
+            MaterialOverride = steel,
+        };
+        AddChild(column);
+        Box(new Vector3(0.55f, 0.04f, 0.8f), new Vector3(SurgeryTop.X, 0.02f, SurgeryTop.Z), steel);
+        AddChild(new SpotLight3D
+        {
+            Position = SurgeryTop + new Vector3(0, 1.6f, 0),
+            RotationDegrees = new Vector3(-90, 0, 0),
+            SpotAngle = 28, SpotRange = 2.5f, LightEnergy = 6f,
+            LightColor = new Color(0.97f, 0.98f, 1f), ShadowEnabled = true,
+        });
+        var bedSign = Look.Tag("정비 수술대 — 바꿀 몸 모듈을 곁에 두고 E", 0.0009f);
+        bedSign.Position = SurgeryTop + new Vector3(-0.3f, 0.95f, 0); // 침대 머리 쪽 벽 높이
+        bedSign.RotationDegrees = new Vector3(0, 90, 0);
+        bedSign.Billboard = BaseMaterial3D.BillboardModeEnum.Disabled;
+        bedSign.Modulate = new Color(0.95f, 0.95f, 0.9f);
+        AddChild(bedSign);
 
         // 택배 하차용 나무 팔레트 (1.2 × 1.0 m, 높이 0.144 m)
         Box(new Vector3(1.2f, 0.144f, 1.0f), new Vector3(DeliveryPoint.X, 0.072f, DeliveryPoint.Z), Look.Scanned("weathered_planks", 1f, Colors.White));

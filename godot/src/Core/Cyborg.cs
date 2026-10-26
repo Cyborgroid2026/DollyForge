@@ -6,6 +6,40 @@ namespace DollyForge.Core;
 public enum BodySlot { Pelvis, Torso, Head, UpperArmL, UpperArmR, ForearmL, ForearmR, HandL, HandR, ThighL, ThighR, ShinL, ShinR, FootL, FootR }
 
 /// <summary>
+/// 팔다리 모듈 종류. 실제 구동기 선택처럼 득실이 있다:
+/// 표준, 고출력(HD: 토크 ×1.8, 질량 ×1.25, 값 ×2.2), 경량(LITE: 토크 그대로, 질량 ×0.7, 값 ×1.6 — 탄소섬유 골격).
+/// </summary>
+public enum ModuleVariant { Standard, HeavyDuty, Lite }
+
+/// <summary>몸 구성: 부위별 모듈 종류와 몸에 찬 기기들. 통신망 서버에 계정별로 저장된다.</summary>
+public sealed record BodyConfig(byte Gender, Dictionary<BodySlot, ModuleVariant> Modules, List<string> Worn)
+{
+    public static BodyConfig Default(byte gender) => new(gender, [], []);
+    public ModuleVariant VariantAt(BodySlot slot) => Modules.GetValueOrDefault(slot, ModuleVariant.Standard);
+
+    /// <summary>서버에 저장하는 형태: 표준이 아닌 모듈의 품번</summary>
+    public List<string> ModuleSkus() =>
+        [.. Modules.Where(m => m.Value != ModuleVariant.Standard).OrderBy(m => m.Key).Select(m => Cyborg.Module(Cyborg.Of(Gender), m.Key, m.Value).Sku!)];
+
+    public static BodyConfig FromSkus(byte gender, IEnumerable<string> modules, IEnumerable<string> worn)
+    {
+        var map = new Dictionary<BodySlot, ModuleVariant>();
+        foreach (var sku in modules)
+        {
+            var def = Catalog.Get(sku).Build()!;
+            if (Cyborg.SlotOf(def) is { } slot && Cyborg.GenderOf(def) == gender) map[slot] = Cyborg.VariantOf(def);
+        }
+        return new(gender, map, [.. worn]);
+    }
+}
+
+/// <summary>몸 구성에서 계산한 능력: 질량, 두 팔로 들 수 있는 힘, 제자리 점프 이륙 속도</summary>
+public sealed record BodyCapabilities(float MassKg, float LiftN, float JumpSpeed, float KneeTorque, float ElbowTorque)
+{
+    public float JumpHeight => JumpSpeed * JumpSpeed / (2 * 9.81f);
+}
+
+/// <summary>
 /// Android Cyborg (안드로이드 사이보그): 사람과 로봇이 합쳐진 몸.
 ///  · Cyborg — 생체 쪽. 사람의 몸을 로봇에 옮겨 넣어 자유롭게 움직이게 하는 것이 목적이며,
 ///    로봇이라기보다 줄기세포·장기 배양체(배양 장기 코어)와 신경 중추다.
@@ -76,25 +110,44 @@ public static class Cyborg
     };
 
     /// <summary>모듈 부품 정의. 질량은 실제 분절 질량, 구동기는 그 분절을 매다는 관절의 것.</summary>
-    public static PartDef Module(BodyType body, BodySlot slot)
+    /// <summary>바꿔 끼울 수 있는 팔다리 부위</summary>
+    public static readonly BodySlot[] Upgradable =
+    [
+        BodySlot.UpperArmL, BodySlot.UpperArmR, BodySlot.ForearmL, BodySlot.ForearmR,
+        BodySlot.ThighL, BodySlot.ThighR, BodySlot.ShinL, BodySlot.ShinR,
+    ];
+
+    static (float Torque, float Mass, float Price, string Sku, string Ko) Tune(ModuleVariant v) => v switch
+    {
+        ModuleVariant.HeavyDuty => (1.8f, 1.25f, 2.2f, "-HD", " (고출력 HD)"),
+        ModuleVariant.Lite => (1.0f, 0.7f, 1.6f, "-LITE", " (경량 LITE)"),
+        _ => (1f, 1f, 1f, "", ""),
+    };
+
+    public static PartDef Module(BodyType body, BodySlot slot, ModuleVariant variant = ModuleVariant.Standard)
     {
         var seg = Segments.First(s => s.Slot == slot);
         var head = slot == BodySlot.Head;
+        if (variant != ModuleVariant.Standard && !Upgradable.Contains(slot))
+            throw new ArgumentException($"{slot} 모듈에는 {variant} 종류가 없습니다.");
+        var t = Tune(variant);
         // 흉부 프레임의 질량에서 안에 든 배양 장기 코어·대사 지원 유닛을 뺀다 (몸 전체 = 실제 체중)
-        var mass = body.Mass * seg.MassFrac - (slot == BodySlot.Torso ? OrganCoreKg + LifeSupportKg : 0);
+        var mass = (body.Mass * seg.MassFrac - (slot == BodySlot.Torso ? OrganCoreKg + LifeSupportKg : 0)) * t.Mass;
+        // 구동기는 몸무게에 맞춰 고른다: 남성형(76 kg)은 여성형(60 kg)보다 정격 토크가 76/60 배
+        var torque = MathF.Round(seg.Torque * t.Torque * body.Mass / Female.Mass);
         return new PartDef(
-            $"cy_{(body.Gender == 1 ? "m" : "f")}_{slot.ToString().ToLowerInvariant()}",
-            $"{body.NameKo} {seg.NameKo}",
+            $"cy_{(body.Gender == 1 ? "m" : "f")}_{slot.ToString().ToLowerInvariant()}{t.Sku.ToLowerInvariant()}",
+            $"{body.NameKo} {seg.NameKo}{t.Ko}",
             seg.Shape(body),
-            Materials.Titanium,
-            $"전신 사이보그 모듈. {seg.ActuatorKo}" + (seg.Torque > 0 ? $" (최대 {seg.Torque} N·m)" : "") + ". 모듈 커넥터로 떼고 붙인다.",
+            variant == ModuleVariant.Lite ? Materials.Aluminium : Materials.Titanium,
+            $"전신 사이보그 모듈. {seg.ActuatorKo}" + (torque > 0 ? $" (최대 {torque:0} N·m)" : "") + ". 모듈 커넥터로 떼고 붙인다.",
             mass,
-            seg.Torque > 0 ? new ActuatorSpec(seg.Torque, seg.Speed, 0) : null)
+            torque > 0 ? new ActuatorSpec(torque, seg.Speed, 0) : null)
         {
-            Sku = $"CY-{(body.Gender == 1 ? "M" : "F")}-{slot.ToString().ToUpperInvariant()}",
+            Sku = $"CY-{(body.Gender == 1 ? "M" : "F")}-{slot.ToString().ToUpperInvariant()}{t.Sku}",
             Role = PartRole.Structure,
-            PriceKrw = ModulePrice(seg),
-            Electrical = seg.Torque > 0 ? new ElectricalSpec(48, RatedCurrentA: seg.Torque / 10f) : null,
+            PriceKrw = (int)(ModulePrice(seg) * t.Price),
+            Electrical = torque > 0 ? new ElectricalSpec(48, RatedCurrentA: torque / 10f) : null,
             Fictional = head,
             RealEquivalentKo = head ? "현실 대체 없음 — 뇌 이식·신경 접속은 현재 불가능. 원격 조종 헤드(카메라·IMU·제어기)로 대체" : null,
         };
@@ -107,15 +160,50 @@ public static class Cyborg
         _ => (int)(seg.Torque * 18_000 + (seg.Joint == JointKind.Ball ? 900_000 : 300_000)),
     };
 
+    /// <summary>품번 "CY-F-SHINL-HD" → 부위 ShinL</summary>
     public static BodySlot? SlotOf(PartDef def) =>
-        def.Sku is { } sku && sku.StartsWith("CY-") && Enum.TryParse<BodySlot>(sku[5..], true, out var s) ? s : null;
+        def.Sku is { } sku && sku.StartsWith("CY-") && sku.Split('-') is { Length: >= 3 } p && Enum.TryParse<BodySlot>(p[2], true, out var s) ? s : null;
+
+    public static ModuleVariant VariantOf(PartDef def) =>
+        def.Sku?.EndsWith("-HD") == true ? ModuleVariant.HeavyDuty : def.Sku?.EndsWith("-LITE") == true ? ModuleVariant.Lite : ModuleVariant.Standard;
+
+    public static byte? GenderOf(PartDef def) => def.Sku is { } sku && sku.StartsWith("CY-") ? (byte)(sku[3] == 'M' ? 1 : 0) : null;
+
+    /// <summary>카탈로그에 올라가는 몸 모듈 (팔다리 × 종류 × 체형)</summary>
+    public static IEnumerable<PartDef> PurchasableModules() =>
+        from body in new[] { Female, Male }
+        from slot in Upgradable
+        from v in Enum.GetValues<ModuleVariant>()
+        select Module(body, slot, v);
+
+    /// <summary>
+    /// 몸 능력 (단순화한 생체역학):
+    ///  · 들기 — 두 팔의 팔꿈치 토크 ÷ (전완 + 손 절반) 지레 팔.
+    ///  · 점프 — 두 다리의 (엉덩이 + 무릎) 토크 ÷ 유효 지레(다리 길이의 40 %)로 내는 다리 신전력이
+    ///    다리 길이 40 % 를 미는 동안 몸을 가속한다. 표준 체형에서 이륙 약 3.4 m/s (높이 약 0.6 m).
+    /// </summary>
+    public static BodyCapabilities Capabilities(BodyConfig config)
+    {
+        var b = Of(config.Gender);
+        var mass = Assemble(config, Vector3.Zero).TotalMass; // 찬 기기 포함
+        float Torque(BodySlot slot) => Module(b, slot, config.VariantAt(slot)).Actuator?.MaxTorque ?? 0;
+        var forearm = 0.146f * b.Height + 0.108f * b.Height / 2;
+        var lift = (Torque(BodySlot.ForearmL) + Torque(BodySlot.ForearmR)) / forearm;
+        var push = 0.4f * (0.245f + 0.246f) * b.Height;
+        var legForce = (Torque(BodySlot.ThighL) + Torque(BodySlot.ThighR) + Torque(BodySlot.ShinL) + Torque(BodySlot.ShinR)) / push;
+        var accel = MathF.Max(legForce / mass - 9.81f, 0);
+        return new BodyCapabilities(mass, lift, MathF.Sqrt(2 * accel * push), Torque(BodySlot.ShinL), Torque(BodySlot.ForearmL));
+    }
 
     /// <summary>
     /// 선 자세의 전신 사이보그를 모듈 조립품으로 만든다 (게임 좌표: Y-up, 정면 -Z, 발바닥 높이 = feet.Y).
     /// 모든 관절은 실제 가동 범위와 구동기 토크를 갖는다.
     /// </summary>
-    public static Assembly Assemble(BodyType b, Vector3 feet)
+    public static Assembly Assemble(BodyType b, Vector3 feet) => Assemble(BodyConfig.Default(b.Gender), feet);
+
+    public static Assembly Assemble(BodyConfig config, Vector3 feet)
     {
+        var b = Of(config.Gender);
         var a = new Assembly($"Cyborg {b.NameKo}");
         var H = b.Height;
         var parts = new Dictionary<BodySlot, PartInstance>();
@@ -128,7 +216,7 @@ public static class Cyborg
         var shoulderY = hipY + pelvisH / 2 + torsoH;
         var up = Quaternion.CreateFromAxisAngle(Vector3.UnitX, -MathF.PI / 2); // 원기둥 축(Z)을 세로로
 
-        PartInstance Put(BodySlot slot, Vector3 at, Quaternion rot) => parts[slot] = a.AddPart(Module(b, slot), new Pose(at, rot));
+        PartInstance Put(BodySlot slot, Vector3 at, Quaternion rot) => parts[slot] = a.AddPart(Module(b, slot, config.VariantAt(slot)), new Pose(at, rot));
         Put(BodySlot.Pelvis, new(feet.X, hipY, feet.Z), Quaternion.Identity);
         var torso = Put(BodySlot.Torso, new(feet.X, hipY + pelvisH / 2 + torsoH / 2, feet.Z), Quaternion.Identity);
         Put(BodySlot.Head, new(feet.X, shoulderY + 0.05f * H + 0.105f * H / 1.7f, feet.Z), Quaternion.Identity);
@@ -163,13 +251,29 @@ public static class Cyborg
             var pivot = c.Pose.Position + Vector3.UnitY * top;
             Attach(a, parts[parent], c, pivot, seg);
         }
+
+        // 몸에 찬 Android Tool 기기: 손목형은 왼쪽부터 전완 끝 바깥쪽에, 머리형은 머리 위에 고정 (커넥터 없이 찬다)
+        var wrists = new Queue<(BodySlot Slot, float Side)>([(BodySlot.ForearmL, -1f), (BodySlot.ForearmR, 1f)]);
+        foreach (var sku in config.Worn)
+        {
+            var gear = Catalog.Get(sku).Build()!;
+            (PartInstance on, Vector3 at) = gear.Wear switch
+            {
+                WearSlot.Wrist when wrists.TryDequeue(out var w) =>
+                    (parts[w.Slot], parts[w.Slot].Pose.Position + new Vector3(w.Side * 0.06f, -0.146f * H * 0.35f, 0)),
+                WearSlot.Head => (parts[BodySlot.Head], parts[BodySlot.Head].Pose.Position + new Vector3(0, 0.07f * H / 1.7f, 0)),
+                _ => throw new ArgumentException($"{gear.NameKo} 은(는) 몸에 찰 수 없습니다."),
+            };
+            var g = a.AddPart(gear, new Pose(at, Quaternion.Identity));
+            a.AddJoint(JointKind.Fixed, on, g, at, Vector3.UnitX);
+        }
         return a;
     }
 
     static void Attach(Assembly a, PartInstance parent, PartInstance child, Vector3 pivot, Segment seg)
     {
         var j = a.AddJoint(seg.Joint, parent, child, pivot, Vector3.UnitX, seg.Lower, seg.Upper);
-        j.Effort = seg.Torque;
+        j.Effort = child.Def.Actuator?.MaxTorque ?? seg.Torque;
         j.Velocity = seg.Speed;
         j.Consumed[Connector] = 1;
     }

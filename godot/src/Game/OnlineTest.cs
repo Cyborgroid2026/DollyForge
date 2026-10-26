@@ -7,7 +7,7 @@ namespace DollyForge.Game;
 /// <summary>
 /// 실제 게임 안에서 통신망 흐름을 확인한다 (월드 서버가 DOLLY_DEV_ECHO_CODE=1 로 떠 있어야 함):
 /// QR 등록 → 인증 → 접속 → 서버 결제 = C# 견적 → 택배 실물 도착 → 기기 창고 보관(월드에서 사라짐) → 꺼내기(눈앞에 다시 놓임)
-/// → 다른 사이보그 접속 시 몸이 보임.
+/// → 다른 사이보그 접속 시 몸이 보임 → 몸 모듈 주문·배송 → 정비 수술대에서 이식 → 서버에 몸 구성 저장.
 /// 실행: godot --path godot -- --onlinetest --server=ws://127.0.0.1:7700 --delivery=1
 /// </summary>
 public partial class OnlineTest : Node
@@ -20,6 +20,7 @@ public partial class OnlineTest : Node
     PartBody? _robot;
     WorldClient? _other;
     List<OrderLine> _order = [];
+    BodyData? _savedBody;
 
     Session S => Main.SessionNode;
     Devices D => Main.DevicesNode;
@@ -56,6 +57,14 @@ public partial class OnlineTest : Node
             case LoginOk ok:
                 Check(true, $"QR 계정 접속: 사이보그 #{ok.PlayerId}");
                 _step = 1;
+                break;
+            case BodyData b when b.Modules.Count > 0:
+                _savedBody = b;
+                break;
+            case PurchaseResult r when _step == 8:
+                Check(r.Ok, $"몸 모듈 결제: {r.Message}");
+                _step = 9;
+                _t = 0;
                 break;
             case PurchaseResult r when _step == 2:
                 var quote = ShopAccount.Quote(_order).Total;
@@ -114,6 +123,22 @@ public partial class OnlineTest : Node
                 break;
             case 7 when Main.Remotes.Count > 0:
                 Check(true, $"다른 사이보그 접속 → 몸 {Main.Remotes.Count}구가 월드에 보임");
+                _partsBefore = D.Bodies.Count();
+                S.Send(Packets.Purchase([new(Catalog.Get("CY-M-THIGHL-HD"), 1)]));
+                _step = 8;
+                break;
+            case 9 when Main.PendingDeliveries == 0 && _t > 0.2:
+                var module = D.Bodies.FirstOrDefault(b => b.Part.Def.Sku == "CY-M-THIGHL-HD");
+                Check(module is not null, "몸 모듈 택배 도착 (실물 부품)");
+                if (module is null) { Finish(); break; }
+                module.GlobalPosition = World.SurgeryTop + new Vector3(0, 0.15f, 0); // 수술대 위에 올려놓는다
+                GD.Print("  " + Main.InstallModule(module));
+                _step = 10;
+                _t = 0;
+                break;
+            case 10 when _savedBody is not null || _t > 2:
+                Check(_savedBody?.Modules.SequenceEqual(["CY-M-THIGHL-HD"]) == true && Main.PlayerNode.Body.Gender == 1,
+                    $"수술 → 서버에 몸 구성 저장: {string.Join(", ", _savedBody?.Modules ?? [])}");
                 Finish();
                 break;
         }

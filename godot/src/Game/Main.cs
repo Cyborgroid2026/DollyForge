@@ -7,7 +7,7 @@ namespace DollyForge.Game;
 /// <summary>
 /// 게임 시작점. 월드, 작업장 장치, 플레이어, 통신망(Rust 월드 서버) 세션, 주문·창고 흐름을 묶는다.
 /// 온라인이면 결제·소모품 재고·창고는 서버가 권위를 갖고, 오프라인이면 이 기기 안에서만 계산한다.
-/// 개발 확인용 인자: -- --offline | --shot=경로.png --frames=N [--look=yaw,pitch] [--at=x,y,z] [--catalog] | --selftest
+/// 개발 확인용 인자: -- --offline | --shot=경로.png --frames=N [--look=yaw,pitch] [--at=x,y,z] [--catalog] [--surgery] | --selftest
 /// </summary>
 public partial class Main : Node3D
 {
@@ -20,6 +20,8 @@ public partial class Main : Node3D
     RemotePlayers _remotes = null!;
     CatalogUi? _catalog;
     StorageUi? _storage;
+    SurgeryUi? _surgery;
+    readonly List<string> _surgeryLog = new();
     LoginUi? _login;
     Label _slip = null!;
     double _slipTimer, _time, _poseTimer;
@@ -71,6 +73,9 @@ public partial class Main : Node3D
         _player.Stow = Stow;
         _player.EditDrum = EditDrum;
         _player.Notify = Notify;
+        _player.OpenSurgery = OpenSurgery;
+        _player.ExportBody = () => Notify(ExportBody());
+        _player.BodyChanged = SaveBody;
         AddChild(_player);
 
         BuildOverlay();
@@ -123,7 +128,7 @@ public partial class Main : Node3D
     {
         CloseLogin();
         if (!quiet) Notify("오프라인 작업 — 예산·재고는 이 기기 안에서만 계산됩니다.");
-        else Notify("작업장입니다. 1–9 공구 · E 카탈로그 · Q 전원 · R 배선 반전 · F5 창고에 넣기 · F6 창고 · F8 내보내기 · F9 물성");
+        else Notify("작업장입니다. 1–9 공구 · E 카탈로그·수술대 · Q 전원 · R 배선 반전 · F5 창고에 넣기 · F6 창고 · F7 내 몸 내보내기 · F8 기기 내보내기 · F9 물성");
     }
 
     void OnServer(ServerMessage m)
@@ -131,8 +136,7 @@ public partial class Main : Node3D
         switch (m)
         {
             case LoginOk ok:
-                _player.EyeHeight = ok.Gender == 1 ? 1.67f : 1.55f;
-                _player.BodyMassKg = Cyborg.Of(ok.Gender).Mass;
+                _player.ApplyBody(BodyConfig.Default(ok.Gender)); // 저장된 몸 구성(BodyData)이 곧 이어서 온다
                 CloseLogin();
                 Notify($"통신망 접속 — 전신 사이보그 #{ok.PlayerId}. E 카탈로그 · F5 창고에 넣기 · F6 창고 · F8 내보내기");
                 break;
@@ -168,6 +172,11 @@ public partial class Main : Node3D
                     _pendingStow = null;
                 }
                 break;
+            case BodyData body:
+                _player.ApplyBody(BodyConfig.FromSkus(_player.Body.Gender, body.Modules, body.Worn));
+                _player.RestoreWorn(body.Worn);
+                _surgery?.Refresh();
+                break;
             case DeviceData data:
                 PlaceRetrieved(data);
                 break;
@@ -182,6 +191,85 @@ public partial class Main : Node3D
                 Notify($"사이보그 #{c.Id}: {c.Text}");
                 break;
         }
+    }
+
+    // ------------------------------------------------------------------ 몸: 정비 수술대·내보내기
+
+    void SaveBody()
+    {
+        if (Online) _session.Send(Packets.SaveBody(_player.Body.ModuleSkus(), _player.WornSkus));
+        _surgery?.Refresh();
+    }
+
+    public List<PartBody> NearbyModules() =>
+        [.. _devices.Bodies.Where(b => Cyborg.SlotOf(b.Part.Def) is not null && b.GlobalPosition.DistanceTo(World.SurgeryTop) < 2f)];
+
+    void OpenSurgery()
+    {
+        if (_surgery is not null) return;
+        Input.MouseMode = Input.MouseModeEnum.Visible;
+        _surgery = new SurgeryUi
+        {
+            Body = () => _player.Body,
+            Caps = () => _player.Caps,
+            Nearby = NearbyModules,
+            Install = m => Notify(InstallModule(m)),
+            Remove = slot => Notify(RevertModule(slot)),
+            Log = _surgeryLog,
+            Closed = () =>
+            {
+                _surgery?.QueueFree();
+                _surgery = null;
+                Input.MouseMode = Input.MouseModeEnum.Captured;
+            },
+        };
+        Overlay(_surgery);
+    }
+
+    /// <summary>수술대 곁의 모듈을 몸에 이식한다. 떼어 낸 모듈은 수술대 위에 실물로 남는다.</summary>
+    public string InstallModule(PartBody module)
+    {
+        var def = module.Part.Def;
+        if (Cyborg.SlotOf(def) is not { } slot || !Cyborg.Upgradable.Contains(slot)) return "바꿔 끼울 수 있는 팔다리 모듈이 아닙니다.";
+        if (Cyborg.GenderOf(def) != _player.Body.Gender) return "체형이 다른 모듈은 이식할 수 없습니다.";
+        return SwapModule(slot, Cyborg.VariantOf(def), module);
+    }
+
+    /// <summary>
+    /// 표준 모듈로 되돌릴 때(module == null)는 표준 모듈을 따로 사지 않아도 된다 — 처음 몸에 있던 표준 모듈을
+    /// 정비소가 보관하고 있다는 설정. 떼어 낸 고출력·경량 모듈은 실물 부품으로 나온다.
+    /// </summary>
+    public string RevertModule(BodySlot slot) => SwapModule(slot, ModuleVariant.Standard, null);
+
+    string SwapModule(BodySlot slot, ModuleVariant variant, PartBody? module)
+    {
+        var body = _player.Body;
+        var old = body.VariantAt(slot);
+        if (old == variant) return "이미 그 모듈을 끼우고 있습니다.";
+        var b = Cyborg.Of(body.Gender);
+        var before = _player.Caps;
+        var modules = new Dictionary<BodySlot, ModuleVariant>(body.Modules) { [slot] = variant };
+        _player.ApplyBody(body with { Modules = modules });
+        if (module is not null) _devices.Remove(module);
+        if (old != ModuleVariant.Standard)
+        {
+            var removed = Cyborg.Module(b, slot, old);
+            _devices.Spawn(removed, new Transform3D(new Basis(Vector3.Right, -Mathf.Pi / 2), World.SurgeryTop + new Vector3(0, 0.12f, 0.55f)));
+        }
+        var after = _player.Caps;
+        var line = $"{DateTime.Now:HH:mm} {Cyborg.Module(b, slot, old).NameKo} → {Cyborg.Module(b, slot, variant).NameKo}: " +
+                   $"들기 {before.LiftN:0}→{after.LiftN:0} N, 점프 {before.JumpHeight:0.00}→{after.JumpHeight:0.00} m, 몸무게 {before.MassKg:0.0}→{after.MassKg:0.0} kg";
+        _surgeryLog.Add(line);
+        SaveBody();
+        return "수술 완료 — " + line;
+    }
+
+    /// <summary>F7: 지금 몸(모듈·장기 코어·대사 지원 유닛·찬 기기)을 URDF·USDA·STL·BOM 으로 내보낸다.</summary>
+    public string ExportBody()
+    {
+        var body = Cyborg.Assemble(_player.FullBody, System.Numerics.Vector3.Zero);
+        body.Name = $"cyborg_{(_player.Body.Gender == 1 ? "male" : "female")}_{DateTime.Now:yyyyMMdd_HHmmss}";
+        return "내 몸 " + Devices.ExportAssembly(body);
     }
 
     // ------------------------------------------------------------------ 창고
@@ -401,6 +489,7 @@ public partial class Main : Node3D
                     _player.Camera.RotationDegrees = new Vector3(l[1], 0, 0);
                     break;
                 case "--catalog": CallDeferred(nameof(OpenCatalog)); break;
+                case "--surgery": CallDeferred(nameof(OpenSurgery)); break;
                 case "--login": CallDeferred(nameof(ShowLogin)); break;
                 case "--selftest": AddChild(new SelfTest { Devices = _devices }); break;
                 case "--onlinetest": AddChild(new OnlineTest { Main = this }); break;

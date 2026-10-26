@@ -31,7 +31,7 @@ public static class Serialization
     /// <summary>server/catalog.json 내용. 서버는 이 파일만으로 결제 금액을 다시 계산한다.</summary>
     public static string CatalogJson()
     {
-        var items = Catalog.Items.Select(i => new CatalogEntry(
+        var items = Catalog.All.Select(i => new CatalogEntry(
             i.Sku, i.NameKo, i.Category, i.PriceKrw, i.PackQty, !i.IsConsumable,
             i.CutToLength is { } c ? new LengthRange(c.Min, c.Max, c.CutFeeKrw) : null,
             i.CutToSize is { } s ? new SizeRange(s.MinW, s.MaxW, s.MinD, s.MaxD, s.CutFeeKrw) : null,
@@ -39,7 +39,7 @@ public static class Serialization
             i.CutToLength is null && i.CutToSize is null && i.Build() is { Fictional: true })).ToList();
         // 서버 구현이 같은 금액을 내는지 확인하는 예시들 (경계값·반올림 포함)
         var examples = new List<PriceExample>();
-        foreach (var i in Catalog.Items)
+        foreach (var i in Catalog.All)
         {
             if (i.CutToLength is { } c)
                 foreach (var l in new[] { c.Min, c.Max, 333, 750, 1001 }.Where(l => l >= c.Min && l <= c.Max))
@@ -71,7 +71,7 @@ public static class Serialization
         var parts = a.Parts.Select(p =>
         {
             var d = p.Def;
-            var fromCatalog = d.Sku is not null && Catalog.Items.Any(i => i.Sku == d.Sku);
+            var fromCatalog = d.Sku is not null && Catalog.All.Any(i => i.Sku == d.Sku);
             DefDoc? def = fromCatalog ? null : new DefDoc(d.Id, d.NameKo, d.Shape.Kind.ToString(), A(d.Shape.Size), d.Material.Id,
                 d.DescriptionKo, d.MassOverride,
                 d.Actuator is { } act ? [act.MaxTorque, act.MaxSpeed, act.EnergyJ] : null,

@@ -393,11 +393,15 @@ public partial class Devices : Node3D
     }
 
     /// <summary>URDF·USDA·STL·BOM 을 exports 폴더에 쓴다.</summary>
-    public string ExportDevice(PartBody any)
+    public string ExportDevice(PartBody any) => ExportAssembly(DeviceOf(any, $"device_{Stamp()}"));
+
+    static string Stamp() => Time.GetDatetimeStringFromSystem().Replace(":", "").Replace("-", "").Replace("T", "_");
+
+    /// <summary>조립체를 exports/ 에 URDF·USDA·STL·BOM 으로 쓴다. 이름은 조립체 이름 (없으면 시각).</summary>
+    public static string ExportAssembly(Assembly dev)
     {
-        var stamp = Time.GetDatetimeStringFromSystem().Replace(":", "").Replace("-", "").Replace("T", "_");
-        var name = $"device_{stamp}";
-        var dev = DeviceOf(any, name);
+        var name = string.Concat(dev.Name.Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_'));
+        if (name.Trim('_').Length == 0) name = $"device_{Stamp()}";
         var dir = ProjectSettings.GlobalizePath("res://exports");
         System.IO.Directory.CreateDirectory(dir);
         var path = System.IO.Path.Combine(dir, name);

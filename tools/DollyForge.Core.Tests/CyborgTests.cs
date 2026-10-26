@@ -35,7 +35,7 @@ public class CyborgTests
         var knee = body.Joints.First(j => Cyborg.SlotOf(body.Part(j.Child).Def) == BodySlot.ShinL);
         Assert.Equal(JointKind.Revolute, knee.Kind);
         Assert.True(knee.Upper <= 0 && knee.Lower < -2, "무릎은 한 방향으로만 접힌다");
-        Assert.Equal(120, knee.Effort);
+        Assert.Equal(MathF.Round(120 * 76f / 60f), knee.Effort); // 남성형 구동기는 몸무게 비례로 크다
         var hip = body.Joints.First(j => Cyborg.SlotOf(body.Part(j.Child).Def) == BodySlot.ThighR);
         Assert.Equal(JointKind.Ball, hip.Kind);
         Assert.All(body.Joints, j => Assert.Equal(1, j.Consumed[Cyborg.Connector]));
@@ -91,5 +91,85 @@ public class CyborgTests
         var quantum = Enumerable.Repeat(Catalog.Get("ATE-QW-1").Build()!, 2);
         Assert.True(Cyborg.LiftAcceleration(Cyborg.Female.Mass, quantum) > 5);
         Assert.True(Catalog.Get("ATE-QW-1").Build()!.Fictional);
+    }
+
+    [Fact]
+    public void ModuleVariantsTradeTorqueMassAndPrice()
+    {
+        var b = Cyborg.Female;
+        var std = Cyborg.Module(b, BodySlot.ShinL);
+        var hd = Cyborg.Module(b, BodySlot.ShinL, ModuleVariant.HeavyDuty);
+        var lite = Cyborg.Module(b, BodySlot.ShinL, ModuleVariant.Lite);
+        Assert.Equal("CY-F-SHINL-HD", hd.Sku);
+        Assert.Equal(BodySlot.ShinL, Cyborg.SlotOf(hd));
+        Assert.Equal(ModuleVariant.Lite, Cyborg.VariantOf(lite));
+        Assert.Equal((byte)0, Cyborg.GenderOf(lite));
+        Assert.Equal(std.Actuator!.MaxTorque * 1.8f, hd.Actuator!.MaxTorque, 3);
+        Assert.True(hd.Mass > std.Mass && lite.Mass < std.Mass);
+        Assert.True(hd.PriceKrw > lite.PriceKrw && lite.PriceKrw > std.PriceKrw);
+        Assert.Throws<ArgumentException>(() => Cyborg.Module(b, BodySlot.Head, ModuleVariant.HeavyDuty));
+        // 카탈로그에서 산 모듈 = 같은 정의
+        Assert.Equal(hd.Mass, Catalog.Get("CY-F-SHINL-HD").Build()!.Mass);
+    }
+
+    [Fact]
+    public void CapabilitiesFollowFromModules()
+    {
+        var std = Cyborg.Capabilities(BodyConfig.Default(0));
+        Assert.Equal(Cyborg.Female.Mass, std.MassKg, 1);
+        Assert.InRange(std.JumpHeight, 0.3f, 0.7f);    // 사람 제자리 점프 수준
+        Assert.InRange(std.LiftN, 200f, 450f);    // 팔꿈치로 약 25 kg
+
+        var legs = BodyConfig.Default(0) with
+        {
+            Modules = new() { [BodySlot.ShinL] = ModuleVariant.HeavyDuty, [BodySlot.ShinR] = ModuleVariant.HeavyDuty },
+        };
+        var hd = Cyborg.Capabilities(legs);
+        Assert.True(hd.JumpHeight > std.JumpHeight * 1.3f);
+        Assert.InRange(Cyborg.Capabilities(BodyConfig.Default(1)).JumpHeight, 0.3f, 0.7f); // 남성형도 사람 수준
+        Assert.True(hd.MassKg > std.MassKg);
+
+        // 찬 기기도 몸 질량에 들어간다
+        var worn = BodyConfig.Default(0) with { Worn = ["ATE-HS-G"] };
+        Assert.True(Cyborg.Capabilities(worn).MassKg > std.MassKg);
+
+        // 구성대로 조립하면 관절 토크도 따라간다
+        var body = Cyborg.Assemble(legs, Vector3.Zero);
+        var knee = body.Joints.First(j => body.Part(j.Child).Def.Sku == "CY-F-SHINL-HD");
+        Assert.Equal(hd.KneeTorque, knee.Effort, 3);
+    }
+
+    [Fact]
+    public void BodyConfigRoundTripsThroughServerPacket()
+    {
+        var config = BodyConfig.Default(1) with
+        {
+            Modules = new() { [BodySlot.ThighR] = ModuleVariant.Lite, [BodySlot.ShinL] = ModuleVariant.HeavyDuty },
+            Worn = ["ATE-HS-G"],
+        };
+        Assert.Equal(["CY-M-THIGHR-LITE", "CY-M-SHINL-HD"], config.ModuleSkus());
+        var packet = DollyForge.Core.Net.Packets.SaveBody(config.ModuleSkus(), config.Worn);
+        packet[0] = DollyForge.Core.Net.Op.BodyData; // 서버는 같은 형식으로 돌려준다
+        var back = (DollyForge.Core.Net.BodyData)DollyForge.Core.Net.Packets.Parse(packet)!;
+        var restored = BodyConfig.FromSkus(1, back.Modules, back.Worn);
+        Assert.Equal(ModuleVariant.Lite, restored.VariantAt(BodySlot.ThighR));
+        Assert.Equal(ModuleVariant.HeavyDuty, restored.VariantAt(BodySlot.ShinL));
+        Assert.Equal(ModuleVariant.Standard, restored.VariantAt(BodySlot.ShinR));
+        Assert.Equal(["ATE-HS-G"], restored.Worn);
+    }
+
+    [Fact]
+    public void WornGearIsPartOfTheExportedBody()
+    {
+        var config = BodyConfig.Default(0) with { Worn = ["ATE-QW-1", "ATE-QW-1", "ATE-HS-G"] };
+        var body = Cyborg.Assemble(config, Vector3.Zero);
+        Assert.Equal(17 + 3, body.Parts.Count);
+        var (tree, loops, disconnected) = body.SpanningTree(body.DefaultRoot());
+        Assert.Equal(19, tree.Count);
+        Assert.Empty(loops);
+        Assert.Empty(disconnected);
+        Assert.Contains("ATE-QW-1", Export.Bom(body).Markdown);
+        Assert.Equal(2 + 3, body.Joints.Count(j => j.Kind == JointKind.Fixed)); // 장기 코어·MSU + 찬 기기 3개
+        Assert.Throws<ArgumentException>(() => Cyborg.Assemble(config with { Worn = ["MT-NEMA17"] }, Vector3.Zero));
     }
 }

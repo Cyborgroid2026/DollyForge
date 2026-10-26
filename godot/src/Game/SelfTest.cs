@@ -5,7 +5,8 @@ namespace DollyForge.Game;
 
 /// <summary>
 /// 실제 엔진(Jolt 물리) 안에서 핵심 흐름을 자동으로 확인한다:
-/// 구매 → 축 스냅 결합 → 전기 구동(같은 배선 제자리 회전, 반전 직진) → 진공관 서보 손잡이 → 캠 드럼 프로그램 → 닉시관 → 내보내기.
+/// 구매 → 축 스냅 결합 → 전기 구동(같은 배선 제자리 회전, 반전 직진) → 진공관 서보 손잡이 → 캠 드럼 프로그램 → 닉시관 → 내보내기
+/// → 몸에 차는 추력기 → 정비 수술대 모듈 교체(점프 실측) → 내 몸 내보내기.
 /// 실행: godot --path godot -- --selftest   (결과를 출력하고 종료 코드 0/1 로 끝난다)
 /// </summary>
 public partial class SelfTest : Node
@@ -162,6 +163,49 @@ public partial class SelfTest : Node
         // 1400 N / 62.25 kg − 9.81 ≈ 12.7 m/s² → 1.5 초에 이론상 약 14 m
         Check(quantumRise > 5f, $"양자 추력기(가상) 700 N × 2 + 자세 안정기: 비행 상승 {quantumRise:0.0} m / 1.5 s");
         player.TakeOffAll();
+
+        // 7. 정비 수술대: 고출력 하퇴 모듈 두 개를 이식하고 실제로 뛰어 본다
+        var main = GetTree().Root.GetNode<Main>("Main");
+        await Wait(1.0);
+        var std = player.Caps;
+        var stdJump = await MeasureJump(player);
+        Check(MathF.Abs(stdJump - std.JumpHeight) < 0.12f, $"표준 몸 점프: 실측 {stdJump:0.00} m (계산 {std.JumpHeight:0.00} m)");
+        foreach (var (sku, dz) in new[] { ("CY-F-SHINL-HD", -0.4f), ("CY-F-SHINR-HD", 0.4f) })
+            Devices.Spawn(Catalog.Get(sku).Build()!, new Transform3D(Basis.Identity, Game.World.SurgeryTop + new Vector3(0, 0.2f, dz)));
+        await Wait(0.5);
+        var nearby = main.NearbyModules();
+        Check(nearby.Count == 2, $"수술대 곁 모듈 {nearby.Count}개");
+        foreach (var m in nearby) GD.Print("  " + main.InstallModule(m));
+        var hd = player.Caps;
+        Check(main.NearbyModules().Count == 0 && player.Body.VariantAt(BodySlot.ShinR) == ModuleVariant.HeavyDuty,
+            "이식한 모듈은 수술대에서 사라지고 몸 구성에 들어감");
+        var hdJump = await MeasureJump(player);
+        Check(hdJump > stdJump * 1.3f && MathF.Abs(hdJump - hd.JumpHeight) < 0.15f,
+            $"고출력 HD 하퇴 점프: 실측 {hdJump:0.00} m (계산 {hd.JumpHeight:0.00} m), 몸무게 {std.MassKg:0.0} → {hd.MassKg:0.0} kg");
+        GD.Print("  " + main.ExportBody());
+
+        // 표준으로 되돌리면 떼어 낸 HD 모듈이 수술대 위에 실물로 나온다
+        GD.Print("  " + main.RevertModule(BodySlot.ShinL));
+        var back = main.NearbyModules();
+        Check(back.Count == 1 && back[0].Part.Def.Sku == "CY-F-SHINL-HD" && player.Caps.JumpHeight < hd.JumpHeight,
+            $"왼 하퇴를 표준으로: 떼어 낸 HD 모듈이 수술대에 놓임, 점프 계산 {player.Caps.JumpHeight:0.00} m");
+    }
+
+    /// <summary>제자리에서 한 번 뛰어 최고 높이 (m) 를 잰다</summary>
+    async Task<float> MeasureJump(Player player)
+    {
+        player.GlobalPosition = new Vector3(1.5f, 0.05f, -4f); // 작업장 콘크리트 바닥 (천장 3.5 m)
+        player.Velocity = Vector3.Zero; // 비행하던 속도를 버린다
+        await Wait(1.0);
+        var y0 = player.GlobalPosition.Y;
+        var peak = y0;
+        player.JumpRequest = true;
+        for (var t = 0.0; t < 1.6; t += 1 / 120.0)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            peak = MathF.Max(peak, player.GlobalPosition.Y);
+        }
+        return peak - y0;
     }
 
     World World() => GetTree().Root.GetNode<Main>("Main").GetChildren().OfType<World>().First();

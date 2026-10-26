@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "startBudgetKrw": 300000,
+  "startBudgetKrw": 30000000,
   "shippingKrw": 3500,
   "freeShippingOverKrw": 50000,
   "items": [
@@ -380,6 +380,438 @@
       "priceKrw": 85000,
       "packQty": 1,
       "physical": false,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-UPPERARML",
+      "nameKo": "여성형 왼 상완",
+      "category": "사이보그 모듈",
+      "priceKrw": 1980000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-UPPERARML-HD",
+      "nameKo": "여성형 왼 상완 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 4356000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-UPPERARML-LITE",
+      "nameKo": "여성형 왼 상완 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 3168000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-UPPERARMR",
+      "nameKo": "여성형 오른 상완",
+      "category": "사이보그 모듈",
+      "priceKrw": 1980000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-UPPERARMR-HD",
+      "nameKo": "여성형 오른 상완 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 4356000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-UPPERARMR-LITE",
+      "nameKo": "여성형 오른 상완 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 3168000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-FOREARML",
+      "nameKo": "여성형 왼 전완",
+      "category": "사이보그 모듈",
+      "priceKrw": 1020000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-FOREARML-HD",
+      "nameKo": "여성형 왼 전완 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 2244000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-FOREARML-LITE",
+      "nameKo": "여성형 왼 전완 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 1632000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-FOREARMR",
+      "nameKo": "여성형 오른 전완",
+      "category": "사이보그 모듈",
+      "priceKrw": 1020000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-FOREARMR-HD",
+      "nameKo": "여성형 오른 전완 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 2244000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-FOREARMR-LITE",
+      "nameKo": "여성형 오른 전완 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 1632000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-THIGHL",
+      "nameKo": "여성형 왼 대퇴",
+      "category": "사이보그 모듈",
+      "priceKrw": 3600000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-THIGHL-HD",
+      "nameKo": "여성형 왼 대퇴 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 7920000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-THIGHL-LITE",
+      "nameKo": "여성형 왼 대퇴 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 5760000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-THIGHR",
+      "nameKo": "여성형 오른 대퇴",
+      "category": "사이보그 모듈",
+      "priceKrw": 3600000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-THIGHR-HD",
+      "nameKo": "여성형 오른 대퇴 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 7920000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-THIGHR-LITE",
+      "nameKo": "여성형 오른 대퇴 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 5760000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-SHINL",
+      "nameKo": "여성형 왼 하퇴",
+      "category": "사이보그 모듈",
+      "priceKrw": 2460000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-SHINL-HD",
+      "nameKo": "여성형 왼 하퇴 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 5412000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-SHINL-LITE",
+      "nameKo": "여성형 왼 하퇴 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 3936000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-SHINR",
+      "nameKo": "여성형 오른 하퇴",
+      "category": "사이보그 모듈",
+      "priceKrw": 2460000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-SHINR-HD",
+      "nameKo": "여성형 오른 하퇴 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 5412000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-F-SHINR-LITE",
+      "nameKo": "여성형 오른 하퇴 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 3936000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-UPPERARML",
+      "nameKo": "남성형 왼 상완",
+      "category": "사이보그 모듈",
+      "priceKrw": 1980000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-UPPERARML-HD",
+      "nameKo": "남성형 왼 상완 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 4356000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-UPPERARML-LITE",
+      "nameKo": "남성형 왼 상완 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 3168000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-UPPERARMR",
+      "nameKo": "남성형 오른 상완",
+      "category": "사이보그 모듈",
+      "priceKrw": 1980000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-UPPERARMR-HD",
+      "nameKo": "남성형 오른 상완 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 4356000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-UPPERARMR-LITE",
+      "nameKo": "남성형 오른 상완 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 3168000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-FOREARML",
+      "nameKo": "남성형 왼 전완",
+      "category": "사이보그 모듈",
+      "priceKrw": 1020000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-FOREARML-HD",
+      "nameKo": "남성형 왼 전완 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 2244000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-FOREARML-LITE",
+      "nameKo": "남성형 왼 전완 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 1632000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-FOREARMR",
+      "nameKo": "남성형 오른 전완",
+      "category": "사이보그 모듈",
+      "priceKrw": 1020000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-FOREARMR-HD",
+      "nameKo": "남성형 오른 전완 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 2244000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-FOREARMR-LITE",
+      "nameKo": "남성형 오른 전완 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 1632000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-THIGHL",
+      "nameKo": "남성형 왼 대퇴",
+      "category": "사이보그 모듈",
+      "priceKrw": 3600000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-THIGHL-HD",
+      "nameKo": "남성형 왼 대퇴 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 7920000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-THIGHL-LITE",
+      "nameKo": "남성형 왼 대퇴 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 5760000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-THIGHR",
+      "nameKo": "남성형 오른 대퇴",
+      "category": "사이보그 모듈",
+      "priceKrw": 3600000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-THIGHR-HD",
+      "nameKo": "남성형 오른 대퇴 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 7920000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-THIGHR-LITE",
+      "nameKo": "남성형 오른 대퇴 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 5760000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-SHINL",
+      "nameKo": "남성형 왼 하퇴",
+      "category": "사이보그 모듈",
+      "priceKrw": 2460000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-SHINL-HD",
+      "nameKo": "남성형 왼 하퇴 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 5412000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-SHINL-LITE",
+      "nameKo": "남성형 왼 하퇴 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 3936000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-SHINR",
+      "nameKo": "남성형 오른 하퇴",
+      "category": "사이보그 모듈",
+      "priceKrw": 2460000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-SHINR-HD",
+      "nameKo": "남성형 오른 하퇴 (고출력 HD)",
+      "category": "사이보그 모듈",
+      "priceKrw": 5412000,
+      "packQty": 0,
+      "physical": true,
+      "fictional": false
+    },
+    {
+      "sku": "CY-M-SHINR-LITE",
+      "nameKo": "남성형 오른 하퇴 (경량 LITE)",
+      "category": "사이보그 모듈",
+      "priceKrw": 3936000,
+      "packQty": 0,
+      "physical": true,
       "fictional": false
     }
   ],
@@ -809,6 +1241,294 @@
       "lengthMm": 0,
       "widthMm": 0,
       "unitKrw": 85000
+    },
+    {
+      "sku": "CY-F-UPPERARML",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1980000
+    },
+    {
+      "sku": "CY-F-UPPERARML-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 4356000
+    },
+    {
+      "sku": "CY-F-UPPERARML-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 3168000
+    },
+    {
+      "sku": "CY-F-UPPERARMR",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1980000
+    },
+    {
+      "sku": "CY-F-UPPERARMR-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 4356000
+    },
+    {
+      "sku": "CY-F-UPPERARMR-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 3168000
+    },
+    {
+      "sku": "CY-F-FOREARML",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1020000
+    },
+    {
+      "sku": "CY-F-FOREARML-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 2244000
+    },
+    {
+      "sku": "CY-F-FOREARML-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1632000
+    },
+    {
+      "sku": "CY-F-FOREARMR",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1020000
+    },
+    {
+      "sku": "CY-F-FOREARMR-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 2244000
+    },
+    {
+      "sku": "CY-F-FOREARMR-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1632000
+    },
+    {
+      "sku": "CY-F-THIGHL",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 3600000
+    },
+    {
+      "sku": "CY-F-THIGHL-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 7920000
+    },
+    {
+      "sku": "CY-F-THIGHL-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 5760000
+    },
+    {
+      "sku": "CY-F-THIGHR",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 3600000
+    },
+    {
+      "sku": "CY-F-THIGHR-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 7920000
+    },
+    {
+      "sku": "CY-F-THIGHR-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 5760000
+    },
+    {
+      "sku": "CY-F-SHINL",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 2460000
+    },
+    {
+      "sku": "CY-F-SHINL-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 5412000
+    },
+    {
+      "sku": "CY-F-SHINL-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 3936000
+    },
+    {
+      "sku": "CY-F-SHINR",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 2460000
+    },
+    {
+      "sku": "CY-F-SHINR-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 5412000
+    },
+    {
+      "sku": "CY-F-SHINR-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 3936000
+    },
+    {
+      "sku": "CY-M-UPPERARML",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1980000
+    },
+    {
+      "sku": "CY-M-UPPERARML-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 4356000
+    },
+    {
+      "sku": "CY-M-UPPERARML-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 3168000
+    },
+    {
+      "sku": "CY-M-UPPERARMR",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1980000
+    },
+    {
+      "sku": "CY-M-UPPERARMR-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 4356000
+    },
+    {
+      "sku": "CY-M-UPPERARMR-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 3168000
+    },
+    {
+      "sku": "CY-M-FOREARML",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1020000
+    },
+    {
+      "sku": "CY-M-FOREARML-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 2244000
+    },
+    {
+      "sku": "CY-M-FOREARML-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1632000
+    },
+    {
+      "sku": "CY-M-FOREARMR",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1020000
+    },
+    {
+      "sku": "CY-M-FOREARMR-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 2244000
+    },
+    {
+      "sku": "CY-M-FOREARMR-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 1632000
+    },
+    {
+      "sku": "CY-M-THIGHL",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 3600000
+    },
+    {
+      "sku": "CY-M-THIGHL-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 7920000
+    },
+    {
+      "sku": "CY-M-THIGHL-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 5760000
+    },
+    {
+      "sku": "CY-M-THIGHR",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 3600000
+    },
+    {
+      "sku": "CY-M-THIGHR-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 7920000
+    },
+    {
+      "sku": "CY-M-THIGHR-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 5760000
+    },
+    {
+      "sku": "CY-M-SHINL",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 2460000
+    },
+    {
+      "sku": "CY-M-SHINL-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 5412000
+    },
+    {
+      "sku": "CY-M-SHINL-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 3936000
+    },
+    {
+      "sku": "CY-M-SHINR",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 2460000
+    },
+    {
+      "sku": "CY-M-SHINR-HD",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 5412000
+    },
+    {
+      "sku": "CY-M-SHINR-LITE",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 3936000
     }
   ]
 }

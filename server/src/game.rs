@@ -85,6 +85,45 @@ fn msg_profile(a: &Account) -> Vec<u8> {
     w.finish()
 }
 
+fn msg_body(a: &Account) -> Vec<u8> {
+    let mut w = Writer::new(op::BODY_DATA).u16(a.body.len() as u16);
+    for sku in &a.body {
+        w = w.str(sku);
+    }
+    w = w.u16(a.worn.len() as u16);
+    for sku in &a.worn {
+        w = w.str(sku);
+    }
+    w.finish()
+}
+
+/// 몸 구성 검사: 모듈은 이 체형의 고출력·경량 품목이고 부위마다 하나, 찬 기기는 Android Tool 최대 4개.
+/// (어느 부위에 차는지는 클라이언트 규칙 Rules.CheckWear 가 정한다.)
+pub fn validate_body(c: &Catalog, gender: u8, modules: &[String], worn: &[String]) -> Result<(), String> {
+    let prefix = if gender == 1 { "CY-M-" } else { "CY-F-" };
+    let mut slots = std::collections::HashSet::new();
+    for sku in modules {
+        let item = c.items.get(sku).ok_or_else(|| format!("없는 몸 모듈입니다: {sku}"))?;
+        if item.category != "사이보그 모듈" || !sku.starts_with(prefix) {
+            return Err(format!("이 몸에 맞지 않는 모듈입니다: {sku}"));
+        }
+        let slot = sku.split('-').nth(2).unwrap_or("");
+        if !(sku.ends_with("-HD") || sku.ends_with("-LITE")) || !slots.insert(slot.to_string()) {
+            return Err(format!("부위가 겹치거나 표준 모듈입니다: {sku}"));
+        }
+    }
+    if worn.len() > 4 {
+        return Err("몸에 찰 수 있는 기기는 4개까지입니다.".into());
+    }
+    for sku in worn {
+        match c.items.get(sku) {
+            Some(i) if i.category == "Android Tool" && i.physical => {}
+            _ => return Err(format!("몸에 찰 수 없는 품목입니다: {sku}")),
+        }
+    }
+    Ok(())
+}
+
 fn msg_joined(id: u32, a: &Account) -> Vec<u8> {
     let p = a.pose;
     Writer::new(op::PLAYER_JOINED).u32(id).u8(a.gender).f32(p[0]).f32(p[1]).f32(p[2]).f32(p[3]).finish()
@@ -252,6 +291,7 @@ impl Game {
             C2S::StowDevice { name, json } => self.on_stow(conn, &name, &json),
             C2S::ListDevices => self.send_device_list(conn),
             C2S::RetrieveDevice { name } => self.on_retrieve(conn, &name),
+            C2S::SaveBody { modules, worn } => self.on_save_body(conn, modules, worn),
         }
     }
 
@@ -330,6 +370,7 @@ impl Game {
         println!("[game] 입장 #{conn} ({})", mask_phone(&acc.phone));
         self.reply(conn, Writer::new(op::LOGIN_OK).u32(conn).u8(acc.gender).finish());
         self.reply(conn, msg_profile(&acc));
+        self.reply(conn, msg_body(&acc));
         let others: Vec<Vec<u8>> = self
             .sessions
             .iter()
@@ -423,6 +464,22 @@ impl Game {
         let acc = p.acc.clone();
         self.store.save(&acc);
         self.reply(conn, profile);
+    }
+
+    // ---------- 몸 ----------
+
+    fn on_save_body(&mut self, conn: u32, modules: Vec<String>, worn: Vec<String>) {
+        let Some(gender) = self.player(conn).map(|p| p.acc.gender) else { return };
+        if let Err(e) = validate_body(&self.catalog, gender, &modules, &worn) {
+            return self.error(conn, &e);
+        }
+        let Some(p) = self.player(conn) else { return };
+        p.acc.body = modules;
+        p.acc.worn = worn;
+        let reply = msg_body(&p.acc);
+        let acc = p.acc.clone();
+        self.store.save(&acc);
+        self.reply(conn, reply);
     }
 
     // ---------- 창고 ----------
@@ -555,6 +612,18 @@ mod tests {
         assert!(price_order(&c, &[line("AL-2020", 1, 10, 0)]).is_err());
         assert!(price_order(&c, &[line("MT-JGB37-100", 0, 0, 0)]).is_err());
         assert!(price_order(&c, &[line("MT-JGB37-100", 1, 300, 0)]).is_err());
+    }
+
+    #[test]
+    fn validates_body_config() {
+        let c = catalog();
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert!(validate_body(&c, 0, &s(&["CY-F-SHINL-HD", "CY-F-SHINR-HD"]), &s(&["ATE-HS-G", "ATE-QW-1"])).is_ok());
+        assert!(validate_body(&c, 1, &s(&["CY-F-SHINL-HD"]), &[]).is_err(), "다른 체형");
+        assert!(validate_body(&c, 0, &s(&["CY-F-SHINL-HD", "CY-F-SHINL-LITE"]), &[]).is_err(), "부위 중복");
+        assert!(validate_body(&c, 0, &s(&["CY-F-SHINL"]), &[]).is_err(), "표준은 기록하지 않는다");
+        assert!(validate_body(&c, 0, &[], &s(&["MT-NEMA17"])).is_err(), "Android Tool 이 아님");
+        assert!(validate_body(&c, 0, &[], &s(&["ATE-HS-G"; 5])).is_err());
     }
 
     #[test]

@@ -18,6 +18,7 @@ pub mod op {
     pub const STOW_DEVICE: u8 = 0x23;
     pub const LIST_DEVICES: u8 = 0x24;
     pub const RETRIEVE_DEVICE: u8 = 0x25;
+    pub const SAVE_BODY: u8 = 0x26;
 
     // 서버 → 클라이언트
     pub const REGISTERED: u8 = 0x81;
@@ -33,6 +34,7 @@ pub mod op {
     pub const PURCHASE_RESULT: u8 = 0xA0;
     pub const DEVICE_LIST: u8 = 0xA4;
     pub const DEVICE_DATA: u8 = 0xA5;
+    pub const BODY_DATA: u8 = 0xA6;
 }
 
 /// 클라이언트 메시지 최대 크기 (기기 JSON 보관 포함)
@@ -59,6 +61,8 @@ pub enum C2S {
     StowDevice { name: String, json: String },
     ListDevices,
     RetrieveDevice { name: String },
+    /// 몸 구성: 표준이 아닌 모듈 품번들, 몸에 찬 기기 품번들
+    SaveBody { modules: Vec<String>, worn: Vec<String> },
 }
 
 pub struct Writer {
@@ -151,6 +155,14 @@ impl<'a> Reader<'a> {
         let len = self.u16()? as usize;
         String::from_utf8(self.take(len)?.to_vec()).map_err(|_| bad("invalid utf-8"))
     }
+    /// [u16 개수][문자열…] (최대 32개)
+    pub fn str_list(&mut self) -> io::Result<Vec<String>> {
+        let n = self.u16()? as usize;
+        if n > 32 {
+            return Err(bad("list too long"));
+        }
+        (0..n).map(|_| self.str()).collect()
+    }
     pub fn blob(&mut self) -> io::Result<String> {
         let len = self.u32()? as usize;
         if len > MAX_FRAME {
@@ -184,6 +196,7 @@ pub fn decode(frame: &[u8]) -> io::Result<C2S> {
         op::STOW_DEVICE => C2S::StowDevice { name: r.str()?, json: r.blob()? },
         op::LIST_DEVICES => C2S::ListDevices,
         op::RETRIEVE_DEVICE => C2S::RetrieveDevice { name: r.str()? },
+        op::SAVE_BODY => C2S::SaveBody { modules: r.str_list()?, worn: r.str_list()? },
         other => return Err(bad(&format!("unknown opcode 0x{other:02x}"))),
     };
     Ok(msg)
