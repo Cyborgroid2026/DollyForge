@@ -212,6 +212,7 @@ public static class Catalog
         new("MC-HINGE-75", "기구", "강철 경첩 75 mm", "개당, 나사 포함", 2000, "개") { PackQty = 1 },
         new("MC-LM8UU", "기구", "리니어 부싱 LM8UU", "8 mm 축용, 개당", 1500, "개") { PackQty = 1 },
         new("MC-RODEND-M8", "기구", "로드엔드 볼조인트 M8", "개당", 4000, "개") { PackQty = 1 },
+        new(Cyborg.Connector, "사이보그 모듈", "모듈 커넥터", "볼트 4개 + 전원·신호 접점. 몸 모듈 하나를 붙일 때 1개", 85000, "개") { PackQty = 1 },
     ];
 
     public static CatalogItem Get(string sku) => Items.First(i => i.Sku == sku);

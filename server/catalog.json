@@ -336,6 +336,15 @@
       "packQty": 1,
       "physical": false,
       "fictional": false
+    },
+    {
+      "sku": "MC-MODULE-LINK",
+      "nameKo": "모듈 커넥터",
+      "category": "사이보그 모듈",
+      "priceKrw": 85000,
+      "packQty": 1,
+      "physical": false,
+      "fictional": false
     }
   ],
   "examples": [
@@ -734,6 +743,12 @@
       "lengthMm": 0,
       "widthMm": 0,
       "unitKrw": 4000
+    },
+    {
+      "sku": "MC-MODULE-LINK",
+      "lengthMm": 0,
+      "widthMm": 0,
+      "unitKrw": 85000
     }
   ]
 }
