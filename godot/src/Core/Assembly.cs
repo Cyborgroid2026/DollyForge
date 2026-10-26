@@ -127,9 +127,12 @@ public sealed class Assembly(string name)
     }
 
     public JointInstance AddJoint(JointKind kind, PartInstance parent, PartInstance child, Vector3 pivot, Vector3 axis,
-        float lower = -MathF.PI, float upper = MathF.PI)
+        float lower = -MathF.PI, float upper = MathF.PI, Vector3? secondary = null)
     {
-        var j = new JointInstance(_nextJoint++, kind, parent.Id, child.Id, pivot, axis) { Lower = lower, Upper = upper };
+        var j = new JointInstance(_nextJoint++, kind, parent.Id, child.Id, pivot, axis)
+        {
+            Lower = lower, Upper = upper, Secondary = secondary ?? Vector3.Zero,
+        };
         Joints.Add(j);
         return j;
     }
@@ -170,6 +173,47 @@ public sealed class Assembly(string name)
         var loops = Joints.Where(j => !used.Contains(j.Id)).ToList();
         var disconnected = Parts.Where(p => !visited.Contains(p.Id)).ToList();
         return (tree, loops, disconnected);
+    }
+
+    /// <summary>관절로 이어진 부품 묶음(기기 하나)의 부품 id 들</summary>
+    public HashSet<int> ConnectedTo(int partId)
+    {
+        var seen = new HashSet<int> { partId };
+        var stack = new Stack<int>([partId]);
+        while (stack.Count > 0)
+        {
+            var cur = stack.Pop();
+            foreach (var j in Joints)
+            {
+                var other = j.Parent == cur ? j.Child : j.Child == cur ? j.Parent : -1;
+                if (other >= 0 && seen.Add(other)) stack.Push(other);
+            }
+        }
+        return seen;
+    }
+
+    /// <summary>부품 일부와 그 사이 관절만으로 새 조립품을 만든다 (내보내기용). 부품 id 는 새로 매긴다.</summary>
+    public Assembly Extract(IEnumerable<int> partIds, string name)
+    {
+        var ids = partIds.ToHashSet();
+        var sub = new Assembly(name);
+        var map = new Dictionary<int, PartInstance>();
+        foreach (var p in Parts.Where(p => ids.Contains(p.Id)).OrderBy(p => p.Id))
+            map[p.Id] = sub.AddPart(p.Def, p.Pose);
+        foreach (var j in Joints.Where(j => ids.Contains(j.Parent) && ids.Contains(j.Child)))
+        {
+            var nj = sub.AddJoint(j.Kind, map[j.Parent], map[j.Child], j.Pivot, j.Axis, j.Lower, j.Upper, j.Secondary);
+            nj.Effort = j.Effort;
+            nj.Velocity = j.Velocity;
+            if (j.DrivenBy is { } m && map.TryGetValue(m, out var motor)) nj.DrivenBy = motor.Id;
+        }
+        return sub;
+    }
+
+    public void RemovePart(int id)
+    {
+        Parts.RemoveAll(p => p.Id == id);
+        Joints.RemoveAll(j => j.Parent == id || j.Child == id);
     }
 
     /// <summary>가장 무거운 부품을 기본 몸체(root)로 삼는다.</summary>
