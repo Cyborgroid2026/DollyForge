@@ -16,12 +16,31 @@ public partial class World : Node3D
     public StaticBody3D Catalog { get; private set; } = null!;
     public Label3D LedgerTag { get; private set; } = null!;
     DirectionalLight3D _sun = null!;
+    const int TerrainN = 161;
+    /// <summary>연못: 작업장 문(남쪽) 너머 언덕 사이의 오목한 곳</summary>
+    public static readonly Vector2 PondCenter = new(22f, 34f);
+    public const float PondRadius = 9f, PondDepth = 2.2f;
+    float[] _heights = [];
+
+    /// <summary>지형 높이 (1 m 격자 보간). 격자 밖은 0.</summary>
+    public float HeightAt(float x, float z)
+    {
+        const int n = TerrainN;
+        var fx = x + (n - 1) / 2f;
+        var fz = z + (n - 1) / 2f;
+        if (fx < 0 || fz < 0 || fx >= n - 1 || fz >= n - 1) return 0;
+        int i = (int)fz, j = (int)fx;
+        float tx = fx - j, tz = fz - i;
+        float H(int a, int b) => _heights[a * n + b];
+        return Mathf.Lerp(Mathf.Lerp(H(i, j), H(i, j + 1), tx), Mathf.Lerp(H(i + 1, j), H(i + 1, j + 1), tx), tz);
+    }
 
     public override void _Ready()
     {
         BuildEnvironment();
         BuildTerrain();
         BuildWorkshop();
+        AddChild(new FutureCity { World = this });
     }
 
     void BuildEnvironment()
@@ -85,16 +104,24 @@ public partial class World : Node3D
     void BuildTerrain()
     {
         // 1 m 격자 높이맵. 작업장 주변은 평평한 자갈 마당, 바깥은 완만한 풀 언덕.
-        const int n = 161;
+        const int n = TerrainN;
+        // 자연 지형: 도메인 왜곡(물결치듯 흐르는 지형선) + 능선 노이즈(침식된 등성이) + 잔결 노이즈
         var noise = new FastNoiseLite { Seed = 20261026, Frequency = 0.012f, FractalOctaves = 5 };
-        var heights = new float[n * n];
+        var warp = new FastNoiseLite { Seed = 11, Frequency = 0.009f, FractalOctaves = 3 };
+        var ridge = new FastNoiseLite { Seed = 5, Frequency = 0.011f, FractalType = FastNoiseLite.FractalTypeEnum.Ridged, FractalOctaves = 4 };
+        var fine = new FastNoiseLite { Seed = 23, Frequency = 0.15f, FractalOctaves = 2 };
+        var heights = _heights = new float[n * n];
         for (var z = 0; z < n; z++)
         for (var x = 0; x < n; x++)
         {
             var wx = x - (n - 1) / 2f;
             var wz = z - (n - 1) / 2f;
             var yard = Mathf.SmoothStep(14f, 34f, new Vector2(wx, wz - 2).Length());
-            heights[z * n + x] = yard * (noise.GetNoise2D(wx, wz) * 9f + 2.5f * yard) - 0.02f;
+            var ux = wx + warp.GetNoise2D(wx, wz) * 22f;
+            var uz = wz + warp.GetNoise2D(wz + 137f, wx - 59f) * 22f;
+            var hills = noise.GetNoise2D(ux, uz) * 7f + ridge.GetNoise2D(ux, uz) * 3.5f + fine.GetNoise2D(wx, wz) * 0.35f;
+            var pond = Mathf.SmoothStep(PondRadius + 4f, PondRadius * 0.35f, new Vector2(wx - PondCenter.X, wz - PondCenter.Y).Length());
+            heights[z * n + x] = yard * (hills + 2.5f * yard) - 0.02f - pond * PondDepth;
         }
 
         var shape = new HeightMapShape3D { MapWidth = n, MapDepth = n, MapData = heights };
