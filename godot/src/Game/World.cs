@@ -35,7 +35,7 @@ public partial class World : Node3D
                     : null,
                 EnergyMultiplier = 1.0f,
             },
-            ProcessMode = Sky.ProcessModeEnum.Realtime,
+            ProcessMode = Sky.ProcessModeEnum.Automatic,
             RadianceSize = Sky.RadianceSizeEnum.Size512,
         };
         var env = new Godot.Environment

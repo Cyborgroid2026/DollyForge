@@ -249,7 +249,7 @@ public sealed class Assembly(string name)
     public MassProperties ComputeMassProperties()
     {
         var mass = TotalMass;
-        if (mass <= 0) return new(0, Vector3.Zero, default);
+        if (mass <= 0) return new(0, Vector3.Zero, new double[3, 3]);
         var com = Parts.Aggregate(Vector3.Zero, (acc, p) => acc + p.Pose.Position * p.Def.Mass) / mass;
         var I = new double[3, 3];
         foreach (var p in Parts)

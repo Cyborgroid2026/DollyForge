@@ -28,8 +28,13 @@ vec3 blend_weights() {
 	return b / (b.x + b.y + b.z);
 }
 
-vec4 tri(sampler2D t, float tile, vec3 b) {
-	return texture(t, wpos.zy / tile) * b.x + texture(t, wpos.xz / tile) * b.y + texture(t, wpos.xy / tile) * b.z;
+// Godot 는 함수 하나에 넘기는 샘플러의 힌트가 모두 같아야 하므로 종류별로 나눈다
+vec3 tri_color(sampler2D t, float tile, vec3 b) {
+	return (texture(t, wpos.zy / tile) * b.x + texture(t, wpos.xz / tile) * b.y + texture(t, wpos.xy / tile) * b.z).rgb;
+}
+
+float tri_rough(sampler2D t, float tile, vec3 b) {
+	return texture(t, wpos.zy / tile).r * b.x + texture(t, wpos.xz / tile).r * b.y + texture(t, wpos.xy / tile).r * b.z;
 }
 
 // Ben Golus 의 whiteout 삼면 노멀 블렌딩
@@ -52,14 +57,14 @@ void fragment() {
 	w.r *= flat_ground;
 	w /= max(w.r + w.g + w.b, 1e-4);
 
-	vec3 albedo = tri(grass_albedo, grass_tile, b).rgb * w.r + tri(soil_albedo, soil_tile, b).rgb * w.g + tri(rock_albedo, rock_tile, b).rgb * w.b;
-	float rough = tri(grass_rough, grass_tile, b).r * w.r + tri(soil_rough, soil_tile, b).r * w.g + tri(rock_rough, rock_tile, b).r * w.b;
+	vec3 albedo = tri_color(grass_albedo, grass_tile, b) * w.r + tri_color(soil_albedo, soil_tile, b) * w.g + tri_color(rock_albedo, rock_tile, b) * w.b;
+	float rough = tri_rough(grass_rough, grass_tile, b) * w.r + tri_rough(soil_rough, soil_tile, b) * w.g + tri_rough(rock_rough, rock_tile, b) * w.b;
 	vec3 n = normalize(tri_normal(grass_normal, grass_tile, b) * w.r + tri_normal(soil_normal, soil_tile, b) * w.g + tri_normal(rock_normal, rock_tile, b) * w.b);
 
 	// 광석 노두: 적철석은 녹슨 적갈색, 황동석은 놋쇠빛 금속 반점
 	float iron = clamp(UV2.x, 0.0, 1.0);
 	float copper = clamp(UV2.y, 0.0, 1.0);
-	float speck = smoothstep(0.55, 0.75, tri(rock_rough, rock_tile * 0.35, b).r);
+	float speck = smoothstep(0.55, 0.75, tri_rough(rock_rough, rock_tile * 0.35, b));
 	albedo = mix(albedo, albedo * vec3(1.25, 0.62, 0.48), iron * 0.85);
 	albedo = mix(albedo, mix(albedo, vec3(0.78, 0.62, 0.3), speck), copper);
 	float metal = copper * speck * 0.8 + iron * speck * 0.25;
