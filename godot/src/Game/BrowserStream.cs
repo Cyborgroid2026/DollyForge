@@ -31,6 +31,10 @@ public partial class BrowserStream : Node
     long _frameSeq, _lastSent;
     const int MaxInFlight = 3;
     double _frameTimer;
+    /// <summary>DOLLY_STREAM_STATS=1 이면 5초마다 렌더·전송 속도를 출력한다 (성능 확인용)</summary>
+    readonly bool _stats = OS.GetEnvironment("DOLLY_STREAM_STATS") == "1";
+    double _statsTimer;
+    long _statsSeq;
     string _page = "";
     string? _lastStatus;
     Vector2 _mouse, _seen;
@@ -166,6 +170,17 @@ public partial class BrowserStream : Node
         {
             _lastStatus = status;
             _ = Send(ws, Encoding.UTF8.GetBytes(status), WebSocketMessageType.Text);
+        }
+
+        if (_stats)
+        {
+            _statsTimer += delta;
+            if (_statsTimer >= 5)
+            {
+                GD.Print($"[stream] 렌더 {Engine.GetFramesPerSecond():0} fps · 전송 {(_frameSeq - _statsSeq) / _statsTimer:0.0} 장/초");
+                _statsTimer = 0;
+                _statsSeq = _frameSeq;
+            }
         }
 
         _frameTimer += delta;
