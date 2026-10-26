@@ -50,7 +50,11 @@ echo "[run] 2/4 Rust 월드 서버"
 if listening "$SERVER_PORT"; then
   echo "  이미 127.0.0.1:$SERVER_PORT 에서 실행 중 — 그대로 씁니다"
 else
-  (cd server && cargo build --quiet)
+  if ! (cd server && cargo build --quiet) >"$LOG_DIR/server-build.log" 2>&1; then
+    echo "  서버 빌드 실패. 로그: $LOG_DIR/server-build.log" >&2
+    tail -n 30 "$LOG_DIR/server-build.log" >&2
+    exit 1
+  fi
   (cd server && DOLLY_DEV_ECHO_CODE=1 exec cargo run --quiet) >"$LOG_DIR/server.log" 2>&1 &
   SERVER_PID=$!
   for _ in $(seq 1 100); do
