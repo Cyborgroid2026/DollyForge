@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # 실사 렌더링용 CC0 에셋(Poly Haven, https://polyhaven.com — CC0 1.0)을 내려받는다.
-# 용량이 커서 git 에는 넣지 않는다 (client/wwwroot/assets 는 .gitignore). 이미 있는 파일은 건너뛴다.
+# 용량이 커서 git 에는 넣지 않는다 (godot/assets 는 .gitignore). 이미 있는 파일은 건너뛴다.
+# 사용법: fetch-assets.sh [대상 폴더, 기본: godot]
 set -euo pipefail
-cd "$(dirname "$0")/../client/wwwroot"
+cd "$(dirname "$0")/../${1:-godot}"
 BASE=https://dl.polyhaven.org/file/ph-assets
 
 fetch() { # url dest
@@ -18,7 +19,7 @@ for h in kloofendal_48d_partly_cloudy_puresky kloppenheim_06_puresky; do
 done
 
 echo "[assets] PBR 텍스처 (색·노멀·거칠기)"
-for t in aerial_grass_rock rocky_trail weathered_planks white_plaster_02 bark_brown_02 rock_boulder_dry plywood metal_plate; do
+for t in aerial_grass_rock forrest_ground_01 rock_face_03 rocky_trail weathered_planks white_plaster_02 bark_brown_02 rock_boulder_dry plywood metal_plate; do
   for m in diff nor_gl rough; do
     fetch "$BASE/Textures/jpg/1k/$t/${t}_${m}_1k.jpg" "assets/tex/$t/$m.jpg"
   done

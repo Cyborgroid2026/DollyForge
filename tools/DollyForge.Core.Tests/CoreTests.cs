@@ -56,6 +56,19 @@ public class PhysicalTests
         Assert.Equal(2 * ball.Inertia.X, mp.Inertia[0, 0], 4);
     }
 
+    [Theory]
+    [InlineData(0.7, 1.5707963, 1.1)]   // 짐벌 잠금 (pitch +90°)
+    [InlineData(-2.0, -1.5707963, 0.3)] // 짐벌 잠금 (pitch -90°)
+    [InlineData(0.4, 0.9, -2.5)]
+    public void RpyRoundTripsIncludingGimbalLock(double r, double p, double y)
+    {
+        static Quaternion FromRpy(Vector3 e) =>
+            Quaternion.CreateFromAxisAngle(Vector3.UnitZ, e.Z) * Quaternion.CreateFromAxisAngle(Vector3.UnitY, e.Y) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, e.X);
+        var q = FromRpy(new((float)r, (float)p, (float)y));
+        var back = FromRpy(Frames.ToRpy(q));
+        Assert.True(MathF.Abs(Quaternion.Dot(q, back)) > 1 - 1e-5f, $"{q} != {back}");
+    }
+
     [Fact]
     public void GameToRosFrameMapsAxesCorrectly()
     {

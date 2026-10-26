@@ -226,19 +226,24 @@ public static class Frames
 
     public static Pose ToRos(Pose p) => new(ToRos(p.Position), Quaternion.Normalize(GameToRos * p.Rotation));
 
-    /// <summary>URDF rpy (고정축 X→Y→Z 순서 회전) 값</summary>
+    /// <summary>
+    /// URDF rpy (고정축 X→Y→Z, 즉 R = Rz(yaw)·Ry(pitch)·Rx(roll)).
+    /// 회전 행렬에서 뽑고, pitch = ±90° (짐벌 잠금)일 때는 yaw = 0 으로 두고 roll 로 나머지를 표현한다.
+    /// </summary>
     public static Vector3 ToRpy(Quaternion q)
     {
         q = Quaternion.Normalize(q);
-        var sinr = 2 * (q.W * q.X + q.Y * q.Z);
-        var cosr = 1 - 2 * (q.X * q.X + q.Y * q.Y);
-        var roll = MathF.Atan2(sinr, cosr);
-        var sinp = Math.Clamp(2 * (q.W * q.Y - q.Z * q.X), -1f, 1f);
-        var pitch = MathF.Asin(sinp);
-        var siny = 2 * (q.W * q.Z + q.X * q.Y);
-        var cosy = 1 - 2 * (q.Y * q.Y + q.Z * q.Z);
-        var yaw = MathF.Atan2(siny, cosy);
-        return new(roll, pitch, yaw);
+        double w = q.W, x = q.X, y = q.Y, z = q.Z;
+        double r00 = 1 - 2 * (y * y + z * z), r10 = 2 * (x * y + w * z), r20 = 2 * (x * z - w * y);
+        double r21 = 2 * (y * z + w * x), r22 = 1 - 2 * (x * x + y * y);
+        double r11 = 1 - 2 * (x * x + z * z), r12 = 2 * (y * z - w * x);
+        if (Math.Abs(r20) < 1 - 1e-9)
+        {
+            var pitch = Math.Asin(-r20);
+            return new((float)Math.Atan2(r21, r22), (float)pitch, (float)Math.Atan2(r10, r00));
+        }
+        var p = r20 < 0 ? Math.PI / 2 : -Math.PI / 2;
+        return new((float)Math.Atan2(-r12, r11), (float)p, 0);
     }
 
     /// <summary>a 를 b 로 돌리는 최소 회전</summary>
