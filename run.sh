@@ -4,7 +4,8 @@
 #   1. 실사 에셋 내려받기 (처음 한 번)
 #   2. Rust 월드 서버 (이미 떠 있으면 그대로 쓴다)
 #   3. C# 빌드와 Godot 에셋 가져오기
-#   4. Godot 게임을 모니터 없는 가상 화면에서 실행 → 통합 브라우저 주소를 알려 준다 (창은 뜨지 않는다)
+#   4. Godot 게임을 모니터 없는 가상 화면에서 실행 (창은 뜨지 않는다)
+#   5. VS Code 통합 브라우저(Open Integrated Browser)로 게임 화면을 자동으로 연다
 # 끝낼 때는 Ctrl+C. 이 스크립트가 띄운 서버와 게임을 함께 정리한다.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -17,7 +18,25 @@ mkdir -p "$LOG_DIR"
 
 listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
+# VS Code 통합 브라우저로 연다: 저장소의 작은 확장(tools/vscode-browser)이 vscode:// 주소를 받아
+# workbench.action.browser.open 을 부른다. 처음 한 번만 설치한다.
+open_integrated_browser() {
+  command -v code >/dev/null || return 1
+  local id=dollyforge.dollyforge-browser
+  if ! code --list-extensions 2>/dev/null | grep -qx "$id"; then
+    python3 tools/vscode-browser/build.py "$LOG_DIR/dollyforge-browser.vsix" &&
+      code --install-extension "$LOG_DIR/dollyforge-browser.vsix" >/dev/null 2>&1 || return 1
+  fi
+  code --open-url "vscode://$id/open?url=$STREAM_URL" >/dev/null 2>&1
+}
+
 banner() {
+  if open_integrated_browser; then
+    printf '\n\033[1;32m  Dolly Forge → VS Code 통합 브라우저에 열었습니다 (%s)\033[0m\n' "$STREAM_URL"
+    printf '  탭이 보이지 않으면: 명령 팔레트(Ctrl+Shift+P) → "Open Integrated Browser" → 위 주소\n'
+    printf '  화면을 클릭하면 마우스가 잡히고 Esc 로 놓입니다. 끝내려면 이 터미널에서 Ctrl+C.\n\n'
+    return
+  fi
   printf '\n\033[1;32m%s\033[0m\n' "════════════════════════════════════════════════════════════"
   printf '\033[1;32m  Dolly Forge 실행 중 → %s\033[0m\n' "$STREAM_URL"
   printf '  VS Code: 명령 팔레트(Ctrl+Shift+P) → "Open Integrated Browser" → 위 주소\n'
