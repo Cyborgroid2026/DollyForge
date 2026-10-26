@@ -108,10 +108,11 @@ public partial class World : Node3D
             FogSkyAffect = 0.0f,
             FogHeight = 1.2f,
             FogHeightDensity = 0.035f,
-            // 색: 맑은 아침의 채도와 대비 (과하지 않게)
+            // 색: 실제 자연 사진(위키미디어 공용 품질 사진 1,229장)의 중앙값에 맞춘 채도·대비
+            //   사진 채도 0.37 · 대비(log p95/p5) 3.24  ←  보정 전 게임 0.26 · 2.80
             AdjustmentEnabled = true,
-            AdjustmentSaturation = 1.12f,
-            AdjustmentContrast = 1.05f,
+            AdjustmentSaturation = 1.38f,
+            AdjustmentContrast = 1.22f,
         };
         // 언리얼 4 의 눈 적응: 어두운 작업장에 들어가면 서서히 밝아지고 밖으로 나오면 눈이 부시다 잦아든다
         var camera = new CameraAttributesPractical
@@ -120,7 +121,7 @@ public partial class World : Node3D
             AutoExposureMinSensitivity = 60f,
             AutoExposureMaxSensitivity = 400f,
             AutoExposureSpeed = 0.6f,
-            AutoExposureScale = 0.45f,
+            AutoExposureScale = 0.36f,
         };
         AddChild(new WorldEnvironment { Environment = env, CameraAttributes = camera });
         var lens = new CanvasLayer { Layer = -1 };
@@ -145,19 +146,6 @@ public partial class World : Node3D
         };
         _sun.Basis = Basis.LookingAt(-SunDirection, Vector3.Up);
         AddChild(_sun);
-        // PERF-PROBE (임시): 효과별 비용 측정
-        foreach (var off in OS.GetEnvironment("DOLLY_PERF_OFF").Split(',', StringSplitOptions.RemoveEmptyEntries))
-            switch (off)
-            {
-                case "sdfgi": env.SdfgiEnabled = false; break;
-                case "volfog": env.VolumetricFogEnabled = false; break;
-                case "ssil": env.SsilEnabled = false; break;
-                case "ssr": env.SsrEnabled = false; break;
-                case "ssao": env.SsaoEnabled = false; break;
-                case "glow": env.GlowEnabled = false; break;
-                case "shadows": _sun.ShadowEnabled = false; break;
-                case "autoexp": camera.AutoExposureEnabled = false; break;
-            }
     }
 
     void BuildTerrain()

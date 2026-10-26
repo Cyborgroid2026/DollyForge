@@ -7,7 +7,7 @@ namespace DollyForge.Game;
 /// <summary>
 /// 게임 시작점. 월드, 작업장 장치, 플레이어, 통신망(Rust 월드 서버) 세션, 주문·창고 흐름을 묶는다.
 /// 온라인이면 결제·소모품 재고·창고는 서버가 권위를 갖고, 오프라인이면 이 기기 안에서만 계산한다.
-/// 개발 확인용 인자: -- --offline | --shot=경로.png --frames=N [--look=yaw,pitch] [--at=x,y,z] [--catalog] [--surgery] | --stream (통합 브라우저로 화면 보내기) | --selftest
+/// 개발 확인용 인자: -- --offline | --shot=경로.png --frames=N [--look=yaw,pitch] [--at=x,y,z] [--view=back|front] [--catalog] [--surgery] | --stream (통합 브라우저로 화면 보내기) | --selftest
 /// </summary>
 public partial class Main : Node3D
 {
@@ -126,7 +126,7 @@ public partial class Main : Node3D
     }
 
     const string StartHint = "들꽃 정류장. 오솔길 끝 볼트 지붕 건물이 작업장입니다 — 카탈로그로 주문하고, 조립하고, 수술대에서 몸을 고칩니다. " +
-                             "WASD 이동 · E 카탈로그·수술대 · 1–9 공구 · F5/F6 창고 · F7 내 몸 · F8 기기 내보내기";
+                             "WASD 이동 · V 시점 · E 카탈로그·수술대 · 1–9 공구 · F5/F6 창고 · F7 내 몸 · F8 기기 내보내기";
 
     void StartOffline(bool quiet)
     {
@@ -494,6 +494,7 @@ public partial class Main : Node3D
                 case "--catalog": CallDeferred(nameof(OpenCatalog)); break;
                 case "--surgery": CallDeferred(nameof(OpenSurgery)); break;
                 case "--stream": AddChild(new BrowserStream()); break;
+                case "--view": _player.SetView(v == "front" ? Player.ViewMode.ThirdFront : v == "back" ? Player.ViewMode.ThirdBack : Player.ViewMode.FirstPerson); break;
                 case "--login": CallDeferred(nameof(ShowLogin)); break;
                 case "--selftest": AddChild(new SelfTest { Devices = _devices }); break;
                 case "--onlinetest": AddChild(new OnlineTest { Main = this }); break;

@@ -36,6 +36,46 @@ public partial class Player : CharacterBody3D
 
     float _pitch;
     int _tool;
+
+    // ------------------------------------------------------------------ 시점: 1인칭 → 3인칭(뒤) → 3인칭(앞), V 로 바꾼다
+
+    public enum ViewMode { FirstPerson, ThirdBack, ThirdFront }
+    public ViewMode View { get; private set; } = ViewMode.FirstPerson;
+    /// <summary>3인칭 카메라: 눈(Camera)에서 뒤나 앞으로 뻗은 팔 끝. 벽에 닿으면 몸 쪽으로 당겨진다.</summary>
+    SpringArm3D _viewArm = null!;
+    Camera3D _viewCamera = null!;
+    /// <summary>3인칭에서 보이는 내 몸 (1인칭에서는 숨긴다: 카메라가 머리 안에 있다)</summary>
+    CyborgBody? _avatar;
+    byte _avatarGender = byte.MaxValue;
+
+    public void CycleView() => SetView(View switch
+    {
+        ViewMode.FirstPerson => ViewMode.ThirdBack,
+        ViewMode.ThirdBack => ViewMode.ThirdFront,
+        _ => ViewMode.FirstPerson,
+    });
+
+    public void SetView(ViewMode mode)
+    {
+        View = mode;
+        // 조준·들기는 늘 눈(Camera)에서 계산하고, 화면만 3인칭 카메라로 보여 준다
+        _viewArm.Rotation = new Vector3(0, mode == ViewMode.ThirdFront ? Mathf.Pi : 0, 0);
+        _viewCamera.Current = mode != ViewMode.FirstPerson;
+        Camera.Current = mode == ViewMode.FirstPerson;
+        if (_avatar is not null) _avatar.Visible = mode != ViewMode.FirstPerson;
+    }
+
+    /// <summary>체형이 바뀌면 3인칭용 몸을 다시 만든다 (몸 앞(+Z)이 플레이어 앞(-Z)을 보게)</summary>
+    void RebuildAvatar()
+    {
+        if (_viewArm is null || Body.Gender == _avatarGender) return;
+        _avatar?.QueueFree();
+        _avatarGender = Body.Gender;
+        _avatar = CyborgBody.Build(Body.Gender);
+        _avatar.Rotation = new Vector3(0, Mathf.Pi, 0);
+        _avatar.Visible = View != ViewMode.FirstPerson;
+        AddChild(_avatar);
+    }
     PartBody? _held, _selected;
     float _holdDistance;
     Basis _holdRelative;
@@ -77,6 +117,7 @@ public partial class Player : CharacterBody3D
     {
         Body = body with { Worn = [] };
         EyeHeight = body.Gender == 1 ? 1.67f : 1.55f;
+        RebuildAvatar();
         BodyMassKg = Cyborg.Assemble(Body, System.Numerics.Vector3.Zero).TotalMass;
         RefreshCaps();
     }
@@ -168,6 +209,14 @@ public partial class Player : CharacterBody3D
         _capsule = new CollisionShape3D { Shape = new CapsuleShape3D { Radius = 0.24f } };
         AddChild(_capsule);
         EyeHeight = _eyeHeight;
+        _viewArm = new SpringArm3D { SpringLength = 2.4f, Margin = 0.15f, CollisionMask = PartBody.LayerWorld, Position = new Vector3(0.0f, 0.15f, 0) };
+        _viewArm.Shape = new SphereShape3D { Radius = 0.18f };
+        _viewArm.AddExcludedObject(GetRid());
+        Camera.AddChild(_viewArm);
+        _viewCamera = new Camera3D { Fov = 70, Near = 0.05f };
+        _viewArm.AddChild(_viewCamera);
+        RebuildAvatar();
+        SetView(View);
         _tag = Look.Tag("", 0.0011f);
         _tag.Billboard = BaseMaterial3D.BillboardModeEnum.Enabled;
         _tag.Modulate = new Color(0.95f, 0.93f, 0.86f);
@@ -220,6 +269,15 @@ public partial class Player : CharacterBody3D
         }
         switch (key)
         {
+            case Key.V:
+                CycleView();
+                Notify?.Invoke(View switch
+                {
+                    ViewMode.FirstPerson => "1인칭 시점",
+                    ViewMode.ThirdBack => "3인칭 시점 — 뒤에서",
+                    _ => "3인칭 시점 — 앞에서",
+                });
+                break;
             case Key.Escape:
                 if (_selected is not null) { _selected = null; Notify?.Invoke("선택 취소"); }
                 else Pointer.Mode = Input.MouseModeEnum.Visible;
@@ -319,6 +377,7 @@ public partial class Player : CharacterBody3D
         if (!IsOnFloor() || thrust.Y > Gravity) v.Y -= Gravity * dt;
         Velocity = v;
         MoveAndSlide();
+        _avatar?.Animate(dt, new Vector2(Velocity.X, Velocity.Z).Length());
 
         // 밀기: 사람이 낼 수 있는 힘 이하로만
         for (var i = 0; i < GetSlideCollisionCount(); i++)
