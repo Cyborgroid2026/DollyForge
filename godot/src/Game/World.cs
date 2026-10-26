@@ -11,7 +11,6 @@ public partial class World : Node3D
     public const float YardSize = 160f;
     public static readonly Vector3 DeliveryPoint = new(0, 0.15f, 5.5f);
     public static readonly Vector3 WorkbenchTop = new(-3f, 0.92f, -6.5f);
-    public static readonly Vector3 PlayerSpawn = new(0, 0.2f, -2.5f);
     /// <summary>정비 수술대 상판 중심. 바꿔 끼울 몸 모듈을 이 근처(2 m)에 둔다.</summary>
     public static readonly Vector3 SurgeryTop = new(-4.6f, 0.86f, -3.0f);
 
@@ -126,7 +125,8 @@ public partial class World : Node3D
         {
             var wx = x - (n - 1) / 2f;
             var wz = z - (n - 1) / 2f;
-            var yard = Mathf.SmoothStep(14f, 34f, new Vector2(wx, wz - 2).Length());
+            // 작업장 터만 평평하게 (건물·앞마당 둘레 10 m 안쪽), 그 바깥은 바로 자연 지형
+            var yard = Mathf.SmoothStep(11f, 26f, new Vector2(wx, (wz + 1) * 0.85f).Length());
             var ux = wx + warp.GetNoise2D(wx, wz) * 22f;
             var uz = wz + warp.GetNoise2D(wz + 137f, wx - 59f) * 22f;
             var hills = noise.GetNoise2D(ux, uz) * 7f + ridge.GetNoise2D(ux, uz) * 3.5f + fine.GetNoise2D(wx, wz) * 0.35f;
@@ -137,6 +137,7 @@ public partial class World : Node3D
             var ground = yard * (hills + 2.5f * yard) - 0.02f;
             heights[z * n + x] = Mathf.Lerp(ground, PondBank, bank) - bowl * PondDepth;
         }
+        Site.ShapeTerrain(heights, n);
 
         var shape = new HeightMapShape3D { MapWidth = n, MapDepth = n, MapData = heights };
         var body = new StaticBody3D { CollisionLayer = PartBody.LayerWorld, CollisionMask = 0 };
@@ -151,9 +152,12 @@ public partial class World : Node3D
             var wx = x - (n - 1) / 2f;
             var wz = z - (n - 1) / 2f;
             var h = heights[z * n + x];
-            var yard = Mathf.SmoothStep(14f, 26f, new Vector2(wx, wz - 2).Length());
-            // R 풀, G 자갈(마당), B 암석 — 셰이더가 경사에 따라 다시 조정한다
-            st.SetColor(new Color(yard, 1 - yard, Mathf.Clamp((h - 6) / 4, 0, 1)));
+            // 자갈은 건물 벽 둘레와 선로 바닥에만. 나머지는 풀밭 (오솔길·마당은 따로 포장한다)
+            var p = new Vector2(wx, wz);
+            var gravel = Mathf.Max(1 - Mathf.SmoothStep(1.5f, 4f, DistanceToRect(Site.Building, p)),
+                                   1 - Mathf.SmoothStep(2.4f, 4.2f, Mathf.Abs(wz - Site.RailZ)));
+            // R 풀, G 자갈, B 암석 — 셰이더가 경사에 따라 다시 조정한다
+            st.SetColor(new Color(1 - gravel, gravel, Mathf.Clamp((h - 6) / 4, 0, 1)));
             st.SetUV2(Vector2.Zero);
             st.AddVertex(new Vector3(wx, h, wz));
         }
@@ -277,6 +281,13 @@ public partial class World : Node3D
         sign.Billboard = BaseMaterial3D.BillboardModeEnum.Disabled;
         sign.Modulate = new Color(0.95f, 0.95f, 0.9f);
         AddChild(sign);
+    }
+
+    static float DistanceToRect(Rect2 r, Vector2 p)
+    {
+        var dx = Mathf.Max(Mathf.Max(r.Position.X - p.X, p.X - r.End.X), 0);
+        var dz = Mathf.Max(Mathf.Max(r.Position.Y - p.Y, p.Y - r.End.Y), 0);
+        return Mathf.Sqrt(dx * dx + dz * dz);
     }
 
     StaticBody3D Box(Vector3 size, Vector3 at, Material mat)

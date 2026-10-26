@@ -66,8 +66,9 @@ public partial class Main : Node3D
         var sample = Blueprints.TwoWheelRobot(new ShopAccount(1_000_000), (World.WorkbenchTop + new Vector3(0.3f, 0.01f, 0)).N());
         _devices.Adopt(sample);
 
-        _player = new Player { Devices = _devices, Position = World.PlayerSpawn };
-        _player.RotationDegrees = new Vector3(0, 25, 0);
+        // 시작: 모노레일 정류장 승강장에 막 내린 참. 오솔길 끝에 작업장, 오른쪽 앞에 연못, 지평선에 도시.
+        _player = new Player { Devices = _devices, Position = Site.Spawn };
+        _player.RotationDegrees = new Vector3(0, Site.SpawnYawDegrees, 0);
         _player.OpenCatalog = OpenCatalog;
         _player.OpenStorage = OpenStorage;
         _player.Stow = Stow;

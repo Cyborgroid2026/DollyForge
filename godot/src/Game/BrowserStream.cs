@@ -20,6 +20,8 @@ public partial class BrowserStream : Node
     public int Port { get; set; } = 7780;
     public int Fps { get; set; } = 30;
     public float Quality { get; set; } = 0.8f;
+    /// <summary>브라우저로 보내는 화면 해상도</summary>
+    public Vector2I Size { get; set; } = new(1280, 720);
 
     HttpListener? _http;
     WebSocket? _ws;
@@ -29,7 +31,13 @@ public partial class BrowserStream : Node
     double _frameTimer;
     string _page = "";
     string? _lastStatus;
-    Vector2 _mouse;
+    Vector2 _mouse, _seen;
+
+    /// <summary>게임 노드들이 실제로 받은 마우스 위치 (게임 화면 좌표)</summary>
+    public override void _Input(InputEvent ev)
+    {
+        if (ev is InputEventMouse m) _seen = m.Position;
+    }
 
     public override void _Ready()
     {
@@ -37,13 +45,52 @@ public partial class BrowserStream : Node
         // 화면은 브라우저에 보이므로 Godot 창은 내려 둔다. 숨은 창은 수직 동기를 기다리지 않게 한다.
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         Engine.MaxFps = 60;
-        DisplayServer.WindowSetMode(DisplayServer.WindowMode.Minimized);
+        PutWindowAway();
         _page = System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://web/stream.html"));
         _http = new HttpListener();
         _http.Prefixes.Add($"http://127.0.0.1:{Port}/");
-        _http.Start();
+        try { _http.Start(); }
+        catch (HttpListenerException e)
+        {
+            GD.PrintErr($"[stream] 포트 {Port} 를 열 수 없습니다 ({e.Message}). 이미 실행 중인 Dolly Forge 를 종료하세요.");
+            GetTree().Quit(1);
+            return;
+        }
         _ = Task.Run(AcceptLoop);
         GD.Print($"[stream] http://127.0.0.1:{Port}/ — VS Code 통합 브라우저로 여세요");
+    }
+
+    /// <summary>
+    /// 최소화하면 Godot 가 그리기를 멈추고, 창을 화면 밖으로 옮기면 창 관리자가 되돌려 놓는다.
+    /// 그래서 게임은 고정 해상도(Size)로 렌더링하고(content scale = viewport),
+    /// 실제 창은 테두리 없는 작은 창으로 만들어 어느 모니터에도 보이지 않는 자리(없으면 화면 구석)에 둔다.
+    /// </summary>
+    void PutWindowAway()
+    {
+        var root = GetTree().Root;
+        root.ContentScaleMode = Window.ContentScaleModeEnum.Viewport;
+        root.ContentScaleAspect = Window.ContentScaleAspectEnum.Keep;
+        root.ContentScaleSize = Size;
+        DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.Borderless, true);
+        DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.NoFocus, true);
+        var tiny = new Vector2I(16, 9);
+        DisplayServer.WindowSetSize(tiny);
+        DisplayServer.WindowSetPosition(HiddenSpot(tiny));
+    }
+
+    /// <summary>모니터 배치의 빈틈(어느 모니터에도 속하지 않는 점)을 찾는다</summary>
+    static Vector2I HiddenSpot(Vector2I size)
+    {
+        var screens = Enumerable.Range(0, DisplayServer.GetScreenCount())
+            .Select(i => new Rect2I(DisplayServer.ScreenGetPosition(i), DisplayServer.ScreenGetSize(i))).ToList();
+        var all = screens.Aggregate((a, b) => a.Merge(b));
+        for (var y = all.End.Y - size.Y; y >= all.Position.Y; y -= 8)
+        for (var x = all.End.X - size.X; x >= all.Position.X; x -= 8)
+        {
+            var r = new Rect2I(new Vector2I(x, y), size);
+            if (!screens.Any(s => s.Intersects(r))) return r.Position;
+        }
+        return all.End - size; // 빈틈이 없으면 오른쪽 아래 구석
     }
 
     public override void _ExitTree()
@@ -136,7 +183,10 @@ public partial class BrowserStream : Node
         JsonElement e;
         try { e = JsonDocument.Parse(json).RootElement; }
         catch (JsonException) { return; }
-        var size = GetViewport().GetVisibleRect().Size;
+        // 브라우저 좌표는 게임 화면(Size) 기준 0..1. Godot 는 창 좌표로 받은 이벤트를 content scale 로 되돌려
+        // 게임 화면 좌표로 바꾸므로, 여기서는 게임 화면 좌표 → (작은) 창 좌표로 바꿔 넣는다.
+        var size = (Vector2)Size;
+        var toWindow = GetTree().Root.GetFinalTransform();
         Vector2 At() => e.TryGetProperty("x", out var x) ? new Vector2(x.GetSingle() * size.X, e.GetProperty("y").GetSingle() * size.Y) : _mouse;
         switch (e.GetProperty("t").GetString())
         {
@@ -158,7 +208,9 @@ public partial class BrowserStream : Node
                 var rel = new Vector2(e.GetProperty("dx").GetSingle(), e.GetProperty("dy").GetSingle());
                 if (!Pointer.Captured) rel = to - _mouse;
                 _mouse = to;
-                Input.ParseInputEvent(new InputEventMouseMotion { Position = to, GlobalPosition = to, Relative = rel, ScreenRelative = rel });
+                var w = toWindow * to;
+                var wr = toWindow.BasisXform(rel);
+                Input.ParseInputEvent(new InputEventMouseMotion { Position = w, GlobalPosition = w, Relative = wr, ScreenRelative = wr });
                 break;
             case "mb":
                 var at = Pointer.Captured ? size / 2 : At();
@@ -169,9 +221,14 @@ public partial class BrowserStream : Node
                     3 => MouseButton.WheelUp, _ => MouseButton.WheelDown,
                 };
                 var down = e.GetProperty("down").GetBoolean();
-                Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = button, Pressed = down, Position = at, GlobalPosition = at });
+                var wa = toWindow * at;
+                Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = button, Pressed = down, Position = wa, GlobalPosition = wa });
                 if (button is MouseButton.WheelUp or MouseButton.WheelDown && down)
-                    Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = button, Pressed = false, Position = at, GlobalPosition = at });
+                    Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = button, Pressed = false, Position = wa, GlobalPosition = wa });
+                break;
+            case "where": // 시험용: 게임이 받은 마우스 위치를 돌려준다
+                var p = _seen;
+                if (_ws is { } sock) _ = Send(sock, Encoding.UTF8.GetBytes($"{{\"t\":\"where\",\"x\":{p.X:0.0},\"y\":{p.Y:0.0}}}"), WebSocketMessageType.Text);
                 break;
             case "unlock":
                 // 브라우저가 Esc 로 포인터 잠금을 풀었다 (그 Esc 는 페이지에 오지 않는다)

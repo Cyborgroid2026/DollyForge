@@ -1,21 +1,58 @@
 {
     // Dolly Forge 실행: Terminal > Run Task... > "Dolly Forge: 실행"
-    // CC0 실사 에셋을 (처음 한 번) 내려받고, Rust 월드 서버를 띄운 뒤, Godot C# 게임 창을 연다.
+    // CC0 실사 에셋을 (처음 한 번) 내려받고, Rust 월드 서버와 Godot C# 게임을 띄운 뒤, VS Code 통합 브라우저(Open Integrated Browser)로 연다.
+    // Godot 4 는 C# 프로젝트를 웹으로 내보낼 수 없어서, 게임은 이 컴퓨터에서 실사 렌더링(Forward+·Jolt)으로 돌고
+    // 화면을 http://127.0.0.1:7780 으로 보낸다. 키보드·마우스는 브라우저에서 게임으로 돌아간다.
     "version": "2.0.0",
     "options": {
         "env": {
             "GODOT": "${env:HOME}/Applications/Godot_v4.7.2-stable_mono_linux_x86_64/Godot_v4.7.2-stable_mono_linux.x86_64"
         }
     },
+    "inputs": [
+        {
+            // VS Code 통합 브라우저로 게임 화면을 연다
+            "id": "openIntegratedBrowser",
+            "type": "command",
+            "command": "workbench.action.browser.open",
+            "args": "http://127.0.0.1:7780/"
+        }
+    ],
     "tasks": [
         {
             "label": "Dolly Forge: 실행",
+            "dependsOrder": "sequence",
+            "dependsOn": ["assets: 실사 에셋 내려받기", "server: Rust 월드 서버", "godot: C# 빌드·에셋 가져오기", "game: Godot 게임 (화면 보내기)"],
+            "type": "shell",
+            "command": "echo \"Dolly Forge → http://127.0.0.1:7780/ ${input:openIntegratedBrowser}\"",
+            "presentation": { "reveal": "silent" },
+            "problemMatcher": []
+        },
+        {
+            // 게임 본체. 창은 보이지 않는 자리에 두고 화면은 통합 브라우저로 보낸다. 끝낼 때는 이 작업을 종료(Terminate Task)한다.
+            "label": "game: Godot 게임 (화면 보내기)",
+            "type": "shell",
+            "command": "\"$GODOT\" --path godot -- --stream",
+            "options": { "cwd": "${workspaceFolder}" },
+            "isBackground": true,
+            "presentation": { "group": "dolly", "panel": "dedicated" },
+            "problemMatcher": {
+                "owner": "dolly-game",
+                "pattern": { "regexp": "^__never_matches__$" },
+                "background": {
+                    "activeBegins": true,
+                    "beginsPattern": "Godot Engine",
+                    "endsPattern": "\\[stream\\] http"
+                }
+            }
+        },
+        {
+            "label": "Dolly Forge: 네이티브 창으로 실행 (VR·디버그용)",
             "dependsOrder": "sequence",
             "dependsOn": ["assets: 실사 에셋 내려받기", "server: Rust 월드 서버", "godot: C# 빌드·에셋 가져오기"],
             "type": "shell",
             "command": "\"$GODOT\" --path godot",
             "options": { "cwd": "${workspaceFolder}" },
-            "presentation": { "group": "dolly", "panel": "dedicated" },
             "problemMatcher": []
         },
         {
