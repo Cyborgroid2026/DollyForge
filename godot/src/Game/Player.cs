@@ -181,9 +181,9 @@ public partial class Player : CharacterBody3D
 
     public override void _UnhandledInput(InputEvent e)
     {
-        if (Input.MouseMode != Input.MouseModeEnum.Captured)
+        if (!Pointer.Captured)
         {
-            if (e is InputEventMouseButton { Pressed: true }) Input.MouseMode = Input.MouseModeEnum.Captured;
+            if (e is InputEventMouseButton { Pressed: true }) Pointer.Mode = Input.MouseModeEnum.Captured;
             return;
         }
         switch (e)
@@ -222,7 +222,7 @@ public partial class Player : CharacterBody3D
         {
             case Key.Escape:
                 if (_selected is not null) { _selected = null; Notify?.Invoke("선택 취소"); }
-                else Input.MouseMode = Input.MouseModeEnum.Visible;
+                else Pointer.Mode = Input.MouseModeEnum.Visible;
                 break;
             case Key.E:
                 if (_aimObject is Node n && n.HasMeta("interact") && n.GetMeta("interact").AsString() == "catalog") OpenCatalog?.Invoke();

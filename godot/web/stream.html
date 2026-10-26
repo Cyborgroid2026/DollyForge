@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dolly Forge</title>
+<style>
+  :root { --bg: #0b0c0e; --ink: #e9e4d6; --dim: #8d887c; }
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+  body { display: grid; place-items: center; font: 15px/1.5 "Noto Sans KR", system-ui, sans-serif; color: var(--ink); }
+  canvas { width: 100vw; height: 100vh; object-fit: contain; display: block; outline: none; cursor: default; }
+  #hint { position: fixed; inset: auto 0 6vh 0; text-align: center; pointer-events: none; }
+  #hint span { background: rgba(10, 10, 12, .72); padding: 8px 16px; border-radius: 3px; letter-spacing: .02em; }
+  #hint[hidden] { display: none; }
+</style>
+</head>
+<body>
+<canvas id="screen" tabindex="0" width="1280" height="720"></canvas>
+<div id="hint"><span id="hintText">게임에 연결하는 중…</span></div>
+<script>
+// 게임(Godot)이 렌더링한 화면을 받아 그리고, 키보드·마우스를 게임으로 보낸다.
+const canvas = document.getElementById('screen');
+const ctx = canvas.getContext('2d');
+const hint = document.getElementById('hint');
+const hintText = document.getElementById('hintText');
+let ws = null, captured = false, drawing = false;
+
+function say(text) { hintText.textContent = text; hint.hidden = !text; }
+function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+const locked = () => document.pointerLockElement === canvas;
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = 'blob';
+  ws.onopen = () => { say(''); canvas.focus(); };
+  ws.onclose = () => { say('게임과 연결이 끊겼습니다. 다시 연결하는 중…'); setTimeout(connect, 1000); };
+  ws.onmessage = async (m) => {
+    if (typeof m.data === 'string') {
+      const s = JSON.parse(m.data);
+      if (s.t === 'mode') {
+        captured = s.captured;
+        if (!captured && locked()) document.exitPointerLock();
+        updateHint();
+      }
+      return;
+    }
+    if (drawing) return; // 앞 화면을 아직 그리는 중이면 건너뛴다
+    drawing = true;
+    try {
+      const bmp = await createImageBitmap(m.data);
+      if (canvas.width !== bmp.width || canvas.height !== bmp.height) { canvas.width = bmp.width; canvas.height = bmp.height; }
+      ctx.drawImage(bmp, 0, 0);
+      bmp.close();
+    } finally { drawing = false; }
+  };
+}
+
+function updateHint() {
+  if (!ws || ws.readyState !== 1) return;
+  say(captured && !locked() ? '화면을 클릭하면 조작합니다 · Esc 로 마우스 놓기' : '');
+}
+
+// 화면 좌표 → 게임 화면 안의 0..1 좌표 (object-fit: contain 여백 제외)
+function norm(e) {
+  const r = canvas.getBoundingClientRect();
+  const scale = Math.min(r.width / canvas.width, r.height / canvas.height);
+  const w = canvas.width * scale, h = canvas.height * scale;
+  const x = (e.clientX - r.left - (r.width - w) / 2) / w;
+  const y = (e.clientY - r.top - (r.height - h) / 2) / h;
+  return { x: Math.min(Math.max(x, 0), 1), y: Math.min(Math.max(y, 0), 1) };
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  canvas.focus();
+  if (captured && !locked()) { canvas.requestPointerLock(); return; } // 첫 클릭은 마우스를 잡기만
+  send({ t: 'mb', b: e.button, down: true, ...norm(e) });
+});
+canvas.addEventListener('mouseup', (e) => { if (captured && !locked()) return; send({ t: 'mb', b: e.button, down: false, ...norm(e) }); });
+canvas.addEventListener('mousemove', (e) => send({ t: 'mm', dx: e.movementX, dy: e.movementY, ...norm(e) }));
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); send({ t: 'mb', b: e.deltaY < 0 ? 3 : 4, down: true, ...norm(e) }); }, { passive: false });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+document.addEventListener('pointerlockchange', () => {
+  if (!locked() && captured) send({ t: 'unlock' }); // Esc 로 풀렸다
+  updateHint();
+});
+
+// 키보드: F5 새로고침·Tab 이동·Space 스크롤 같은 브라우저 동작을 막고 모두 게임으로 보낸다
+function key(e, down) {
+  if (e.isComposing) return;
+  e.preventDefault();
+  send({ t: 'k', code: e.code, key: e.key, down, rep: e.repeat, shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey });
+}
+window.addEventListener('keydown', (e) => key(e, true), true);
+window.addEventListener('keyup', (e) => key(e, false), true);
+
+connect();
+</script>
+</body>
+</html>

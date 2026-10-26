@@ -7,7 +7,7 @@ namespace DollyForge.Game;
 /// <summary>
 /// 게임 시작점. 월드, 작업장 장치, 플레이어, 통신망(Rust 월드 서버) 세션, 주문·창고 흐름을 묶는다.
 /// 온라인이면 결제·소모품 재고·창고는 서버가 권위를 갖고, 오프라인이면 이 기기 안에서만 계산한다.
-/// 개발 확인용 인자: -- --offline | --shot=경로.png --frames=N [--look=yaw,pitch] [--at=x,y,z] [--catalog] [--surgery] | --selftest
+/// 개발 확인용 인자: -- --offline | --shot=경로.png --frames=N [--look=yaw,pitch] [--at=x,y,z] [--catalog] [--surgery] | --stream (통합 브라우저로 화면 보내기) | --selftest
 /// </summary>
 public partial class Main : Node3D
 {
@@ -111,7 +111,7 @@ public partial class Main : Node3D
     void ShowLogin()
     {
         _player.SetPhysicsProcess(false); // 양식에 글자를 쓰는 동안 몸이 움직이지 않게
-        Input.MouseMode = Input.MouseModeEnum.Visible;
+        Pointer.Mode = Input.MouseModeEnum.Visible;
         _login = new LoginUi { Session = _session, Offline = () => StartOffline(quiet: false) };
         Overlay(_login);
     }
@@ -121,7 +121,7 @@ public partial class Main : Node3D
         _login?.QueueFree();
         _login = null;
         _player.SetPhysicsProcess(true);
-        Input.MouseMode = Input.MouseModeEnum.Captured;
+        Pointer.Mode = Input.MouseModeEnum.Captured;
     }
 
     void StartOffline(bool quiet)
@@ -207,7 +207,7 @@ public partial class Main : Node3D
     void OpenSurgery()
     {
         if (_surgery is not null) return;
-        Input.MouseMode = Input.MouseModeEnum.Visible;
+        Pointer.Mode = Input.MouseModeEnum.Visible;
         _surgery = new SurgeryUi
         {
             Body = () => _player.Body,
@@ -220,7 +220,7 @@ public partial class Main : Node3D
             {
                 _surgery?.QueueFree();
                 _surgery = null;
-                Input.MouseMode = Input.MouseModeEnum.Captured;
+                Pointer.Mode = Input.MouseModeEnum.Captured;
             },
         };
         Overlay(_surgery);
@@ -288,7 +288,7 @@ public partial class Main : Node3D
     {
         if (!Online) { Notify("창고는 통신망 접속이 필요합니다."); return; }
         if (_storage is not null) return;
-        Input.MouseMode = Input.MouseModeEnum.Visible;
+        Pointer.Mode = Input.MouseModeEnum.Visible;
         _storage = new StorageUi
         {
             Retrieve = name => _session.Send(Packets.RetrieveDevice(name)),
@@ -296,7 +296,7 @@ public partial class Main : Node3D
             {
                 _storage?.QueueFree();
                 _storage = null;
-                Input.MouseMode = Input.MouseModeEnum.Captured;
+                Pointer.Mode = Input.MouseModeEnum.Captured;
             },
         };
         _storage.SetDevices(_stored);
@@ -319,7 +319,7 @@ public partial class Main : Node3D
 
     void EditDrum(PartBody drum)
     {
-        Input.MouseMode = Input.MouseModeEnum.Visible;
+        Pointer.Mode = Input.MouseModeEnum.Visible;
         DrumUi? ui = null;
         ui = new DrumUi
         {
@@ -332,7 +332,7 @@ public partial class Main : Node3D
             Closed = () =>
             {
                 ui?.QueueFree();
-                Input.MouseMode = Input.MouseModeEnum.Captured;
+                Pointer.Mode = Input.MouseModeEnum.Captured;
             },
         };
         Overlay(ui);
@@ -399,7 +399,7 @@ public partial class Main : Node3D
     void OpenCatalog()
     {
         if (_catalog is not null) return;
-        Input.MouseMode = Input.MouseModeEnum.Visible;
+        Pointer.Mode = Input.MouseModeEnum.Visible;
         _catalog = new CatalogUi { Shop = _devices.Shop };
         if (Online) _catalog.SubmitOnline = lines => _session.Send(Packets.Purchase(lines));
         _catalog.Ordered = parts =>
@@ -411,7 +411,7 @@ public partial class Main : Node3D
         {
             _catalog?.QueueFree();
             _catalog = null;
-            Input.MouseMode = Input.MouseModeEnum.Captured;
+            Pointer.Mode = Input.MouseModeEnum.Captured;
         };
         Overlay(_catalog);
     }
@@ -490,6 +490,7 @@ public partial class Main : Node3D
                     break;
                 case "--catalog": CallDeferred(nameof(OpenCatalog)); break;
                 case "--surgery": CallDeferred(nameof(OpenSurgery)); break;
+                case "--stream": AddChild(new BrowserStream()); break;
                 case "--login": CallDeferred(nameof(ShowLogin)); break;
                 case "--selftest": AddChild(new SelfTest { Devices = _devices }); break;
                 case "--onlinetest": AddChild(new OnlineTest { Main = this }); break;

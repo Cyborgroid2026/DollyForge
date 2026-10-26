@@ -1,0 +1,204 @@
+using System.Collections.Concurrent;
+using System.Net;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
+using Godot;
+
+namespace DollyForge.Game;
+
+/// <summary>
+/// VS Code 통합 브라우저로 게임을 보여 준다 (--stream).
+/// Godot 4 는 C# 프로젝트를 웹으로 내보낼 수 없으므로, 게임은 이 컴퓨터의 Godot 에서 그대로(Forward+, Jolt) 돌고
+/// 렌더링한 화면을 JPEG 로 브라우저에 보낸다. 브라우저의 키보드·마우스는 Godot 입력 이벤트로 되돌려 넣는다.
+///   http://127.0.0.1:7780/    화면 페이지 (godot/web/stream.html)
+///   ws://127.0.0.1:7780/ws    ← 화면(JPEG 바이너리)·상태(JSON 텍스트) / → 입력(JSON 텍스트)
+/// 로컬 주소에서만 연다.
+/// </summary>
+public partial class BrowserStream : Node
+{
+    public int Port { get; set; } = 7780;
+    public int Fps { get; set; } = 30;
+    public float Quality { get; set; } = 0.8f;
+
+    HttpListener? _http;
+    WebSocket? _ws;
+    readonly SemaphoreSlim _sendLock = new(1, 1);
+    readonly ConcurrentQueue<string> _inbox = new();
+    volatile bool _sending;
+    double _frameTimer;
+    string _page = "";
+    string? _lastStatus;
+    Vector2 _mouse;
+
+    public override void _Ready()
+    {
+        Pointer.Streaming = true;
+        // 화면은 브라우저에 보이므로 Godot 창은 내려 둔다. 숨은 창은 수직 동기를 기다리지 않게 한다.
+        DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
+        Engine.MaxFps = 60;
+        _page = System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://web/stream.html"));
+        _http = new HttpListener();
+        _http.Prefixes.Add($"http://127.0.0.1:{Port}/");
+        _http.Start();
+        _ = Task.Run(AcceptLoop);
+        GD.Print($"[stream] http://127.0.0.1:{Port}/ — VS Code 통합 브라우저로 여세요");
+    }
+
+    public override void _ExitTree()
+    {
+        _http?.Close();
+        _ws?.Abort();
+    }
+
+    async Task AcceptLoop()
+    {
+        while (_http is { IsListening: true })
+        {
+            HttpListenerContext ctx;
+            try { ctx = await _http.GetContextAsync(); }
+            catch { return; }
+            if (ctx.Request.IsWebSocketRequest && ctx.Request.Url?.AbsolutePath == "/ws")
+            {
+                var ws = (await ctx.AcceptWebSocketAsync(null)).WebSocket;
+                var old = _ws;
+                _ws = ws; // 새 탭이 열리면 그쪽으로 넘긴다
+                _lastStatus = null;
+                old?.Abort();
+                _ = Task.Run(() => ReceiveLoop(ws));
+                continue;
+            }
+            var body = ctx.Request.Url?.AbsolutePath is "/" or "/index.html" ? Encoding.UTF8.GetBytes(_page) : null;
+            ctx.Response.StatusCode = body is null ? 404 : 200;
+            ctx.Response.ContentType = "text/html; charset=utf-8";
+            ctx.Response.Headers["Cache-Control"] = "no-store";
+            if (body is not null) await ctx.Response.OutputStream.WriteAsync(body);
+            ctx.Response.Close();
+        }
+    }
+
+    async Task ReceiveLoop(WebSocket ws)
+    {
+        var buf = new byte[8192];
+        var text = new StringBuilder();
+        try
+        {
+            while (ws.State == WebSocketState.Open)
+            {
+                var r = await ws.ReceiveAsync(buf, CancellationToken.None);
+                if (r.MessageType == WebSocketMessageType.Close) break;
+                text.Append(Encoding.UTF8.GetString(buf, 0, r.Count));
+                if (!r.EndOfMessage) continue;
+                _inbox.Enqueue(text.ToString());
+                text.Clear();
+            }
+        }
+        catch (WebSocketException) { }
+    }
+
+    async Task Send(WebSocket ws, ReadOnlyMemory<byte> data, WebSocketMessageType type)
+    {
+        await _sendLock.WaitAsync();
+        try { if (ws.State == WebSocketState.Open) await ws.SendAsync(data, type, true, CancellationToken.None); }
+        catch (Exception) { }
+        finally { _sendLock.Release(); }
+    }
+
+    public override void _Process(double delta)
+    {
+        while (_inbox.TryDequeue(out var msg)) HandleInput(msg);
+        if (_ws is not { State: WebSocketState.Open } ws) return;
+
+        var status = Pointer.Captured ? "{\"t\":\"mode\",\"captured\":true}" : "{\"t\":\"mode\",\"captured\":false}";
+        if (status != _lastStatus)
+        {
+            _lastStatus = status;
+            _ = Send(ws, Encoding.UTF8.GetBytes(status), WebSocketMessageType.Text);
+        }
+
+        _frameTimer += delta;
+        if (_sending || _frameTimer < 1.0 / Fps) return;
+        _frameTimer = 0;
+        var image = GetViewport().GetTexture().GetImage();
+        _sending = true;
+        _ = Task.Run(async () =>
+        {
+            try { await Send(ws, image.SaveJpgToBuffer(Quality), WebSocketMessageType.Binary); }
+            finally { _sending = false; }
+        });
+    }
+
+    // ------------------------------------------------------------------ 브라우저 입력 → Godot 입력
+
+    void HandleInput(string json)
+    {
+        JsonElement e;
+        try { e = JsonDocument.Parse(json).RootElement; }
+        catch (JsonException) { return; }
+        var size = GetViewport().GetVisibleRect().Size;
+        Vector2 At() => e.TryGetProperty("x", out var x) ? new Vector2(x.GetSingle() * size.X, e.GetProperty("y").GetSingle() * size.Y) : _mouse;
+        switch (e.GetProperty("t").GetString())
+        {
+            case "k":
+                if (KeyOf(e.GetProperty("code").GetString() ?? "") is not { } key) return;
+                var ev = new InputEventKey
+                {
+                    Keycode = key, PhysicalKeycode = key,
+                    Pressed = e.GetProperty("down").GetBoolean(), Echo = e.GetProperty("rep").GetBoolean(),
+                    ShiftPressed = e.GetProperty("shift").GetBoolean(), CtrlPressed = e.GetProperty("ctrl").GetBoolean(),
+                    AltPressed = e.GetProperty("alt").GetBoolean(),
+                };
+                // 글자 입력(전화번호·이름 칸)용: 한 글자짜리 key 는 유니코드로
+                if (e.GetProperty("key").GetString() is { Length: 1 } ch && !ev.CtrlPressed) ev.Unicode = ch[0];
+                Input.ParseInputEvent(ev);
+                break;
+            case "mm":
+                var to = At();
+                var rel = new Vector2(e.GetProperty("dx").GetSingle(), e.GetProperty("dy").GetSingle());
+                if (!Pointer.Captured) rel = to - _mouse;
+                _mouse = to;
+                Input.ParseInputEvent(new InputEventMouseMotion { Position = to, GlobalPosition = to, Relative = rel, ScreenRelative = rel });
+                break;
+            case "mb":
+                var at = Pointer.Captured ? size / 2 : At();
+                _mouse = at;
+                var button = e.GetProperty("b").GetInt32() switch
+                {
+                    0 => MouseButton.Left, 1 => MouseButton.Middle, 2 => MouseButton.Right,
+                    3 => MouseButton.WheelUp, _ => MouseButton.WheelDown,
+                };
+                var down = e.GetProperty("down").GetBoolean();
+                Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = button, Pressed = down, Position = at, GlobalPosition = at });
+                if (button is MouseButton.WheelUp or MouseButton.WheelDown && down)
+                    Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = button, Pressed = false, Position = at, GlobalPosition = at });
+                break;
+            case "unlock":
+                // 브라우저가 Esc 로 포인터 잠금을 풀었다 (그 Esc 는 페이지에 오지 않는다)
+                if (!Pointer.Captured) return;
+                Input.ParseInputEvent(new InputEventKey { Keycode = Key.Escape, PhysicalKeycode = Key.Escape, Pressed = true });
+                Input.ParseInputEvent(new InputEventKey { Keycode = Key.Escape, PhysicalKeycode = Key.Escape, Pressed = false });
+                if (Pointer.Captured) Pointer.Mode = Input.MouseModeEnum.Visible;
+                break;
+        }
+    }
+
+    /// <summary>KeyboardEvent.code (물리 키 위치) → Godot Key</summary>
+    static Key? KeyOf(string code)
+    {
+        if (code.StartsWith("Key") && code.Length == 4) return Key.A + (code[3] - 'A');
+        if (code.StartsWith("Digit") && code.Length == 6) return Key.Key0 + (code[5] - '0');
+        if (code.StartsWith("Numpad") && code.Length == 7 && char.IsDigit(code[6])) return Key.Kp0 + (code[6] - '0');
+        if (code.Length is 2 or 3 && code[0] == 'F' && int.TryParse(code[1..], out var f) && f is >= 1 and <= 12) return Key.F1 + (f - 1);
+        return code switch
+        {
+            "Space" => Key.Space, "Enter" or "NumpadEnter" => Key.Enter, "Escape" => Key.Escape, "Backspace" => Key.Backspace,
+            "Tab" => Key.Tab, "Delete" => Key.Delete, "Home" => Key.Home, "End" => Key.End,
+            "ShiftLeft" or "ShiftRight" => Key.Shift, "ControlLeft" or "ControlRight" => Key.Ctrl, "AltLeft" or "AltRight" => Key.Alt,
+            "ArrowLeft" => Key.Left, "ArrowRight" => Key.Right, "ArrowUp" => Key.Up, "ArrowDown" => Key.Down,
+            "BracketLeft" => Key.Bracketleft, "BracketRight" => Key.Bracketright, "Minus" => Key.Minus, "Equal" => Key.Equal,
+            "Comma" => Key.Comma, "Period" => Key.Period, "Slash" => Key.Slash, "Semicolon" => Key.Semicolon,
+            "Quote" => Key.Apostrophe, "Backquote" => Key.Quoteleft, "Backslash" => Key.Backslash,
+            _ => null,
+        };
+    }
+}
