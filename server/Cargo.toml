@@ -1,0 +1,10 @@
+[package]
+name = "dolly-forge-server"
+version = "0.1.0"
+edition = "2021"
+description = "Dolly Forge VR MMORPG authoritative game server"
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
