@@ -270,13 +270,6 @@ public partial class CyborgBody : Node3D
         return (leg, knee);
     }
 
-    /// <summary>팔을 든 자세 (기념상 등). angle 은 어깨의 X 회전(rad)이고 음수가 앞·위로 올라간다.</summary>
-    public void RaiseArm(int side, float angle)
-    {
-        var arm = side < 0 ? _armL : _armR;
-        arm.Rotation = arm.Rotation with { X = angle };
-    }
-
     /// <summary>걷기 주기와 팔 흔들기를 속도(m/s)에 맞춘다. 서 있을 때는 아주 미세한 움직임만.</summary>
     public void Animate(float dt, float speed)
     {

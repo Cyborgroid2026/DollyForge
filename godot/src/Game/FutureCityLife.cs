@@ -8,13 +8,10 @@ namespace DollyForge.Game;
 ///  · 떠 있는 플랫폼 아래에 매달린 원통 주거 포드와 진홍 등 구슬
 ///  · 하늘을 천천히 도는 구형 정비 드론 (적대 로봇이 아니라 도시의 일꾼)
 ///  · 늑골 뼈대의 유리 거품 돔 온실 군락
-///  · 하늘로 손을 뻗은 거대한 사이보그 기념상 (얼굴 없는 몸 그대로)
-///  · 정류장과 작업장 앞마당의 진홍 풍선 다발
 /// </summary>
 public partial class FutureCity
 {
     readonly List<(Node3D Node, Vector3 Center, float Radius, float Speed, float Phase)> _drones = new();
-    readonly List<(Node3D Node, float Phase)> _balloons = new();
 
     static readonly StandardMaterial3D Lantern = new()
     {
@@ -31,11 +28,6 @@ public partial class FutureCity
         Roughness = 0.04f, Metallic = 0.2f, CullMode = BaseMaterial3D.CullModeEnum.Disabled,
     };
     static readonly StandardMaterial3D Leafy = new() { AlbedoColor = new Color(0.24f, 0.42f, 0.18f), Roughness = 0.9f };
-    static readonly StandardMaterial3D BalloonSkin = new()
-    {
-        AlbedoColor = new Color(0.78f, 0.07f, 0.06f), Roughness = 0.2f, ClearcoatEnabled = true, Clearcoat = 0.8f, ClearcoatRoughness = 0.1f,
-    };
-    static readonly StandardMaterial3D Twine = new() { AlbedoColor = new Color(0.92f, 0.9f, 0.86f), Roughness = 0.8f };
 
     static MeshInstance3D Put(Node3D parent, Mesh mesh, Material mat, Vector3 at, Vector3? rotation = null)
     {
@@ -155,65 +147,6 @@ public partial class FutureCity
         }
     }
 
-    /// <summary>
-    /// 기념상: 얼굴 없는 사이보그 몸을 그대로 키워 흰 돌로 깎았다. 한 팔을 하늘로 뻗고 남쪽(정류장)을 본다.
-    /// 계단식 콘크리트 받침에 진홍 띠.
-    /// </summary>
-    void BuildMonument(Vector3 at, float height)
-    {
-        var root = new Node3D { Position = at };
-        AddChild(root);
-        var y = 0f;
-        foreach (var (w, h) in new[] { (64f, 6f), (48f, 9f), (34f, 14f) })
-        {
-            Put(root, new BoxMesh { Size = new Vector3(w, h, w) }, FacadeMat, new Vector3(0, y + h / 2, 0));
-            y += h;
-        }
-        Put(root, new BoxMesh { Size = new Vector3(34.6f, 2.4f, 34.6f) }, Crimson, new Vector3(0, y - 3.5f, 0));
-
-        var statue = CyborgBody.Build(0);
-        statue.RaiseArm(1, -2.75f);
-        var k = height / statue.Height;
-        statue.Scale = Vector3.One * k;
-        statue.Position = new Vector3(0, y, 0);
-        root.AddChild(statue);
-        var stone = Look.Painted("white_plaster_02", 3f, new Color(0.93f, 0.92f, 0.88f));
-        foreach (var m in statue.FindChildren("*", nameof(MeshInstance3D), recursive: true, owned: false).OfType<MeshInstance3D>())
-            m.MaterialOverride = stone;
-    }
-
-    /// <summary>정류장 양 끝과 작업장 앞마당 모서리에 묶인 진홍 풍선 다발. 바람에 살짝 흔들린다.</summary>
-    void BuildBalloons()
-    {
-        var platform = Site.PlatformTop;
-        var spots = new List<Vector3>
-        {
-            new(Site.StationX0 + 0.5f, platform, Site.PlatformZ0 + 0.4f),
-            new(Site.StationX1 - 0.5f, platform, Site.PlatformZ0 + 0.4f),
-        };
-        foreach (var x in new[] { Site.Apron.Position.X + 0.4f, Site.Apron.End.X - 0.4f })
-        {
-            var z = Site.Apron.End.Y - 0.4f;
-            spots.Add(new Vector3(x, World.HeightAt(x, z), z));
-        }
-        foreach (var p in spots)
-        {
-            var post = new Node3D { Position = p };
-            AddChild(post);
-            Put(post, new CylinderMesh { TopRadius = 0.025f, BottomRadius = 0.035f, Height = 1.1f, RadialSegments = 8 }, Brass, new Vector3(0, 0.55f, 0));
-            var bunch = new Node3D { Position = new Vector3(0, 1.1f, 0) };
-            post.AddChild(bunch);
-            for (var i = 0; i < 7; i++)
-            {
-                var top = new Vector3(Jitter(0.45f), _rng.RandfRange(1.3f, 2.1f), Jitter(0.45f));
-                Rod(bunch, Vector3.Zero, top, 0.003f, Twine);
-                var s = _rng.RandfRange(0.9f, 1.1f);
-                Put(bunch, new SphereMesh { Radius = 0.21f * s, Height = 0.52f * s, RadialSegments = 16, Rings = 10 }, BalloonSkin, top + new Vector3(0, 0.25f * s, 0));
-            }
-            _balloons.Add((bunch, _rng.Randf() * Mathf.Tau));
-        }
-    }
-
     void AnimateLife(float dt)
     {
         foreach (var (node, center, radius, speed, phase) in _drones)
@@ -222,7 +155,5 @@ public partial class FutureCity
             node.Position = center + new Vector3(Mathf.Cos(a) * radius, Mathf.Sin(_time * 0.4f + phase) * 1.5f, Mathf.Sin(a) * radius);
             node.Rotation = new Vector3(0, -a + (speed > 0 ? 0 : Mathf.Pi), 0);
         }
-        foreach (var (node, phase) in _balloons)
-            node.Rotation = new Vector3(Mathf.Sin(_time * 0.9f + phase) * 0.08f, 0, Mathf.Sin(_time * 0.7f + phase * 1.7f) * 0.1f);
     }
 }

@@ -145,6 +145,19 @@ public partial class World : Node3D
         };
         _sun.Basis = Basis.LookingAt(-SunDirection, Vector3.Up);
         AddChild(_sun);
+        // PERF-PROBE (임시): 효과별 비용 측정
+        foreach (var off in OS.GetEnvironment("DOLLY_PERF_OFF").Split(',', StringSplitOptions.RemoveEmptyEntries))
+            switch (off)
+            {
+                case "sdfgi": env.SdfgiEnabled = false; break;
+                case "volfog": env.VolumetricFogEnabled = false; break;
+                case "ssil": env.SsilEnabled = false; break;
+                case "ssr": env.SsrEnabled = false; break;
+                case "ssao": env.SsaoEnabled = false; break;
+                case "glow": env.GlowEnabled = false; break;
+                case "shadows": _sun.ShadowEnabled = false; break;
+                case "autoexp": camera.AutoExposureEnabled = false; break;
+            }
     }
 
     void BuildTerrain()

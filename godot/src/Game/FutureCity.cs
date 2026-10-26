@@ -29,8 +29,6 @@ public partial class FutureCity : Node3D
         BuildMasts();
         BuildDrones();
         BuildGreenhouses(new Vector3(-150, -0.6f, -175));
-        BuildMonument(new Vector3(-190, -1, -430), 115);
-        BuildBalloons();
     }
 
     float Jitter(float amount) => _rng.RandfRange(-amount, amount);
