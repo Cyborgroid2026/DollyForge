@@ -4,7 +4,7 @@
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 
-const GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC11B65";
+const GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const MAX_PAYLOAD: u64 = 64 * 1024;
 
 pub enum WsMessage {

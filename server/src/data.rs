@@ -127,7 +127,6 @@ pub const PROJECTS: [Project; 5] = [
     Project { name: "영생 프로토콜", cost: [3, 3, 0, 2], effect: "최종 연구. 선택의 순간이 옵니다." },
 ];
 
-pub const P_AMP: u8 = 1;
 pub const P_SPRING: u8 = 2;
 pub const P_CULTURE: u8 = 3;
 pub const P_RADIO: u8 = 4;

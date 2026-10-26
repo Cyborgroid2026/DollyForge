@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "pQz9I9423FA=",
+  "dgSpecHash": "ozapsS4ogJg=",
   "success": true,
   "projectFilePath": "/home/a71143055/Desktop/DollyForge/client/DollyForge.Client.csproj",
   "expectedPackageFiles": [
@@ -35,6 +35,7 @@
     "/home/a71143055/.nuget/packages/microsoft.jsinterop.webassembly/10.0.12/microsoft.jsinterop.webassembly.10.0.12.nupkg.sha512",
     "/home/a71143055/.nuget/packages/microsoft.net.illink.tasks/10.0.12/microsoft.net.illink.tasks.10.0.12.nupkg.sha512",
     "/home/a71143055/.nuget/packages/microsoft.net.sdk.webassembly.pack/10.0.12/microsoft.net.sdk.webassembly.pack.10.0.12.nupkg.sha512",
+    "/home/a71143055/.nuget/packages/qrcoder/1.6.0/qrcoder.1.6.0.nupkg.sha512",
     "/home/a71143055/.nuget/packages/microsoft.netcore.app.runtime.mono.browser-wasm/10.0.12/microsoft.netcore.app.runtime.mono.browser-wasm.10.0.12.nupkg.sha512"
   ],
   "logs": []

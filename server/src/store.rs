@@ -33,7 +33,7 @@ pub struct Account {
 
 impl Account {
     pub fn new(token: String, phone: String, gender: u8) -> Self {
-        let mut a = Account {
+        Account {
             token,
             phone,
             gender,
@@ -54,36 +54,12 @@ impl Account {
             haram_seen_cryo: 0,
             visits: 0,
             letter_read: false,
-        };
-        a.reset_progress();
-        a
+        }
     }
 
     /// 계정 정보는 유지하고 진행 상황만 처음으로 되돌린다.
     pub fn reset_progress(&mut self) {
-        let keep = (self.token.clone(), self.phone.clone(), self.gender);
-        *self = Account {
-            token: keep.0,
-            phone: keep.1,
-            gender: keep.2,
-            day: 1,
-            years: 0,
-            phase: Phase::Daily,
-            tasks: 0,
-            battery: 100.0,
-            bio: BIO_START,
-            memory: 0,
-            inv: START_INVENTORY,
-            collected: 0,
-            today: [0; 4],
-            research: 0,
-            haram_age: HARAM_START_AGE,
-            haram_alive: true,
-            cryo_count: 0,
-            haram_seen_cryo: 0,
-            visits: 0,
-            letter_read: false,
-        };
+        *self = Account::new(std::mem::take(&mut self.token), std::mem::take(&mut self.phone), self.gender);
     }
 
     fn serialize(&self) -> String {
