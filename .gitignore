@@ -21,3 +21,6 @@ obj/
 
 # Godot 게임에서 내보낸 기기 (URDF·USDA·STL·BOM)
 /godot/exports/
+
+# run.sh 로그
+/.run-logs/
