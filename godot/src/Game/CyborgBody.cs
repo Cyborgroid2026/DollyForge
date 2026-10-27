@@ -208,6 +208,7 @@ public partial class CyborgBody : Node3D
     // ------------------------------------------------------------------ 조립
 
     public float Height { get; private set; }
+    Node3D _head = null!;
     Node3D _legL = null!, _legR = null!, _kneeL = null!, _kneeR = null!, _ankleL = null!, _ankleR = null!;
     Node3D _armL = null!, _armR = null!, _elbowL = null!, _elbowR = null!, _handL = null!, _handR = null!, _thumbL = null!, _thumbR = null!;
     Node3D[] _fingersL = [], _fingersR = [];
@@ -231,7 +232,7 @@ public partial class CyborgBody : Node3D
             .ToArray();
         Add(g, Loft(torso, 64, 7), ModuleTitanium(body.VariantAt(BodySlot.Torso)));
 
-        BuildHead(P, g);
+        g._head = BuildHead(P, g);
         (g._armL, g._elbowL, g._handL, g._fingersL, g._thumbL) = BuildArm(P, -1,
             body.VariantAt(BodySlot.UpperArmL), body.VariantAt(BodySlot.ForearmL), body.VariantAt(BodySlot.HandL));
         (g._armR, g._elbowR, g._handR, g._fingersR, g._thumbR) = BuildArm(P, 1,
@@ -435,6 +436,8 @@ public partial class CyborgBody : Node3D
         _thumbR.Rotation = new Vector3(-0.7f - s * 0.025f * _amp, 0, -0.35f - fingerCurl * 0.14f);
         foreach (var finger in _fingersL) finger.Rotation = new Vector3(0, 0, -0.22f - fingerCurl);
         foreach (var finger in _fingersR) finger.Rotation = new Vector3(0, 0, -0.22f - fingerCurl);
-
+        var idle = 1 - _amp;
+        _head.Rotation = new Vector3(Mathf.Sin(_phase * 0.37f) * 0.018f * idle,
+            Mathf.Sin(_phase * 0.23f) * 0.065f * idle, 0);
     }
 }

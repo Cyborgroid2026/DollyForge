@@ -12,6 +12,7 @@ public partial class Player : CharacterBody3D
 {
     const float Walk = 1.6f, Run = 4.0f, Gravity = 9.81f, GroundAccel = 8f, AirAccel = 1.5f;
     const float Reach = 2.5f, PushForce = 600f, HoldTorque = 20f;
+    const float StreetViewFov = 78f, MinStreetViewFov = 42f, MaxStreetViewFov = 86f;
 
     public enum Tool { Hand, Bolt, Weld, Screw, Axle, Hinge, Slide, Ball, Wrench }
 
@@ -36,6 +37,7 @@ public partial class Player : CharacterBody3D
 
     float _pitch;
     float _headBobPhase;
+    float _streetStepRemaining;
     float _landingVelocity;
     Vector3 _headOffset;
     Vector3 _headOffsetVelocity;
@@ -49,6 +51,7 @@ public partial class Player : CharacterBody3D
     /// <summary>3인칭 카메라: 눈(Camera)에서 뒤나 앞으로 뻗은 팔 끝. 벽에 닿으면 몸 쪽으로 당겨진다.</summary>
     SpringArm3D _viewArm = null!;
     Camera3D _viewCamera = null!;
+    Label _compassNeedle = null!, _zoomLabel = null!;
     /// <summary>3인칭에서 보이는 내 몸 (1인칭에서는 숨긴다: 카메라가 머리 안에 있다)</summary>
     CyborgBody? _avatar;
     internal CyborgBody? Avatar => _avatar;
@@ -208,7 +211,7 @@ public partial class Player : CharacterBody3D
         CollisionMask = PartBody.LayerWorld | PartBody.LayerParts;
         FloorSnapLength = 0.3f;
         FloorMaxAngle = Mathf.DegToRad(38);
-        Camera = new Camera3D { Fov = 75, Near = 0.03f, Current = true };
+        Camera = new Camera3D { Fov = StreetViewFov, Near = 0.03f, Current = true };
         AddChild(Camera);
         _capsule = new CollisionShape3D { Shape = new CapsuleShape3D { Radius = 0.24f } };
         AddChild(_capsule);
@@ -217,7 +220,7 @@ public partial class Player : CharacterBody3D
         _viewArm.Shape = new SphereShape3D { Radius = 0.18f };
         _viewArm.AddExcludedObject(GetRid());
         Camera.AddChild(_viewArm);
-        _viewCamera = new Camera3D { Fov = 70, Near = 0.05f };
+        _viewCamera = new Camera3D { Fov = StreetViewFov, Near = 0.05f };
         _viewArm.AddChild(_viewCamera);
         RebuildAvatar();
         SetView(View);
@@ -230,6 +233,145 @@ public partial class Player : CharacterBody3D
         _tag.Visible = false;
         _tag.TopLevel = true;
         AddChild(_tag);
+        BuildStreetViewHud();
+    }
+
+    void BuildStreetViewHud()
+    {
+        var layer = new CanvasLayer { Layer = 1 };
+        AddChild(layer);
+
+        var panel = new PanelContainer
+        {
+            AnchorLeft = 1,
+            AnchorRight = 1,
+            AnchorTop = 0.5f,
+            AnchorBottom = 0.5f,
+            OffsetLeft = -148,
+            OffsetRight = -16,
+            OffsetTop = -112,
+            OffsetBottom = 160,
+            MouseFilter = Control.MouseFilterEnum.Pass,
+        };
+        panel.AddThemeStyleboxOverride("panel", new StyleBoxFlat
+        {
+            BgColor = new Color(0.035f, 0.055f, 0.07f, 0.82f),
+            BorderColor = new Color(0.82f, 0.9f, 0.95f, 0.22f),
+            BorderWidthLeft = 1,
+            BorderWidthTop = 1,
+            BorderWidthRight = 1,
+            BorderWidthBottom = 1,
+            CornerRadiusTopLeft = 14,
+            CornerRadiusTopRight = 14,
+            CornerRadiusBottomLeft = 14,
+            CornerRadiusBottomRight = 14,
+            ContentMarginLeft = 10,
+            ContentMarginTop = 10,
+            ContentMarginRight = 10,
+            ContentMarginBottom = 10,
+        });
+
+        var contents = new VBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        contents.AddThemeConstantOverride("separation", 8);
+        panel.AddChild(contents);
+
+        var compass = new Control { CustomMinimumSize = new Vector2(58, 58), MouseFilter = Control.MouseFilterEnum.Ignore };
+        var north = new Label
+        {
+            Text = "N",
+            Position = new Vector2(23, 0),
+            Size = new Vector2(20, 18),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        north.AddThemeColorOverride("font_color", new Color(1f, 0.48f, 0.42f));
+        north.AddThemeFontSizeOverride("font_size", 12);
+        _compassNeedle = new Label
+        {
+            Text = "▲",
+            Position = new Vector2(15, 17),
+            Size = new Vector2(28, 36),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        _compassNeedle.AddThemeFontSizeOverride("font_size", 22);
+        compass.AddChild(north);
+        compass.AddChild(_compassNeedle);
+        contents.AddChild(compass);
+
+        var zoomRow = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        var zoomOut = StreetViewButton("−");
+        zoomOut.TooltipText = "축소";
+        zoomOut.Pressed += () => SetStreetViewZoom(ActiveCameraFov + 5);
+        zoomRow.AddChild(zoomOut);
+        _zoomLabel = new Label { CustomMinimumSize = new Vector2(42, 0), HorizontalAlignment = HorizontalAlignment.Center };
+        _zoomLabel.AddThemeFontSizeOverride("font_size", 12);
+        zoomRow.AddChild(_zoomLabel);
+        var zoomIn = StreetViewButton("+");
+        zoomIn.TooltipText = "확대";
+        zoomIn.Pressed += () => SetStreetViewZoom(ActiveCameraFov - 5);
+        zoomRow.AddChild(zoomIn);
+        var reset = StreetViewButton("↺");
+        reset.TooltipText = "시야 초기화";
+        reset.Pressed += () => SetStreetViewZoom(StreetViewFov);
+        zoomRow.AddChild(reset);
+        contents.AddChild(zoomRow);
+
+        var step = StreetViewButton("↑  앞 지점으로 이동");
+        step.CustomMinimumSize = new Vector2(108, 36);
+        step.Pressed += StartStreetStep;
+        contents.AddChild(step);
+
+        var hint = new Label
+        {
+            Text = "마우스로 둘러보기\n휠로 확대 · WASD 이동",
+            HorizontalAlignment = HorizontalAlignment.Center,
+            AutowrapMode = TextServer.AutowrapMode.Word,
+        };
+        hint.AddThemeColorOverride("font_color", new Color(0.78f, 0.84f, 0.88f));
+        hint.AddThemeFontSizeOverride("font_size", 10);
+        contents.AddChild(hint);
+
+        layer.AddChild(panel);
+        UpdateStreetViewZoomLabel();
+    }
+
+    static Button StreetViewButton(string text)
+    {
+        var button = new Button
+        {
+            Text = text,
+            CustomMinimumSize = new Vector2(30, 32),
+            FocusMode = Control.FocusModeEnum.None,
+            MouseFilter = Control.MouseFilterEnum.Stop,
+        };
+        button.AddThemeFontSizeOverride("font_size", 16);
+        return button;
+    }
+
+    float ActiveCameraFov => _viewCamera.Current ? _viewCamera.Fov : Camera.Fov;
+
+    void SetStreetViewZoom(float fov)
+    {
+        var clamped = Mathf.Clamp(fov, MinStreetViewFov, MaxStreetViewFov);
+        Camera.Fov = clamped;
+        _viewCamera.Fov = clamped;
+        UpdateStreetViewZoomLabel();
+    }
+
+    void UpdateStreetViewZoomLabel()
+    {
+        if (_zoomLabel is null) return;
+        var zoom = Mathf.Tan(Mathf.DegToRad(StreetViewFov / 2)) / Mathf.Tan(Mathf.DegToRad(ActiveCameraFov / 2));
+        _zoomLabel.Text = $"{Mathf.RoundToInt(zoom * 100)}%";
+    }
+
+    void StartStreetStep() => _streetStepRemaining = 0.6f;
+
+    public override void _Process(double delta)
+    {
+        if (_compassNeedle is not null) _compassNeedle.Rotation = Rotation.Y;
     }
 
     public override void _UnhandledInput(InputEvent e)
@@ -251,6 +393,12 @@ public partial class Player : CharacterBody3D
                 break;
             case InputEventMouseButton { ButtonIndex: MouseButton.WheelDown, Pressed: true } when _held is not null:
                 _holdDistance = Mathf.Max(_holdDistance - 0.1f, 0.5f);
+                break;
+            case InputEventMouseButton { ButtonIndex: MouseButton.WheelUp, Pressed: true }:
+                SetStreetViewZoom(ActiveCameraFov - 5);
+                break;
+            case InputEventMouseButton { ButtonIndex: MouseButton.WheelDown, Pressed: true }:
+                SetStreetViewZoom(ActiveCameraFov + 5);
                 break;
             case InputEventMouseButton { ButtonIndex: MouseButton.Left } b:
                 if (b.Pressed) UsePrimary(); else _held = null;
@@ -367,6 +515,11 @@ public partial class Player : CharacterBody3D
 
         // 이동: 입력 방향으로 가속 (사람의 보행·달리기 속도)
         var input = Input.GetVector("move_left", "move_right", "move_forward", "move_back");
+        if (_streetStepRemaining > 0)
+        {
+            _streetStepRemaining = Mathf.Max(0, _streetStepRemaining - dt);
+            input.Y = -1;
+        }
         var wish = (GlobalBasis * new Vector3(input.X, 0, input.Y)) with { Y = 0 };
         var speed = Input.IsActionPressed("run") ? Run : Walk;
         var v = Velocity;

@@ -10,6 +10,7 @@ import { GTAOPass } from '../lib/three/addons/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from '../lib/three/addons/postprocessing/UnrealBloomPass.js';
 import { SMAAPass } from '../lib/three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from '../lib/three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from '../lib/three/addons/postprocessing/ShaderPass.js';
 import { makeCyborg, outdoorEnvironment } from './body.js';
 import {
     terrainMaterial, trailMaterial, plankMaterial, plasterMaterial, barkMaterial, rockMaterial,
@@ -20,6 +21,9 @@ import {
 const FENCE_R = 18, GATE_W = 1.6, REACH = 3.5;
 const INPUT_HZ = 20;
 const EYE = [1.55, 1.66]; // 성별별 눈높이 (m)
+const STREET_VIEW_FOV = 78;
+const STREET_VIEW_MIN_FOV = 42;
+const STREET_VIEW_MAX_FOV = 86;
 const SPAWN = { x: -6.5, z: 0, yaw: Math.PI / 2 };
 const MIRROR = { x: -3.2, z: 3.4 };
 const SELF_LAYER = 1; // 내 몸은 1인칭 카메라에는 안 보이고 거울에만 비친다
@@ -39,6 +43,8 @@ let towerRings = [], gateBars, haram, grave, pillars = [];
 let vrHud, vrCtx, vrTex, snapReady = true;
 let selfBody = null, selfSpeed = 0, terrain = null;
 let composer = null, treeTrunks = null, treeLeaves = null, treeBase = [];
+let streetViewUi = null, compassNeedle = null, zoomLabel = null;
+let streetStepUntil = 0;
 const keys = {};
 const trees = [];
 const targets = [];               // 상호작용 가능한 루트 오브젝트 (userData.tid)
@@ -67,7 +73,7 @@ export function init(hostId, dotnetRef, stations, gender) {
     host.appendChild(renderer.domElement);
 
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(70, host.clientWidth / host.clientHeight, 0.05, 300);
+    camera = new THREE.PerspectiveCamera(STREET_VIEW_FOV, host.clientWidth / host.clientHeight, 0.05, 300);
     rig = new THREE.Group();
     rig.add(camera);
     scene.add(rig);
@@ -114,12 +120,14 @@ export function showPreview(gender) {
 export function enterWorld(gender) {
     mode = 'world';
     if (preview) { scene.remove(preview); preview = null; }
+    setupStreetViewUi();
     eye = EYE[gender === 1 ? 1 : 0];
     selfBody = makeCyborg(gender);
     selfBody.traverse(o => o.layers.set(SELF_LAYER));
     scene.add(selfBody);
     camera.position.set(0, eye, 0);
     camera.rotation.set(0, 0, 0);
+    setStreetViewZoom(STREET_VIEW_FOV);
     teleport(SPAWN.x, 0, SPAWN.z, SPAWN.yaw);
     const btn = VRButton.createButton(renderer);
     btn.id = 'vr-button';
@@ -704,6 +712,28 @@ function setupComposer(w, h) {
     composer.addPass(ao);
     composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.18, 0.4, 0.92));
     composer.addPass(new SMAAPass(w * renderer.getPixelRatio(), h * renderer.getPixelRatio()));
+    composer.addPass(new ShaderPass({
+        uniforms: { tDiffuse: { value: null } },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform sampler2D tDiffuse;
+            varying vec2 vUv;
+            void main() {
+                vec3 color = texture2D(tDiffuse, vUv).rgb;
+                float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+                color = (color - 0.5) * 1.035 + 0.5;
+                color = mix(vec3(luma), color, 1.025);
+                color += vec3(0.012, 0.007, 0.0) * smoothstep(0.5, 0.95, luma);
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `,
+    }));
     composer.addPass(new OutputPass());
 }
 
@@ -757,7 +787,10 @@ function setupInput() {
         }
     });
     addEventListener('keyup', (e) => { keys[e.code] = false; });
-    addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+    addEventListener('blur', () => {
+        for (const k in keys) keys[k] = false;
+        streetStepUntil = 0;
+    });
     canvas.addEventListener('click', () => {
         if (mode !== 'world') return;
         if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
@@ -768,6 +801,100 @@ function setupInput() {
         yaw -= e.movementX * 0.0022;
         pitch = Math.max(-1.4, Math.min(1.4, pitch - e.movementY * 0.0022));
     });
+    canvas.addEventListener('wheel', (e) => {
+        if (mode !== 'world' || renderer.xr.isPresenting) return;
+        e.preventDefault();
+        setStreetViewZoom(camera.fov + Math.sign(e.deltaY) * 5);
+    }, { passive: false });
+}
+
+function setupStreetViewUi() {
+    if (streetViewUi) {
+        streetViewUi.hidden = false;
+        document.getElementById('viewport')?.classList.add('street-view-active');
+        return;
+    }
+
+    const ui = document.createElement('div');
+    ui.className = 'street-view-ui';
+    ui.setAttribute('aria-label', '파노라마 시점 조작');
+
+    const badge = document.createElement('div');
+    badge.className = 'street-view-badge';
+    const badgeIcon = document.createElement('span');
+    badgeIcon.className = 'street-view-badge-icon';
+    badgeIcon.textContent = '360°';
+    const badgeText = document.createElement('span');
+    badgeText.textContent = '파노라마 시점';
+    badge.append(badgeIcon, badgeText);
+
+    const compass = document.createElement('div');
+    compass.className = 'street-view-compass';
+    compass.setAttribute('aria-label', '방향 나침반');
+    const north = document.createElement('span');
+    north.className = 'street-view-north';
+    north.textContent = 'N';
+    const needle = document.createElement('span');
+    needle.className = 'street-view-needle';
+    compass.append(north, needle);
+    compassNeedle = needle;
+
+    const controls = document.createElement('div');
+    controls.className = 'street-view-controls';
+    const zoom = document.createElement('div');
+    zoom.className = 'street-view-zoom';
+    const zoomIn = makeStreetViewButton('+', '확대', () => setStreetViewZoom(camera.fov - 6));
+    const zoomOut = makeStreetViewButton('−', '축소', () => setStreetViewZoom(camera.fov + 6));
+    const reset = makeStreetViewButton('↺', '시야 초기화', () => setStreetViewZoom(STREET_VIEW_FOV));
+    zoomLabel = document.createElement('span');
+    zoomLabel.className = 'street-view-zoom-value';
+    zoomLabel.setAttribute('aria-live', 'polite');
+    zoom.append(zoomIn, zoomLabel, zoomOut, reset);
+    const step = document.createElement('div');
+    step.className = 'street-view-step';
+    const stepButton = makeStreetViewButton('↑', '앞 지점으로 이동', startStreetStep);
+    stepButton.classList.add('street-view-step-button');
+    const stepText = document.createElement('span');
+    stepText.textContent = '앞으로';
+    step.append(stepButton, stepText);
+    const hint = document.createElement('div');
+    hint.className = 'street-view-hint';
+    hint.textContent = '마우스로 둘러보기 · 휠로 확대';
+    controls.append(zoom, step, hint);
+
+    ui.append(badge, compass, controls);
+    document.getElementById('viewport')?.appendChild(ui);
+    streetViewUi = ui;
+    document.getElementById('viewport')?.classList.add('street-view-active');
+}
+
+function makeStreetViewButton(label, description, onClick) {
+    const button = document.createElement('button');
+    button.className = 'street-view-button';
+    button.type = 'button';
+    button.textContent = label;
+    button.setAttribute('aria-label', description);
+    button.title = description;
+    button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        onClick();
+    });
+    return button;
+}
+
+function setStreetViewZoom(fov) {
+    if (!camera) return;
+    camera.fov = THREE.MathUtils.clamp(fov, STREET_VIEW_MIN_FOV, STREET_VIEW_MAX_FOV);
+    camera.updateProjectionMatrix();
+    if (zoomLabel) {
+        const zoom = Math.tan(THREE.MathUtils.degToRad(STREET_VIEW_FOV / 2)) /
+            Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+        zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+    }
+}
+
+function startStreetStep() {
+    if (mode === 'world' && !renderer.xr.isPresenting) streetStepUntil = performance.now() + 600;
 }
 
 function setupXr() {
@@ -852,7 +979,7 @@ function updateInput(now) {
         run = runToggle;
         camera.getWorldDirection(fwd);
     } else if (!inputBlocked()) {
-        mz = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+        mz = (keys.KeyW || keys.ArrowUp || now < streetStepUntil ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
         mx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
         run = !!(keys.ShiftLeft || keys.ShiftRight);
         fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
@@ -864,6 +991,7 @@ function updateInput(now) {
     const wx = (fwd.x * mz + right.x * mx) / len, wz = (fwd.z * mz + right.z * mx) / len;
     rig.rotation.y = yaw;
     if (!xr) camera.rotation.set(pitch, 0, 0, 'YXZ');
+    if (compassNeedle) compassNeedle.style.transform = `rotate(${THREE.MathUtils.radToDeg(yaw)}deg)`;
 
     const flags = (jump ? 1 : 0) | (run ? 2 : 0);
     const key = `${wx.toFixed(2)},${wz.toFixed(2)},${yaw.toFixed(2)},${flags}`;

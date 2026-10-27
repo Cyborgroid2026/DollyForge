@@ -404,8 +404,11 @@ export function makeCyborg(gender, materials) {
         legR.userData.knee.rotation.x = Math.max(0, Math.cos(phase)) * 0.7 * amp;
         armL.rotation.x = -s * 0.35 * amp;
         armR.rotation.x = s * 0.35 * amp;
-        const idle = Math.sin(performance.now() / 900) * 0.006;
-        head.rotation.x = idle;
+        const time = performance.now() / 1000;
+        const idle = Math.sin(time * 1.1) * 0.006;
+        const lookAround = 1 - amp;
+        head.rotation.x = idle - Math.cos(time * 0.57 + phase) * 0.018 * lookAround;
+        head.rotation.y = Math.sin(time * 0.43 + phase) * 0.075 * lookAround;
         g.children[0].scale.y = 1 + idle * 0.3; // 호흡처럼 미세한 움직임
     };
     return g;

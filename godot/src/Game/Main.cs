@@ -126,7 +126,7 @@ public partial class Main : Node3D
     }
 
     const string StartHint = "들꽃 정류장. 오솔길 끝 볼트 지붕 건물이 작업장입니다 — 카탈로그로 주문하고, 조립하고, 수술대에서 몸을 고칩니다. " +
-                             "WASD 이동 · V 시점 · E 카탈로그·수술대 · 1–9 공구 · F5/F6 창고 · F7 내 몸 · F8 기기 내보내기";
+                             "마우스 둘러보기 · 휠 확대 · 거리뷰 ↑ 앞 지점 이동 · WASD 이동 · V 시점 · E 카탈로그·수술대 · 1–9 공구 · F5/F6 창고 · F7 내 몸 · F8 기기 내보내기";
 
     void StartOffline(bool quiet)
     {
