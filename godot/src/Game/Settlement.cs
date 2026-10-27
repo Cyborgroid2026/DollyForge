@@ -136,51 +136,7 @@ public partial class Settlement : Node3D
 
     void BuildPath()
     {
-        var line = PathLine();
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
-        const int across = 5;
-        for (var i = 0; i < line.Count; i++)
-        {
-            var dir = (line[Math.Min(i + 1, line.Count - 1)] - line[Math.Max(i - 1, 0)]).Normalized();
-            var side = new Vector2(-dir.Y, dir.X);
-            // 길 폭이 조금씩 들쭉날쭉 (손으로 깐 보도블록)
-            var w = Site.PathHalfWidth * (1 + Mathf.Sin(i * 0.37f) * 0.04f);
-            for (var k = 0; k < across; k++)
-            {
-                var t = k / (float)(across - 1) * 2 - 1;
-                var p = line[i] + side * (t * w);
-                st.SetUV(new Vector2(t, i * 0.5f));
-                st.AddVertex(new Vector3(p.X, World.HeightAt(p.X, p.Y) + 0.035f, p.Y));
-            }
-        }
-        for (var i = 0; i < line.Count - 1; i++)
-        for (var k = 0; k < across - 1; k++)
-        {
-            int a = i * across + k, b = a + 1, c = a + across, d = c + 1;
-            st.AddIndex(a); st.AddIndex(c); st.AddIndex(b);
-            st.AddIndex(b); st.AddIndex(c); st.AddIndex(d);
-        }
-        st.GenerateNormals();
-        AddChild(new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = _pavers });
-
-        // 가로등: 흰 기둥 끝이 앞으로 휘고 유백색 구가 달린 레트로 가로등, 길 양쪽에 번갈아 11 m 마다
-        var side2 = 1;
-        for (var i = 10; i < line.Count - 6; i += 22)
-        {
-            var dir = (line[i + 1] - line[i - 1]).Normalized();
-            var n = new Vector2(-dir.Y, dir.X) * side2;
-            var at = line[i] + n * (Site.PathHalfWidth + 0.7f);
-            var y = World.HeightAt(at.X, at.Y);
-            var lamp = new Node3D { Position = new Vector3(at.X, y, at.Y), Rotation = new Vector3(0, Mathf.Atan2(-n.X, -n.Y), 0) };
-            AddChild(lamp);
-            Place(new CylinderMesh { TopRadius = 0.035f, BottomRadius = 0.06f, Height = 3.4f, RadialSegments = 12 }, _white, new Vector3(0, 1.7f, 0), parent: lamp);
-            Place(new CylinderMesh { TopRadius = 0.12f, BottomRadius = 0.14f, Height = 0.25f }, _patina, new Vector3(0, 0.12f, 0), parent: lamp);
-            Place(new TorusMesh { InnerRadius = 0.28f, OuterRadius = 0.33f, Rings = 24, RingSegments = 8 }, _white, new Vector3(0, 3.4f, 0.3f), new Vector3(Mathf.Pi / 2, 0, 0), lamp);
-            Place(new SphereMesh { Radius = 0.17f, Height = 0.34f }, _lamp, new Vector3(0, 3.36f, 0.6f), parent: lamp);
-            Place(new CylinderMesh { TopRadius = 0.06f, BottomRadius = 0.09f, Height = 0.08f }, _brass, new Vector3(0, 3.55f, 0.6f), parent: lamp);
-            side2 = -side2;
-        }
+        StreetEnvironment.Build(this, World, PathLine(), _pavers);
     }
 
     // ------------------------------------------------------------------ 정류장

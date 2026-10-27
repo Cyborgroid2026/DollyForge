@@ -66,8 +66,8 @@ public partial class Main : Node3D
         var sample = Blueprints.TwoWheelRobot(new ShopAccount(1_000_000), (World.WorkbenchTop + new Vector3(0.3f, 0.01f, 0)).N());
         _devices.Adopt(sample);
 
-        // 시작: 모노레일 정류장 승강장에 막 내린 참. 오솔길 끝에 작업장, 오른쪽 앞에 연못, 지평선에 도시.
-        _player = new Player { Devices = _devices, Position = Site.Spawn };
+        // 시작: 도로 한가운데의 보행자 시점. 정류장은 뒤에 두고 상가 골목을 바라본다.
+        _player = new Player { Devices = _devices, Position = Site.Spawn(_world) };
         _player.RotationDegrees = new Vector3(0, Site.SpawnYawDegrees, 0);
         _player.OpenCatalog = OpenCatalog;
         _player.OpenStorage = OpenStorage;
@@ -125,8 +125,7 @@ public partial class Main : Node3D
         Pointer.Mode = Input.MouseModeEnum.Captured;
     }
 
-    const string StartHint = "들꽃 정류장. 오솔길 끝 볼트 지붕 건물이 작업장입니다 — 카탈로그로 주문하고, 조립하고, 수술대에서 몸을 고칩니다. " +
-                             "마우스 둘러보기 · 휠 확대 · 거리뷰 ↑ 앞 지점 이동 · WASD 이동 · V 시점 · E 카탈로그·수술대 · 1–9 공구 · F5/F6 창고 · F7 내 몸 · F8 기기 내보내기";
+    const string StartHint = "거리 탐색 — 마우스로 둘러보기 · WASD 이동 · 휠 확대 · ↑ 앞 지점 이동";
 
     void StartOffline(bool quiet)
     {
@@ -365,18 +364,20 @@ public partial class Main : Node3D
         });
         var slipBox = new PanelContainer
         {
-            AnchorLeft = 0.5f, AnchorRight = 0.5f, AnchorTop = 1, AnchorBottom = 1,
-            OffsetLeft = -460, OffsetRight = 460, OffsetTop = -120, OffsetBottom = -24,
+            AnchorTop = 1, AnchorBottom = 1,
+            OffsetLeft = 24, OffsetRight = 440, OffsetTop = -108, OffsetBottom = -24,
         };
         slipBox.AddThemeStyleboxOverride("panel", new StyleBoxFlat
         {
-            BgColor = new Color(0.96f, 0.94f, 0.88f, 0.94f), ShadowColor = new Color(0, 0, 0, 0.35f), ShadowSize = 6,
-            ContentMarginLeft = 18, ContentMarginRight = 18, ContentMarginTop = 10, ContentMarginBottom = 10,
+            BgColor = new Color(0.035f, 0.055f, 0.07f, 0.78f),
+            BorderColor = new Color(0.82f, 0.9f, 0.95f, 0.22f),
+            BorderWidthLeft = 1, BorderWidthTop = 1, BorderWidthRight = 1, BorderWidthBottom = 1,
+            CornerRadiusTopLeft = 8, CornerRadiusTopRight = 8, CornerRadiusBottomLeft = 8, CornerRadiusBottomRight = 8,
+            ContentMarginLeft = 12, ContentMarginRight = 12, ContentMarginTop = 8, ContentMarginBottom = 8,
         });
-        _slip = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, HorizontalAlignment = HorizontalAlignment.Center };
-        _slip.AddThemeFontOverride("font", Look.PenUi);
-        _slip.AddThemeFontSizeOverride("font_size", 22);
-        _slip.AddThemeColorOverride("font_color", Paper.Ink);
+        _slip = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, HorizontalAlignment = HorizontalAlignment.Left };
+        _slip.AddThemeFontSizeOverride("font_size", 15);
+        _slip.AddThemeColorOverride("font_color", new Color(0.91f, 0.94f, 0.96f));
         slipBox.AddChild(_slip);
         layer.AddChild(slipBox);
         _slip.SetMeta("box", slipBox);
@@ -386,7 +387,7 @@ public partial class Main : Node3D
     {
         _slip.Text = text;
         ((Control)_slip.GetMeta("box").AsGodotObject()).Visible = true;
-        _slipTimer = Math.Max(6, text.Length / 10.0); // 긴 쪽지는 더 오래
+        _slipTimer = Math.Max(4, text.Length / 18.0);
         UpdateLedger();
     }
 

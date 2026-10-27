@@ -12,7 +12,7 @@ public partial class Player : CharacterBody3D
 {
     const float Walk = 1.6f, Run = 4.0f, Gravity = 9.81f, GroundAccel = 8f, AirAccel = 1.5f;
     const float Reach = 2.5f, PushForce = 600f, HoldTorque = 20f;
-    const float StreetViewFov = 78f, MinStreetViewFov = 42f, MaxStreetViewFov = 86f;
+    const float StreetViewFov = 58f, MinStreetViewFov = 38f, MaxStreetViewFov = 72f;
 
     public enum Tool { Hand, Bolt, Weld, Screw, Axle, Hinge, Slide, Ball, Wrench }
 
@@ -35,7 +35,7 @@ public partial class Player : CharacterBody3D
     public Action<PartBody>? Stow, EditDrum;
     public Action<string>? Notify;
 
-    float _pitch;
+    float _pitch = Mathf.DegToRad(7f);
     float _headBobPhase;
     float _streetStepRemaining;
     float _landingVelocity;
@@ -216,6 +216,7 @@ public partial class Player : CharacterBody3D
         _capsule = new CollisionShape3D { Shape = new CapsuleShape3D { Radius = 0.24f } };
         AddChild(_capsule);
         EyeHeight = _eyeHeight;
+        Camera.Rotation = new Vector3(_pitch, 0, 0);
         _viewArm = new SpringArm3D { SpringLength = 2.4f, Margin = 0.15f, CollisionMask = PartBody.LayerWorld, Position = new Vector3(0.0f, 0.15f, 0) };
         _viewArm.Shape = new SphereShape3D { Radius = 0.18f };
         _viewArm.AddExcludedObject(GetRid());

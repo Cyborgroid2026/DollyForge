@@ -5,9 +5,9 @@ render_mode cull_disabled, depth_draw_opaque;
 
 global uniform float wind_strength;
 global uniform vec2 wind_direction;
-uniform vec3 root_color : source_color = vec3(0.04, 0.11, 0.03);
-uniform vec3 tip_color : source_color = vec3(0.22, 0.44, 0.12);
-uniform vec3 dry_tip_color : source_color = vec3(0.62, 0.52, 0.26);
+uniform vec3 root_color : source_color = vec3(0.035, 0.09, 0.025);
+uniform vec3 tip_color : source_color = vec3(0.16, 0.34, 0.09);
+uniform vec3 dry_tip_color : source_color = vec3(0.5, 0.42, 0.23);
 uniform sampler2D wind_noise : repeat_enable, filter_linear;
 
 varying float tip;
@@ -53,7 +53,7 @@ void fragment() {
 	SPECULAR = 0.45;
 	
 	// 물리 기반 엽육 산란 (Subsurface Translucency): 역광에서 잎이 보석처럼 투과되어 빛남
-	BACKLIGHT = mix(c * 0.85, vec3(0.62, 0.74, 0.22), 0.4) * (0.4 + 0.6 * tip);
+	BACKLIGHT = mix(c * 0.55, vec3(0.48, 0.58, 0.2), 0.22) * (0.35 + 0.45 * tip);
 	
 	// 지면과의 접촉 앰비언트 오클루전
 	AO = mix(0.25, 1.0, smoothstep(0.0, 0.7, tip));

@@ -6,10 +6,10 @@
 shader_type canvas_item;
 
 uniform sampler2D screen_texture : hint_screen_texture, filter_linear_mipmap;
-uniform float distortion : hint_range(0.0, 0.03) = 0.0008;
-uniform float chromatic_aberration : hint_range(0.0, 0.005) = 0.00015;
-uniform float vignette_strength : hint_range(0.0, 1.0) = 0.12;
-uniform float grain_strength : hint_range(0.0, 0.05) = 0.002;
+uniform float distortion : hint_range(0.0, 0.03) = 0.00015;
+uniform float chromatic_aberration : hint_range(0.0, 0.005) = 0.00002;
+uniform float vignette_strength : hint_range(0.0, 1.0) = 0.04;
+uniform float grain_strength : hint_range(0.0, 0.05) = 0.0005;
 
 // 정밀 해시 노이즈
 float hash(vec2 p) {

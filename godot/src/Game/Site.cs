@@ -21,6 +21,7 @@ public static class Site
         new(-8f, 47.5f), new(-10.5f, 38f), new(-9f, 28f), new(-5f, 18f), new(-1.5f, 11f), new(0f, 8.5f),
     ];
     public const float PathHalfWidth = 0.9f;
+    const float StreetSetback = 10.2f;
 
     /// <summary>작업장 앞 콘크리트 마당 (택배 하차장 포함)</summary>
     public static readonly Rect2 Apron = new(-6.2f, 0.2f, 12.4f, 8.6f);
@@ -42,9 +43,11 @@ public static class Site
     /// <summary>승강장 윗면 높이</summary>
     public static float PlatformTop => RailGroundAt(StationX) + PlatformHeight;
 
-    /// <summary>시작 지점: 승강장 위, 작업장 쪽(북쪽)을 보며 연못이 오른쪽 앞에 보이게</summary>
-    public static Vector3 Spawn => new(StationX + 1.5f, PlatformTop + 0.05f, 55.2f);
-    public const float SpawnYawDegrees = -12f;
+    /// <summary>거리 탐색 시작점: 오솔길이 넓어진 도로 구간의 보행자 시점</summary>
+    public static readonly Vector2 StreetSpawn = new(-8.8f, 44.5f);
+    public static Vector3 Spawn(World world) =>
+        new(StreetSpawn.X, world.HeightAt(StreetSpawn.X, StreetSpawn.Y) + 0.05f, StreetSpawn.Y);
+    public const float SpawnYawDegrees = 15f;
 
     /// <summary>오솔길 중심선까지의 거리와, 길을 따라 간 비율 (0 = 정류장, 1 = 작업장)</summary>
     public static (float Distance, float Along) PathDistance(Vector2 p)
@@ -88,7 +91,7 @@ public static class Site
         if (RectDistance(TestPad, p) < 0.3f + margin) return false;
         if (RectDistance(StationPad, p) < margin) return false;
         if (Mathf.Abs(z - RailZ) < 3.2f + margin) return false;
-        if (PathDistance(p).Distance < PathHalfWidth + 0.25f + margin) return false;
+        if (PathDistance(p).Distance < StreetSetback + margin) return false;
         if (p.DistanceTo(World.PondCenter) < World.PondRadius + 0.8f + margin) return false;
         return true;
     }

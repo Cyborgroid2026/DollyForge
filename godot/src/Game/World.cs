@@ -77,11 +77,11 @@ public partial class World : Node3D
             ReflectedLightSource = Godot.Environment.ReflectionSource.Sky,
             // 언리얼 4 / 시네마틱 ACES 톤매핑: 자연스러운 하이라이트 롤오프와 풍부한 암부 계조
             TonemapMode = Godot.Environment.ToneMapper.Aces,
-            TonemapExposure = 1.0f,
-            TonemapWhite = 5.8f,
+            TonemapExposure = 0.72f,
+            TonemapWhite = 6.4f,
             SsaoEnabled = true,
             SsaoRadius = 1.3f,
-            SsaoIntensity = 2.2f,
+            SsaoIntensity = 1.5f,
             SsaoPower = 1.5f,
             SsaoDetail = 0.5f,
             SsilEnabled = true,
@@ -96,39 +96,39 @@ public partial class World : Node3D
             SdfgiEnergy = 1.0f,
             // 포토그래픽 광학 글로우: 자연스러운 렌즈 헤이즈
             GlowEnabled = true,
-            GlowIntensity = 0.28f,
-            GlowStrength = 0.95f,
-            GlowBloom = 0.02f,
-            GlowHdrThreshold = 0.95f,
+            GlowIntensity = 0.06f,
+            GlowStrength = 0.65f,
+            GlowBloom = 0.005f,
+            GlowHdrThreshold = 1.6f,
             GlowBlendMode = Godot.Environment.GlowBlendModeEnum.Softlight,
             VolumetricFogEnabled = true,
-            VolumetricFogDensity = 0.0009f,
+            VolumetricFogDensity = 0.00012f,
             VolumetricFogAlbedo = new Color(0.92f, 0.94f, 0.96f),
             VolumetricFogAnisotropy = 0.65f, // 해 방향으로 부드럽게 뻗는 햇살(God rays)
             VolumetricFogLength = 160f,
             // 실제 대기 산란(Rayleigh & Mie): 지평선 너머와 먼 도시가 자연스러운 푸른 하늘빛에 융합
             FogEnabled = true,
-            FogLightColor = new Color(0.68f, 0.76f, 0.88f),
-            FogDensity = 0.0009f,
-            FogAerialPerspective = 0.68f,
-            FogSunScatter = 0.40f,
-            FogSkyAffect = 0.35f, // 하늘과 지평선이 칼같이 분리되지 않고 자연스럽게 융합
+            FogLightColor = new Color(0.68f, 0.75f, 0.84f),
+            FogDensity = 0.00022f,
+            FogAerialPerspective = 0.38f,
+            FogSunScatter = 0.1f,
+            FogSkyAffect = 0.28f,
             FogHeight = 1.5f,
             FogHeightDensity = 0.030f,
             // 자연스러운 색감: 과도한 채도 인공미 제거, 실제 사람의 눈과 시네마 렌즈의 계조
             AdjustmentEnabled = true,
-            AdjustmentSaturation = 1.05f,
-            AdjustmentContrast = 1.04f,
+            AdjustmentSaturation = 0.96f,
+            AdjustmentContrast = 1.03f,
         };
         // 고정 초점 심도는 시선이 바뀌어도 초점이 따라오지 않아 미니어처처럼 보일 수 있다.
         // 플레이 중에는 선명한 시야를 유지한다. 시네마틱 촬영은 카메라별 동적 초점으로 별도 구현한다.
         var camera = new CameraAttributesPractical
         {
-            AutoExposureEnabled = true,
+            AutoExposureEnabled = false,
             AutoExposureMinSensitivity = 80f,
             AutoExposureMaxSensitivity = 380f,
             AutoExposureSpeed = 0.7f,
-            AutoExposureScale = 0.72f,
+            AutoExposureScale = 0.5f,
         };
         AddChild(new WorldEnvironment { Environment = env, CameraAttributes = camera });
         var lens = new CanvasLayer { Layer = -1 };
@@ -143,7 +143,7 @@ public partial class World : Node3D
         // 태양: HDRI 의 해 방향에 맞춘 아침 햇빛
         _sun = new DirectionalLight3D
         {
-            LightEnergy = 1.6f,
+            LightEnergy = 1.1f,
             LightColor = new Color(1.0f, 0.94f, 0.86f),
             ShadowEnabled = true,
             DirectionalShadowMaxDistance = 90f,

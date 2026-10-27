@@ -30,9 +30,9 @@ void fragment() {
 	ALPHA_TEXTURE_COORDINATE = UV;
 	
 	// 식물 큐티클층 프레넬 광택: 비단결 같은 잎사귀 표면 반사
-	ROUGHNESS = 0.38;
-	SPECULAR = 0.40;
+	ROUGHNESS = 0.52;
+	SPECULAR = 0.24;
 	
 	// 엽록소 투과 산란(Subsurface Chlorophyll Scattering): 역광에서 잎이 보석처럼 투명하게 빛남
-	BACKLIGHT = t.rgb * COLOR.rgb * 0.85;
+	BACKLIGHT = t.rgb * COLOR.rgb * 0.45;
 }
