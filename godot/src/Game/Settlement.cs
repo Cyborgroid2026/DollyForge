@@ -700,19 +700,19 @@ public partial class Settlement : Node3D
         AddChild(new MultiMeshInstance3D { Multimesh = trunks, MaterialOverride = bark });
 
         // 자작나무 늘어진 큰 가지들 (수관 골격)
-        var branchMesh = new CylinderMesh { TopRadius = 0.02f, BottomRadius = 0.045f, Height = 1.0f, RadialSegments = 8 };
-        var branchMat = new StandardMaterial3D { AlbedoColor = new Color(0.20f, 0.17f, 0.15f), Roughness = 0.88f };
+        var branchMesh = new CylinderMesh { TopRadius = 0.008f, BottomRadius = 0.022f, Height = 1.0f, RadialSegments = 8 };
+        var branchMat = new StandardMaterial3D { AlbedoColor = new Color(0.34f, 0.31f, 0.28f), Roughness = 0.88f };
         var bTransforms = new List<Transform3D>();
         foreach (var (x, h) in stems)
         {
-            var bCount = _rng.RandiRange(5, 8);
+            var bCount = _rng.RandiRange(4, 6);
             for (var b = 0; b < bCount; b++)
             {
                 var u = _rng.RandfRange(0.42f, 0.86f);
                 var a = _rng.RandfRange(0, Mathf.Tau);
                 var droop = _rng.RandfRange(0.25f, 0.60f);
                 var dir = new Vector3(Mathf.Cos(a) * Mathf.Cos(droop), -Mathf.Sin(droop), Mathf.Sin(a) * Mathf.Cos(droop)).Normalized();
-                var len = _rng.RandfRange(1.6f, 3.2f);
+                var len = _rng.RandfRange(1.0f, 2.1f);
                 var bPos = new Vector3(0, u * h, 0);
                 var bBasis = Basis.LookingAt(dir, Vector3.Up) * new Basis(Vector3.Right, Mathf.Pi / 2);
                 bBasis = bBasis.Scaled(new Vector3(1, len, 1));

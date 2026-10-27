@@ -77,7 +77,7 @@ public partial class World : Node3D
             ReflectedLightSource = Godot.Environment.ReflectionSource.Sky,
             // 언리얼 4 / 시네마틱 ACES 톤매핑: 자연스러운 하이라이트 롤오프와 풍부한 암부 계조
             TonemapMode = Godot.Environment.ToneMapper.Aces,
-            TonemapExposure = 1.12f,
+            TonemapExposure = 1.0f,
             TonemapWhite = 5.8f,
             SsaoEnabled = true,
             SsaoRadius = 1.3f,
@@ -128,7 +128,7 @@ public partial class World : Node3D
             AutoExposureMinSensitivity = 80f,
             AutoExposureMaxSensitivity = 380f,
             AutoExposureSpeed = 0.7f,
-            AutoExposureScale = 0.82f,
+            AutoExposureScale = 0.72f,
         };
         AddChild(new WorldEnvironment { Environment = env, CameraAttributes = camera });
         var lens = new CanvasLayer { Layer = -1 };
@@ -143,7 +143,7 @@ public partial class World : Node3D
         // 태양: HDRI 의 해 방향에 맞춘 아침 햇빛
         _sun = new DirectionalLight3D
         {
-            LightEnergy = 2.2f,
+            LightEnergy = 1.6f,
             LightColor = new Color(1.0f, 0.94f, 0.86f),
             ShadowEnabled = true,
             DirectionalShadowMaxDistance = 90f,

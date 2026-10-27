@@ -9,8 +9,10 @@ uniform float alpha_cut = 0.45;
 
 void vertex() {
 	vec3 origin = MODEL_MATRIX[3].xyz; // 가지 카드의 기저 위치
-	float sway = sin(TIME * 1.1 + origin.x * 0.35 + origin.z * 0.28) * 0.7 + sin(TIME * 2.6 + origin.x * 1.2) * 0.3;
-	float micro_rustle = sin(TIME * 6.5 + dot(VERTEX, vec3(4.2))) * 0.04;
+	float broad_sway = sin(TIME * 0.42 + origin.x * 0.055 + origin.z * 0.041);
+	float gust = sin(TIME * 0.91 + origin.x * 0.19 - origin.z * 0.14 + broad_sway * 0.7);
+	float sway = broad_sway * 0.42 + gust * 0.38;
+	float micro_rustle = sin(TIME * 3.7 + dot(origin.xz, vec2(0.73, 1.17)) + VERTEX.y * 5.3) * 0.08;
 	float branch_weight = pow(clamp(VERTEX.y + 0.5, 0.0, 1.0), 1.6);
 	
 	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;

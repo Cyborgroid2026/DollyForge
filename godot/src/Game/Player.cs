@@ -35,6 +35,11 @@ public partial class Player : CharacterBody3D
     public Action<string>? Notify;
 
     float _pitch;
+    float _headBobPhase;
+    float _landingVelocity;
+    Vector3 _headOffset;
+    Vector3 _headOffsetVelocity;
+    bool _wasOnFloor;
     int _tool;
 
     // ------------------------------------------------------------------ 시점: 1인칭 → 3인칭(뒤) → 3인칭(앞), V 로 바꾼다
@@ -377,6 +382,8 @@ public partial class Player : CharacterBody3D
         if (!IsOnFloor() || thrust.Y > Gravity) v.Y -= Gravity * dt;
         Velocity = v;
         MoveAndSlide();
+
+        UpdateHeadMotion(dt, new Vector3(Velocity.X, 0, Velocity.Z), v.Y);
         _avatar?.Animate(dt, new Vector2(Velocity.X, Velocity.Z).Length());
 
         // 밀기: 사람이 낼 수 있는 힘 이하로만
@@ -395,6 +402,41 @@ public partial class Player : CharacterBody3D
         }
 
         if (_held is not null) Hold(dt);
+    }
+
+    void UpdateHeadMotion(float dt, Vector3 horizontalVelocity, float verticalVelocity)
+    {
+        var grounded = IsOnFloor();
+        var speed = horizontalVelocity.Length();
+        var firstPerson = View == ViewMode.FirstPerson;
+        var intensity = firstPerson ? 1f : 0f;
+
+        if (grounded && speed > 0.12f)
+            _headBobPhase = Mathf.PosMod(_headBobPhase + speed * dt * Mathf.Tau / 1.35f, Mathf.Tau);
+
+        var bob = grounded && speed > 0.12f
+            ? new Vector3(
+                Mathf.Sin(_headBobPhase) * 0.006f,
+                (0.5f - 0.5f * Mathf.Cos(_headBobPhase * 2f)) * Mathf.Min(speed / Run, 1f) * 0.014f,
+                0)
+            : Vector3.Zero;
+
+        if (!_wasOnFloor && grounded && verticalVelocity < 0)
+            _landingVelocity += Mathf.Min(-verticalVelocity * 0.018f, 0.22f);
+        _wasOnFloor = grounded;
+
+        var landingAmount = _landingVelocity;
+        _landingVelocity = Mathf.MoveToward(_landingVelocity, 0, dt * 0.9f);
+        var target = (bob + Vector3.Down * landingAmount) * intensity;
+        var acceleration = (target - _headOffset) * 42f - _headOffsetVelocity * 13f;
+        _headOffsetVelocity += acceleration * dt;
+        _headOffset += _headOffsetVelocity * dt;
+
+        var localVelocity = GlobalBasis.Inverse() * horizontalVelocity;
+        var roll = firstPerson ? -Mathf.Clamp(localVelocity.X / Run, -1f, 1f) * 0.012f : 0f;
+        var pitchSway = firstPerson && grounded ? Mathf.Sin(_headBobPhase) * 0.003f * Mathf.Min(speed / Run, 1f) : 0f;
+        Camera.Position = new Vector3(_headOffset.X, _eyeHeight + _headOffset.Y, _headOffset.Z);
+        Camera.Rotation = new Vector3(_pitch + pitchSway, 0, roll);
     }
 
     /// <summary>들고 있는 부품을 손 위치로 당긴다. 힘·토크는 사람 한계로 제한된다.</summary>
