@@ -6,10 +6,10 @@
 shader_type canvas_item;
 
 uniform sampler2D screen_texture : hint_screen_texture, filter_linear_mipmap;
-uniform float distortion : hint_range(0.0, 0.03) = 0.0035;
-uniform float chromatic_aberration : hint_range(0.0, 0.005) = 0.00065;
-uniform float vignette_strength : hint_range(0.0, 1.0) = 0.25;
-uniform float grain_strength : hint_range(0.0, 0.05) = 0.009;
+uniform float distortion : hint_range(0.0, 0.03) = 0.0008;
+uniform float chromatic_aberration : hint_range(0.0, 0.005) = 0.00015;
+uniform float vignette_strength : hint_range(0.0, 1.0) = 0.12;
+uniform float grain_strength : hint_range(0.0, 0.05) = 0.002;
 
 // 정밀 해시 노이즈
 float hash(vec2 p) {
@@ -37,7 +37,7 @@ void fragment() {
 	// 1. 배럴 왜곡 적용된 기본 좌표
 	vec2 uv_distorted = distort(uv, distortion);
 
-	// 2. 미세 방사형 색수차: 실제 풀프레임 대구경 렌즈의 코너 서브픽셀 분산 (약 0.5~1픽셀)
+	// 2. 미세 방사형 색수차: 실제 렌즈의 가장자리 색 분산을 거의 감지되지 않게 반영
 	vec2 dir = normalize(center_offset + vec2(1e-5));
 	float ca = chromatic_aberration * dist_sq;
 

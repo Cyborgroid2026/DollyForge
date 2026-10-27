@@ -11,10 +11,11 @@ void vertex() {
 	vec3 origin = MODEL_MATRIX[3].xyz; // 가지 카드의 기저 위치
 	float sway = sin(TIME * 1.1 + origin.x * 0.35 + origin.z * 0.28) * 0.7 + sin(TIME * 2.6 + origin.x * 1.2) * 0.3;
 	float micro_rustle = sin(TIME * 6.5 + dot(VERTEX, vec3(4.2))) * 0.04;
+	float branch_weight = pow(clamp(VERTEX.y + 0.5, 0.0, 1.0), 1.6);
 	
 	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float height_weight = clamp((origin.y - 1.0) * 0.15, 0.0, 1.5);
-	world.xz += normalize(wind_direction) * (sway + micro_rustle) * wind_strength * 0.08 * height_weight;
+	world.xz += normalize(wind_direction) * (sway + micro_rustle) * wind_strength * 0.08 * height_weight * branch_weight;
 	VERTEX = (inverse(MODEL_MATRIX) * vec4(world, 1.0)).xyz;
 }
 

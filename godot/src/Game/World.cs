@@ -120,7 +120,8 @@ public partial class World : Node3D
             AdjustmentSaturation = 1.05f,
             AdjustmentContrast = 1.04f,
         };
-        // 물리 기반 카메라 광학: 눈앞의 작업 공간에 집중되고, 원경은 실제 대형 센서 카메라처럼 부드러운 보케(Bokeh)로 아웃포커싱
+        // 고정 초점 심도는 시선이 바뀌어도 초점이 따라오지 않아 미니어처처럼 보일 수 있다.
+        // 플레이 중에는 선명한 시야를 유지한다. 시네마틱 촬영은 카메라별 동적 초점으로 별도 구현한다.
         var camera = new CameraAttributesPractical
         {
             AutoExposureEnabled = true,
@@ -128,10 +129,6 @@ public partial class World : Node3D
             AutoExposureMaxSensitivity = 380f,
             AutoExposureSpeed = 0.7f,
             AutoExposureScale = 0.82f,
-            DofBlurFarEnabled = true,
-            DofBlurFarDistance = 8.5f,
-            DofBlurFarTransition = 35.0f,
-            DofBlurAmount = 0.050f, // 과하지 않고 자연스러운 원경 보케
         };
         AddChild(new WorldEnvironment { Environment = env, CameraAttributes = camera });
         var lens = new CanvasLayer { Layer = -1 };
