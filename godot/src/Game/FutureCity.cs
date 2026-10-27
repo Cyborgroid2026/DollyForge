@@ -14,6 +14,7 @@ public partial class FutureCity : Node3D
 {
     public World World { get; set; } = null!;
     readonly RandomNumberGenerator _rng = new() { Seed = 20261026 };
+    readonly FastNoiseLite _forestEdge = new() { Seed = 83, Frequency = 0.018f, FractalOctaves = 2 };
     readonly List<(Node3D Node, float Speed)> _spinners = new();
     float _time;
 
@@ -30,6 +31,13 @@ public partial class FutureCity : Node3D
     }
 
     float Jitter(float amount) => _rng.RandfRange(-amount, amount);
+
+    float ForestEdgeDensity(float x, float z)
+    {
+        var radius = new Vector2(x, z).Length();
+        var fadeStart = 50f + _forestEdge.GetNoise2D(x, z) * 7f;
+        return 1f - Mathf.SmoothStep(fadeStart, 78f, radius);
+    }
 
     // ------------------------------------------------------------------ 자연
 
@@ -95,6 +103,7 @@ public partial class FutureCity : Node3D
             var x = _rng.RandfRange(-78, 78);
             var z = _rng.RandfRange(-78, 78);
             if (!Site.Clear(x, z, 5f) || new Vector2(x, z + 4).Length() < 16) continue; // 사람 자리·작업장 둘레는 비운다
+            if (_rng.Randf() > ForestEdgeDensity(x, z)) continue;
             if (noise.GetNoise2D(x, z) < 0.05f + _rng.Randf() * 0.25f) continue;
             var s = _rng.RandfRange(0.7f, 1.4f);
             var basis = new Basis(Vector3.Up, _rng.RandfRange(0, Mathf.Tau))

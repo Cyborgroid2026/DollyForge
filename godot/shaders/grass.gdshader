@@ -20,12 +20,13 @@ void vertex() {
 	vec2 dir = normalize(wind_direction);
 
 	// 다층 바람 시뮬레이션: 거대한 바람의 파도(Swell) + 돌풍(Gust) + 마이크로 플러터(Micro-flutter)
-	float swell = sin(dot(world.xz, dir) * 0.08 - TIME * 1.8) * 0.35 + 0.35;
-	float gust = texture(wind_noise, world.xz * 0.018 - dir * TIME * 0.06).r;
-	float flutter = sin(TIME * 4.2 + world.x * 2.3 + world.z * 1.9) * 0.12;
+	float swell = texture(wind_noise, world.xz * 0.006 - dir * TIME * 0.012).r;
+	float gust = texture(wind_noise, world.xz * 0.024 - dir * TIME * 0.055).r;
+	float flutter = (texture(wind_noise, world.xz * 0.09 - dir * TIME * 0.16).r - 0.5) * 0.18;
 	
-	float bend = (gust * 1.2 + swell * 0.6 + flutter) * wind_strength * pow(tip, 1.8);
-	world.xz += dir * bend * 0.38;
+	float bend = (gust * 0.9 + swell * 0.55 + flutter) * wind_strength * pow(tip, 1.8);
+	vec2 crosswind = vec2(-dir.y, dir.x);
+	world.xz += (dir * bend + crosswind * flutter * 0.18) * 0.38;
 	world.y -= bend * bend * 0.09;
 	
 	VERTEX = (inverse(MODEL_MATRIX) * vec4(world, 1.0)).xyz;

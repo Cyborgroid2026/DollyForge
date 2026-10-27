@@ -109,7 +109,7 @@ public partial class CyborgBody : Node3D
         (float X, float Y) Hip, (float Thigh, float Shin, float R, float Q) Leg, float Foot, float WaistY,
         float UnderbustY, float LowHipY);
 
-    // 여성형: 키 1.66 m, 허리·골반·가슴의 완만한 전환과 실물 크기의 인체 비례
+    // 여성형: 성체 키 1.80 m, 허리·골반·가슴의 완만한 전환과 실물 크기의 인체 비례
     static readonly Proportions Female = new(
         [
             new(0.735f, 0.032f, 0.032f, 0.042f, Cz: -0.005f),
@@ -131,7 +131,7 @@ public partial class CyborgBody : Node3D
         1.0f, (1.36f, 1.5f, 0.042f), (1.425f, 1.0f, 0.054f, 0.022f), (0.168f, 1.335f, 0.044f), (0.285f, 0.24f, 1.0f, 0f),
         (0.096f, 0.84f), (0.40f, 0.38f, 1.04f, 0.042f), 0.228f, 1.05f, 1.16f, 0.94f);
 
-    // 남성형: 키 1.78m, 역삼각형 흉근과 다부진 실루엣
+    // 남성형: 성체 키 1.86m, 역삼각형 흉근과 다부진 실루엣
     static readonly Proportions Male = new(
         [
             new(0.785f, 0.038f, 0.038f, 0.042f),
@@ -153,36 +153,28 @@ public partial class CyborgBody : Node3D
 
     // ------------------------------------------------------------------ 재질
 
-    static StandardMaterial3D? _shell, _cowlShell, _seam, _brassMat, _armorMetal;
+    static StandardMaterial3D? _shell, _cowlShell, _brassMat, _armorMetal;
 
-    /// <summary>고순도 새틴 화이트 세라믹/펄 에나멜 외장: 비금속 유전체 표면으로 따뜻한 미색 실크 광택과 리퀴드 클리어코트</summary>
+    /// <summary>은회색 새틴 티타늄 외장: 자연스러운 반사와 미세한 표면 확산을 남긴다</summary>
     static StandardMaterial3D Shell => _shell ??= new StandardMaterial3D
     {
-        AlbedoColor = new Color(0.96f, 0.955f, 0.94f),
-        Metallic = 0.0f, // 비금속 유전체! 크롬/양철통 느낌 전면 제거
-        Roughness = 0.34f,
+        AlbedoColor = new Color(0.60f, 0.66f, 0.71f),
+        Metallic = 0.68f,
+        Roughness = 0.36f,
         ClearcoatEnabled = true,
-        Clearcoat = 0.25f,
-        ClearcoatRoughness = 0.22f,
+        Clearcoat = 0.12f,
+        ClearcoatRoughness = 0.30f,
     };
 
-    /// <summary>머리 헬멧 셸 및 외장 플레이트용 고강도 무광 세라믹 복합체</summary>
+    /// <summary>머리 헬멧 셸 및 외장 플레이트용 어두운 티타늄 합금</summary>
     static StandardMaterial3D CowlShell => _cowlShell ??= new StandardMaterial3D
     {
-        AlbedoColor = new Color(0.93f, 0.925f, 0.91f),
-        Metallic = 0.0f,
-        Roughness = 0.26f,
+        AlbedoColor = new Color(0.43f, 0.49f, 0.55f),
+        Metallic = 0.72f,
+        Roughness = 0.32f,
         ClearcoatEnabled = true,
-        Clearcoat = 0.5f,
-        ClearcoatRoughness = 0.12f,
-    };
-
-    /// <summary>정밀 관절 및 분할선 (어두운 건메탈 티타늄)</summary>
-    static StandardMaterial3D Seam => _seam ??= new StandardMaterial3D
-    {
-        AlbedoColor = new Color(0.14f, 0.15f, 0.17f),
-        Metallic = 0.92f,
-        Roughness = 0.38f,
+        Clearcoat = 0.18f,
+        ClearcoatRoughness = 0.24f,
     };
 
     /// <summary>레트로퓨처 정밀 가공 놋쇠 악센트</summary>
@@ -214,31 +206,17 @@ public partial class CyborgBody : Node3D
     public static CyborgBody Build(byte gender)
     {
         var P = gender == 1 ? Male : Female;
-        var g = new CyborgBody { Height = gender == 1 ? 1.78f : 1.66f };
-        Add(g, Loft(P.Torso.Select(s => s with { Sq = P.Sq }).ToArray(), 64, 7), Shell);
-
-        // 파팅선 1: 언더버스트 밴드 (스케치의 가슴 밑 절개선)
-        if (gender == 0)
+        var scale = gender == 1 ? 1.045f : 1.08f;
+        var g = new CyborgBody
         {
-            var under = P.Torso.MinBy(s => Mathf.Abs(s.Y - P.UnderbustY));
-            SeamRing(g, P.UnderbustY, under.Rx * 1.01f, (under.F + under.B) / 2 * 1.015f, cz: 0.005f);
-            BrassRing(g, P.UnderbustY, under.Rx * 1.006f, (under.F + under.B) / 2 * 1.008f, cz: 0.005f);
-        }
-
-        // 파팅선 2: 허리 링 (잘록한 허리 분할선)
-        var waist = P.Torso.MinBy(s => Mathf.Abs(s.Y - P.WaistY));
-        SeamRing(g, P.WaistY, waist.Rx * 1.01f, (waist.F + waist.B) / 2 * 1.01f);
-        BrassRing(g, P.WaistY + 0.006f, waist.Rx * 1.018f, (waist.F + waist.B) / 2 * 1.018f);
-
-        // 파팅선 3: 골반 로우라이즈 밴드 (스케치의 쇼츠/하복부 셸 분할)
-        var hip = P.Torso.MinBy(s => Mathf.Abs(s.Y - P.LowHipY));
-        SeamRing(g, P.LowHipY, hip.Rx * 1.008f, (hip.F + hip.B) / 2 * 1.008f);
-
-        // 목: 실린더 + 상/하부 칼라 링
-        Add(g, new CylinderMesh { TopRadius = P.Neck.R * 0.92f, BottomRadius = P.Neck.R * 1.15f, Height = P.Neck.Y1 - P.Neck.Y0, RadialSegments = 24 },
-            Shell, new Vector3(0, (P.Neck.Y0 + P.Neck.Y1) / 2, -0.008f));
-        SeamRing(g, P.Neck.Y0 + 0.01f, P.Neck.R * 1.12f, P.Neck.R * 1.12f, -0.008f);
-        BrassRing(g, P.Neck.Y1 - 0.025f, P.Neck.R * 0.98f, P.Neck.R * 0.98f, -0.008f);
+            Height = gender == 1 ? 1.86f : 1.80f,
+            Scale = Vector3.One * scale,
+        };
+        var torso = P.Torso
+            .Append(new Sec(P.Neck.Y1, P.Neck.R * 0.92f, P.Neck.R * 0.92f, P.Neck.R * 0.92f, Cz: -0.008f))
+            .Select(s => s with { Sq = P.Sq })
+            .ToArray();
+        Add(g, Loft(torso, 64, 7), Shell);
 
         g._head = BuildHead(P, g);
         g._armL = BuildArm(P, -1);
@@ -254,19 +232,6 @@ public partial class CyborgBody : Node3D
         var m = new MeshInstance3D { Mesh = mesh, MaterialOverride = mat, Position = at, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
         parent.AddChild(m);
         return m;
-    }
-
-    /// <summary>관절 분할선: 단면 타원을 따라 감는 얇은 고리</summary>
-    static void SeamRing(Node3D parent, float y, float rx, float rz, float cz = 0)
-    {
-        var ring = Add(parent, new TorusMesh { InnerRadius = 0.975f, OuterRadius = 1.025f, Rings = 48, RingSegments = 6 }, Seam, new Vector3(0, y, cz));
-        ring.Scale = new Vector3(rx * 1.004f, 0.05f, rz * 1.004f);
-    }
-
-    static void BrassRing(Node3D parent, float y, float rx, float rz, float cz = 0)
-    {
-        var ring = Add(parent, new TorusMesh { InnerRadius = 0.985f, OuterRadius = 1.015f, Rings = 48, RingSegments = 6 }, Brass, new Vector3(0, y, cz));
-        ring.Scale = new Vector3(rx * 1.002f, 0.07f, rz * 1.002f);
     }
 
     /// <summary>스케치(sketch_01.jpg)의 상징인 챔퍼 사각형 헬멧 외장 셸</summary>
@@ -411,10 +376,8 @@ public partial class CyborgBody : Node3D
         var (U, F, r, bicep) = P.Arm;
         var arm = new Node3D { Position = new Vector3(side * P.Shoulder.X, P.Shoulder.Y, 0), Rotation = new Vector3(0, 0, side * 0.09f) };
 
-        // 어깨 델토이드 캡 + 놋쇠 림
+        // 어깨 델토이드 캡은 외장과 다른 금속색이지만 링 이음매는 두지 않는다
         Add(arm, new SphereMesh { Radius = P.Shoulder.Delt, Height = P.Shoulder.Delt * 2 }, ArmorMetal).Scale = new Vector3(1, 1.1f, 1.05f);
-        var ring = Add(arm, new TorusMesh { InnerRadius = 0.96f, OuterRadius = 1.04f, Rings = 32, RingSegments = 6 }, Brass, new Vector3(0, -P.Shoulder.Delt * 0.3f, 0));
-        ring.Scale = new Vector3(P.Shoulder.Delt * 1.02f, 0.03f, P.Shoulder.Delt * 1.02f);
 
         Sec[] upper = [
             new(0, 0.031f, 0.032f, 0.033f),
@@ -427,8 +390,6 @@ public partial class CyborgBody : Node3D
 
         var elbow = new Node3D { Position = new Vector3(0, -U, 0), Rotation = new Vector3(-0.14f, 0, 0) };
         arm.AddChild(elbow);
-        SeamRing(elbow, 0, 0.033f * r, 0.034f * r);
-
         Sec[] fore = [
             new(0, 0.025f, 0.018f, 0.019f),
             new(F * 0.3f, 0.028f, 0.022f, 0.024f),
@@ -436,9 +397,7 @@ public partial class CyborgBody : Node3D
             new(F * 0.92f, 0.035f, 0.032f, 0.033f),
             new(F, 0.031f, 0.031f, 0.031f)
         ];
-        Add(elbow, Loft(fore.Select(x => x.Scale(r)).ToArray(), 32, 5), ArmorMetal, new Vector3(0, -F, 0));
-        SeamRing(elbow, -F + 0.004f, 0.026f * r, 0.02f * r);
-
+        Add(elbow, Loft(fore.Select(x => x.Scale(r)).ToArray(), 32, 5), Shell, new Vector3(0, -F, 0));
         var hand = BuildHand(r);
         hand.Position = new Vector3(0, -F, 0);
         elbow.AddChild(hand);
@@ -480,7 +439,7 @@ public partial class CyborgBody : Node3D
             new(T + 0.05f, 0.062f, 0.060f, 0.066f, Cx: -0.010f),
             new(T + 0.09f, 0.026f, 0.026f, 0.026f, Cx: -0.018f)
         ];
-        Add(leg, Loft(thigh.Select(x => x.Scale(r)).ToArray(), 40, 5), ArmorMetal, new Vector3(0, -T, 0));
+        Add(leg, Loft(thigh.Select(x => x.Scale(r)).ToArray(), 40, 5), Shell, new Vector3(0, -T, 0));
 
         // 스케치(sketch_01.jpg)의 허벅지 외측 장갑 패널
         var plate = BuildThighPlate(r);
@@ -489,8 +448,6 @@ public partial class CyborgBody : Node3D
 
         var knee = new Node3D { Position = new Vector3(0, -T, 0) };
         leg.AddChild(knee);
-        SeamRing(knee, -0.004f, 0.044f * r, 0.045f * r);
-
         Sec[] shin = [
             new(0, 0.026f, 0.027f, 0.03f),
             new(N * 0.15f, 0.029f, 0.029f, 0.034f),
@@ -499,9 +456,7 @@ public partial class CyborgBody : Node3D
             new(N * 0.92f, 0.043f, 0.045f, 0.043f),
             new(N, 0.044f, 0.046f, 0.043f)
         ];
-        Add(knee, Loft(shin.Select(x => x.Scale(r)).ToArray(), 40, 5), ArmorMetal, new Vector3(0, -N, 0));
-        SeamRing(knee, -N + 0.004f, 0.027f * r, 0.029f * r);
-
+        Add(knee, Loft(shin.Select(x => x.Scale(r)).ToArray(), 40, 5), Shell, new Vector3(0, -N, 0));
         // 발: 로컬 Y(발끝 방향) → +Z 로 눕힌다, F(앞)=발바닥
         var FL = P.Foot;
         Sec[] foot = [

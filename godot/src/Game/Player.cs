@@ -121,7 +121,7 @@ public partial class Player : CharacterBody3D
     public void ApplyBody(BodyConfig body)
     {
         Body = body with { Worn = [] };
-        EyeHeight = body.Gender == 1 ? 1.67f : 1.55f;
+        EyeHeight = body.Gender == 1 ? 1.75f : 1.68f;
         RebuildAvatar();
         BodyMassKg = Cyborg.Assemble(Body, System.Numerics.Vector3.Zero).TotalMass;
         RefreshCaps();

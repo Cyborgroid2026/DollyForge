@@ -189,6 +189,15 @@ public partial class World : Node3D
             heights[z * n + x] = Mathf.Lerp(ground, PondBank, bank) - bowl * PondDepth;
         }
         Site.ShapeTerrain(heights, n);
+        // 자연 지형은 먼 평원과 같은 높이로 부드럽게 풀려 나가며 격자 가장자리에 절벽을 만들지 않는다.
+        for (var z = 0; z < n; z++)
+        for (var x = 0; x < n; x++)
+        {
+            var wx = x - (n - 1) / 2f;
+            var wz = z - (n - 1) / 2f;
+            var edge = Mathf.Max(Mathf.Abs(wx), Mathf.Abs(wz));
+            heights[z * n + x] = Mathf.Lerp(-0.6f, heights[z * n + x], 1f - Mathf.SmoothStep(56f, 79.8f, edge));
+        }
 
         var shape = new HeightMapShape3D { MapWidth = n, MapDepth = n, MapData = heights };
         var body = new StaticBody3D { CollisionLayer = PartBody.LayerWorld, CollisionMask = 0 };

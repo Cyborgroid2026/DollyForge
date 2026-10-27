@@ -15,6 +15,7 @@ public partial class Nature : Node3D
     public World World { get; set; } = null!;
     readonly RandomNumberGenerator _rng = new() { Seed = 4242 };
     readonly FastNoiseLite _gust = new() { Seed = 99, Frequency = 0.07f, FractalOctaves = 3 };
+    readonly FastNoiseLite _edgeNoise = new() { Seed = 73, Frequency = 0.018f, FractalOctaves = 2 };
     GpuParticles3D? _pollen;
     float _time;
 
@@ -34,6 +35,13 @@ public partial class Nature : Node3D
         if (!Site.Clear(x, z)) return false; // 작업장·마당·정류장·선로·오솔길·연못
         var slope = new Vector2(World.HeightAt(x + 0.5f, z) - World.HeightAt(x - 0.5f, z), World.HeightAt(x, z + 0.5f) - World.HeightAt(x, z - 0.5f)).Length();
         return slope < 0.7f; // 가파른 비탈엔 풀이 덜 붙는다
+    }
+
+    float EdgeDensity(float x, float z)
+    {
+        var radius = new Vector2(x, z).Length();
+        var fadeStart = 51f + _edgeNoise.GetNoise2D(x, z) * 7f;
+        return 1f - Mathf.SmoothStep(fadeStart, Extent, radius);
     }
 
     // ------------------------------------------------------------------ 풀
@@ -103,6 +111,7 @@ public partial class Nature : Node3D
                 var px = x + _rng.RandfRange(-0.45f, 0.45f);
                 var pz = z + _rng.RandfRange(-0.45f, 0.45f);
                 if (!OpenGround(px, pz, out _)) continue;
+                if (_rng.Randf() > EdgeDensity(px, pz)) continue;
                 if (patch.GetNoise2D(px, pz) < -0.05f + _rng.Randf() * 0.2f) continue; // 군락 사이 빈 땅
                 var h = World.HeightAt(px, pz);
                 var s = _rng.RandfRange(0.7f, 1.35f) * (0.85f + patch.GetNoise2D(px * 3, pz * 3) * 0.3f);
@@ -170,6 +179,7 @@ public partial class Nature : Node3D
                 var x = _rng.RandfRange(-Extent, Extent);
                 var z = _rng.RandfRange(-Extent, Extent);
                 if (!OpenGround(x, z, out var h) || meadow.GetNoise2D(x, z) < 0.15f) continue;
+                if (_rng.Randf() > EdgeDensity(x, z)) continue;
                 var s = _rng.RandfRange(0.05f, 0.09f);
                 spots.Add(new Transform3D(Basis.Identity.Scaled(Vector3.One * s), new Vector3(x, h + _rng.RandfRange(0.18f, 0.42f), z)));
             }
@@ -262,6 +272,8 @@ public partial class Nature : Node3D
         // 돌풍: 노이즈로 변하는 세기 (0.15–0.95), 같은 주기가 되풀이되지 않는다
         var gust = Mathf.Clamp(0.5f + _gust.GetNoise1D(_time) * 0.8f, 0.15f, 0.95f);
         RenderingServer.GlobalShaderParameterSet("wind_strength", gust);
+        var direction = new Vector2(0.9f, 0.35f).Rotated(_gust.GetNoise1D(_time * 0.08f) * 0.22f).Normalized();
+        RenderingServer.GlobalShaderParameterSet("wind_direction", direction);
         if (_pollen is not null && GetViewport().GetCamera3D() is { } cam)
             _pollen.GlobalPosition = cam.GlobalPosition;
     }
