@@ -100,10 +100,10 @@ public partial class Nature : Node3D
             for (var x = cx; x < cx + Cell; x += 0.5f)
             for (var z = cz; z < cz + Cell; z += 0.5f)
             {
-                var px = x + _rng.RandfRange(-0.3f, 0.3f);
-                var pz = z + _rng.RandfRange(-0.3f, 0.3f);
+                var px = x + _rng.RandfRange(-0.45f, 0.45f);
+                var pz = z + _rng.RandfRange(-0.45f, 0.45f);
                 if (!OpenGround(px, pz, out _)) continue;
-                if (patch.GetNoise2D(px, pz) < -0.25f + _rng.Randf() * 0.2f) continue; // 군락 사이 빈 땅
+                if (patch.GetNoise2D(px, pz) < -0.05f + _rng.Randf() * 0.2f) continue; // 군락 사이 빈 땅
                 var h = World.HeightAt(px, pz);
                 var s = _rng.RandfRange(0.7f, 1.35f) * (0.85f + patch.GetNoise2D(px * 3, pz * 3) * 0.3f);
                 var basis = new Basis(Vector3.Up, _rng.RandfRange(0, Mathf.Tau)).Scaled(new Vector3(s, s * _rng.RandfRange(0.8f, 1.25f), s));
