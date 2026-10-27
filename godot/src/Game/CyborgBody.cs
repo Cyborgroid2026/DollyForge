@@ -414,8 +414,10 @@ public partial class CyborgBody : Node3D
     public void Animate(float dt, float speed)
     {
         var target = Mathf.Min(1, speed / 3);
-        _amp += (target - _amp) * Mathf.Min(1, dt * 8);
-        _phase += dt * (2.2f + speed * 1.1f);
+        _amp = Mathf.MoveToward(_amp, target, dt * (target > _amp ? 5.5f : 3.2f));
+        var strideLength = Mathf.Lerp(1.45f, 2.2f, target);
+        var cadence = speed > 0.08f ? Mathf.Tau * speed / strideLength : 1.2f;
+        _phase = Mathf.PosMod(_phase + dt * cadence, Mathf.Tau);
         var s = Mathf.Sin(_phase);
 
         _legL.Rotation = new Vector3(s * 0.5f * _amp, 0, 0);

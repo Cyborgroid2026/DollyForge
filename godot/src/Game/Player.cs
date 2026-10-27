@@ -41,6 +41,8 @@ public partial class Player : CharacterBody3D
     float _landingVelocity;
     Vector3 _headOffset;
     Vector3 _headOffsetVelocity;
+    Vector3 _lastHorizontalVelocity;
+    float _cameraLean, _cameraPitchLean;
     bool _wasOnFloor;
     int _tool;
 
@@ -51,7 +53,7 @@ public partial class Player : CharacterBody3D
     /// <summary>3인칭 카메라: 눈(Camera)에서 뒤나 앞으로 뻗은 팔 끝. 벽에 닿으면 몸 쪽으로 당겨진다.</summary>
     SpringArm3D _viewArm = null!;
     Camera3D _viewCamera = null!;
-    Label _compassNeedle = null!, _zoomLabel = null!;
+    Label _compassNeedle = null!, _zoomLabel = null!, _bearingLabel = null!;
     /// <summary>3인칭에서 보이는 내 몸 (1인칭에서는 숨긴다: 카메라가 머리 안에 있다)</summary>
     CyborgBody? _avatar;
     internal CyborgBody? Avatar => _avatar;
@@ -300,6 +302,15 @@ public partial class Player : CharacterBody3D
         compass.AddChild(north);
         compass.AddChild(_compassNeedle);
         contents.AddChild(compass);
+        _bearingLabel = new Label
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            CustomMinimumSize = new Vector2(58, 0),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        _bearingLabel.AddThemeFontSizeOverride("font_size", 11);
+        _bearingLabel.AddThemeColorOverride("font_color", new Color(0.78f, 0.84f, 0.88f));
+        contents.AddChild(_bearingLabel);
 
         var zoomRow = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         var zoomOut = StreetViewButton("−");
@@ -372,7 +383,12 @@ public partial class Player : CharacterBody3D
 
     public override void _Process(double delta)
     {
-        if (_compassNeedle is not null) _compassNeedle.Rotation = Rotation.Y;
+        if (_compassNeedle is not null)
+        {
+            _compassNeedle.Rotation = Rotation.Y;
+            var heading = Mathf.PosMod(Mathf.RadToDeg(Rotation.Y), 360f);
+            _bearingLabel.Text = $"{heading:000}°";
+        }
     }
 
     public override void _UnhandledInput(InputEvent e)
@@ -536,7 +552,10 @@ public partial class Player : CharacterBody3D
         Velocity = v;
         MoveAndSlide();
 
-        UpdateHeadMotion(dt, new Vector3(Velocity.X, 0, Velocity.Z), v.Y);
+        var actualHorizontal = new Vector3(Velocity.X, 0, Velocity.Z);
+        var horizontalAcceleration = (actualHorizontal - _lastHorizontalVelocity) / Mathf.Max(dt, 0.0001f);
+        _lastHorizontalVelocity = actualHorizontal;
+        UpdateHeadMotion(dt, actualHorizontal, horizontalAcceleration, v.Y);
         _avatar?.Animate(dt, new Vector2(Velocity.X, Velocity.Z).Length());
 
         // 밀기: 사람이 낼 수 있는 힘 이하로만
@@ -557,7 +576,7 @@ public partial class Player : CharacterBody3D
         if (_held is not null) Hold(dt);
     }
 
-    void UpdateHeadMotion(float dt, Vector3 horizontalVelocity, float verticalVelocity)
+    void UpdateHeadMotion(float dt, Vector3 horizontalVelocity, Vector3 horizontalAcceleration, float verticalVelocity)
     {
         var grounded = IsOnFloor();
         var speed = horizontalVelocity.Length();
@@ -586,10 +605,19 @@ public partial class Player : CharacterBody3D
         _headOffset += _headOffsetVelocity * dt;
 
         var localVelocity = GlobalBasis.Inverse() * horizontalVelocity;
-        var roll = firstPerson ? -Mathf.Clamp(localVelocity.X / Run, -1f, 1f) * 0.012f : 0f;
-        var pitchSway = firstPerson && grounded ? Mathf.Sin(_headBobPhase) * 0.003f * Mathf.Min(speed / Run, 1f) : 0f;
+        var localAcceleration = GlobalBasis.Inverse() * horizontalAcceleration;
+        var leanTarget = firstPerson
+            ? -Mathf.Clamp(localVelocity.X / Run, -1f, 1f) * 0.012f - Mathf.Clamp(localAcceleration.X / GroundAccel, -1f, 1f) * 0.014f
+            : 0f;
+        var pitchLeanTarget = firstPerson
+            ? Mathf.Clamp(localAcceleration.Z / GroundAccel, -1f, 1f) * 0.012f
+            : 0f;
+        var leanBlend = 1f - Mathf.Exp(-dt * 7f);
+        _cameraLean = Mathf.Lerp(_cameraLean, leanTarget, leanBlend);
+        _cameraPitchLean = Mathf.Lerp(_cameraPitchLean, pitchLeanTarget, leanBlend);
+        var pitchSway = firstPerson && grounded ? Mathf.Sin(_headBobPhase) * 0.006f * Mathf.Min(speed / Run, 1f) : 0f;
         Camera.Position = new Vector3(_headOffset.X, _eyeHeight + _headOffset.Y, _headOffset.Z);
-        Camera.Rotation = new Vector3(_pitch + pitchSway, 0, roll);
+        Camera.Rotation = new Vector3(_pitch + pitchSway + _cameraPitchLean, 0, _cameraLean);
     }
 
     /// <summary>들고 있는 부품을 손 위치로 당긴다. 힘·토크는 사람 한계로 제한된다.</summary>

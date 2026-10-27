@@ -20,6 +20,23 @@ uniform float rock_tile = 3.0;
 varying vec3 wpos;
 varying vec3 wnorm;
 
+float hash21(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
+
+float value_noise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(
+		mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
+		mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x),
+		f.y
+	);
+}
+
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnorm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
@@ -62,6 +79,13 @@ void fragment() {
 	vec3 albedo = tri_color(grass_albedo, grass_tile, b) * grass_tint * w.r + tri_color(soil_albedo, soil_tile, b) * soil_tint * w.g + tri_color(rock_albedo, rock_tile, b) * w.b;
 	float rough = tri_rough(grass_rough, grass_tile, b) * w.r + tri_rough(soil_rough, soil_tile, b) * w.g + tri_rough(rock_rough, rock_tile, b) * w.b;
 	vec3 n = normalize(tri_normal(grass_normal, grass_tile, b) * w.r + tri_normal(soil_normal, soil_tile, b) * w.g + tri_normal(rock_normal, rock_tile, b) * w.b);
+
+	// Break up large-scale texture repetition with subtle, world-anchored field variation.
+	float field = value_noise(wpos.xz * 0.09);
+	float patch = value_noise(wpos.xz * 0.42 + 23.7);
+	float tone = (field - 0.5) * 0.12 + (patch - 0.5) * 0.05;
+	albedo *= vec3(1.0 + tone * 0.92, 1.0 + tone, 1.0 + tone * 1.08);
+	rough = clamp(rough + (0.5 - field) * 0.06, 0.0, 1.0);
 
 	// 광석 노두: 적철석은 녹슨 적갈색, 황동석은 놋쇠빛 금속 반점
 	float iron = clamp(UV2.x, 0.0, 1.0);
