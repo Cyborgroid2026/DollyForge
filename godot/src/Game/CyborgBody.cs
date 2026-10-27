@@ -5,7 +5,7 @@ namespace DollyForge.Game;
 
 /// <summary>
 /// 전신 사이보그 몸. 곡면 chassis 가 하중을 연속적으로 나누고, 관절은 유연한 외피 아래에서 움직인다.
-/// Analog 설계의 topology(연결), chassis(지지), circuit(움직임), instrument(감각)를 몸의 형태로 드러낸다.
+/// 얼굴과 머리카락 없이, Analog 설계의 topology(연결), chassis(지지), circuit(움직임), instrument(감각)를 몸의 형태로 드러낸다.
 /// </summary>
 public partial class CyborgBody : Node3D
 {
@@ -154,7 +154,7 @@ public partial class CyborgBody : Node3D
 
     // ------------------------------------------------------------------ 재질
 
-    static StandardMaterial3D? _shell, _visorMat, _heavyTitanium, _lightTitanium;
+    static StandardMaterial3D? _shell, _heavyTitanium, _lightTitanium;
     static StandardMaterial3D? _jointMat, _jointSeamMat;
 
     /// <summary>전신 외장과 지체를 이루는 브러시드 티타늄 합금</summary>
@@ -206,16 +206,6 @@ public partial class CyborgBody : Node3D
         AlbedoColor = new Color(0.28f, 0.35f, 0.39f),
         Metallic = 0.86f,
         Roughness = 0.5f,
-    };
-
-    static StandardMaterial3D Visor => _visorMat ??= new StandardMaterial3D
-    {
-        AlbedoColor = new Color(0.12f, 0.20f, 0.21f),
-        Metallic = 0.58f,
-        Roughness = 0.28f,
-        ClearcoatEnabled = true,
-        Clearcoat = 0.18f,
-        ClearcoatRoughness = 0.24f,
     };
 
     // ------------------------------------------------------------------ 조립
@@ -317,7 +307,7 @@ public partial class CyborgBody : Node3D
         var (b, k, jaw, chin) = P.Head;
         var head = new Node3D { Position = new Vector3(0, b, 0) };
 
-        // 얼굴은 하나의 둥근 외피로 잇고, 짙은 유리 감각부만 작게 얹는다.
+        // 눈·코·입이나 머리카락 없이 매끈한 티타늄 감각 셸 하나로 마감한다.
         Sec[] s =
         [
             new(0, chin * 0.65f, 0.016f, 0.014f, Cz: 0.038f),
@@ -332,16 +322,12 @@ public partial class CyborgBody : Node3D
         ];
         Add(head, Loft(s.Select(x => x with { Y = x.Y * k, Rx = x.Rx * k, F = x.F * k, B = x.B * k, Cz = x.Cz * k }).ToArray(), 56, 7), Shell);
 
-        var visor = Add(head, new SphereMesh { Radius = 0.083f * k, Height = 0.09f * k, RadialSegments = 40, Rings = 20 },
-            Visor, new Vector3(0, 0.148f * k, 0.090f * k));
-        visor.Scale = new Vector3(1.05f, 0.66f, 0.19f);
-
-        // 좌우 청각·균형 감각부
+        // 센서는 얼굴이 아닌 관자 양옆에 작게 두어 비인간적인 실루엣을 유지한다.
         foreach (var side in new[] { -1, 1 })
         {
-            var ear = Add(head, new SphereMesh { Radius = 0.022f * k, Height = 0.042f * k, RadialSegments = 24, Rings = 12 },
+            var sensor = Add(head, new SphereMesh { Radius = 0.018f * k, Height = 0.034f * k, RadialSegments = 24, Rings = 12 },
                 JointMaterial, new Vector3(side * 0.091f * k, 0.122f * k, -0.004f * k));
-            ear.Scale = new Vector3(0.7f, 1f, 1.15f);
+            sensor.Scale = new Vector3(0.65f, 0.9f, 1f);
         }
 
         g.AddChild(head);
