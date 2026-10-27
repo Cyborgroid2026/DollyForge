@@ -46,20 +46,20 @@ public partial class Nature : Node3D
 
     // ------------------------------------------------------------------ 풀
 
-    /// <summary>풀 한 포기: 잎 10~14장, 잎마다 다른 높이·폭·기울기·휨·색 (일부는 마른 잎)</summary>
+    /// <summary>풀 한 포기: 잎마다 높이·폭·기울기·휨·색이 다르고, 일부 잎은 마른색이다.</summary>
     ArrayMesh Clump(float scale = 1)
     {
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
-        var blades = _rng.RandiRange(16, 24);
+        var blades = _rng.RandiRange(10, 18);
         var v = 0;
         for (var b = 0; b < blades; b++)
         {
             var r = Mathf.Sqrt(_rng.Randf()) * 0.24f;
             var a = _rng.RandfRange(0, Mathf.Tau);
             var root = new Vector3(Mathf.Cos(a) * r, 0, Mathf.Sin(a) * r);
-            var height = _rng.RandfRange(0.3f, 0.8f) * scale;
-            var width = _rng.RandfRange(0.014f, 0.03f);
+            var height = _rng.RandfRange(0.2f, 0.68f) * scale;
+            var width = _rng.RandfRange(0.01f, 0.024f);
             var lean = new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a)) * _rng.RandfRange(0.05f, 0.45f) + new Vector3(_rng.RandfRange(-0.1f, 0.1f), 0, _rng.RandfRange(-0.1f, 0.1f));
             var face = _rng.RandfRange(0, Mathf.Tau);
             var side = new Vector3(Mathf.Cos(face), 0, Mathf.Sin(face));
@@ -99,20 +99,21 @@ public partial class Nature : Node3D
         var mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/grass.gdshader") };
         mat.SetShaderParameter("wind_noise", WindNoise(3));
         var variants = new[] { Clump(), Clump(), Clump(), Clump() };
-        var patch = new FastNoiseLite { Seed = 17, Frequency = 0.035f, FractalOctaves = 3 };
+        var patch = new FastNoiseLite { Seed = 17, Frequency = 0.035f, FractalOctaves = 2 };
+        var understory = new FastNoiseLite { Seed = 29, Frequency = 0.13f, FractalOctaves = 2 };
         var total = 0;
         for (var cx = -Extent; cx < Extent; cx += Cell)
         for (var cz = -Extent; cz < Extent; cz += Cell)
         {
             var perVariant = variants.Select(_ => new List<Transform3D>()).ToArray();
-            for (var x = cx; x < cx + Cell; x += 0.5f)
-            for (var z = cz; z < cz + Cell; z += 0.5f)
+            for (var sample = 0; sample < 1024; sample++)
             {
-                var px = x + _rng.RandfRange(-0.45f, 0.45f);
-                var pz = z + _rng.RandfRange(-0.45f, 0.45f);
+                var px = _rng.RandfRange(cx, cx + Cell);
+                var pz = _rng.RandfRange(cz, cz + Cell);
                 if (!OpenGround(px, pz, out _)) continue;
                 if (_rng.Randf() > EdgeDensity(px, pz)) continue;
-                if (patch.GetNoise2D(px, pz) < -0.05f + _rng.Randf() * 0.2f) continue; // 군락 사이 빈 땅
+                var abundance = Mathf.Clamp(0.36f + patch.GetNoise2D(px, pz) * 0.42f + understory.GetNoise2D(px, pz) * 0.16f, 0.04f, 0.82f);
+                if (_rng.Randf() > abundance) continue;
                 var h = World.HeightAt(px, pz);
                 var s = _rng.RandfRange(0.7f, 1.35f) * (0.85f + patch.GetNoise2D(px * 3, pz * 3) * 0.3f);
                 var basis = new Basis(Vector3.Up, _rng.RandfRange(0, Mathf.Tau)).Scaled(new Vector3(s, s * _rng.RandfRange(0.8f, 1.25f), s));
@@ -180,8 +181,8 @@ public partial class Nature : Node3D
                 var z = _rng.RandfRange(-Extent, Extent);
                 if (!OpenGround(x, z, out var h) || meadow.GetNoise2D(x, z) < 0.15f) continue;
                 if (_rng.Randf() > EdgeDensity(x, z)) continue;
-                var s = _rng.RandfRange(0.05f, 0.09f);
-                spots.Add(new Transform3D(Basis.Identity.Scaled(Vector3.One * s), new Vector3(x, h + _rng.RandfRange(0.18f, 0.42f), z)));
+                var s = _rng.RandfRange(0.1f, 0.17f);
+                spots.Add(new Transform3D(Basis.Identity.Scaled(Vector3.One * s), new Vector3(x, h + s * 0.5f, z)));
             }
             var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = new QuadMesh { Size = Vector2.One }, InstanceCount = spots.Count };
             for (var i = 0; i < spots.Count; i++) mm.SetInstanceTransform(i, spots[i]);

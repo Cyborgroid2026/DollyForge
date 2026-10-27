@@ -12,8 +12,8 @@ uniform sampler2D rock_albedo : source_color, filter_linear_mipmap_anisotropic, 
 uniform sampler2D rock_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D rock_rough : hint_roughness_r, filter_linear_mipmap, repeat_enable;
 uniform float grass_tile = 4.0;
-uniform vec3 grass_tint = vec3(0.78, 0.90, 0.68);
-uniform vec3 soil_tint = vec3(0.86, 0.84, 0.80);
+uniform vec3 grass_tint = vec3(0.68, 0.82, 0.54);
+uniform vec3 soil_tint = vec3(0.78, 0.72, 0.59);
 uniform float soil_tile = 2.5;
 uniform float rock_tile = 3.0;
 

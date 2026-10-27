@@ -172,6 +172,8 @@ public partial class World : Node3D
         var fine = new FastNoiseLite { Seed = 23, Frequency = 0.075f, FractalOctaves = 2 };
         var shore = new FastNoiseLite { Seed = 37, Frequency = 0.12f, FractalOctaves = 2 };
         var terrainEdge = new FastNoiseLite { Seed = 881, Frequency = 0.025f, FractalOctaves = 2 };
+        var meadow = new FastNoiseLite { Seed = 17, Frequency = 0.035f, FractalOctaves = 2 };
+        var groundDetail = new FastNoiseLite { Seed = 29, Frequency = 0.13f, FractalOctaves = 2 };
         var heights = _heights = new float[n * n];
         for (var z = 0; z < n; z++)
         for (var x = 0; x < n; x++)
@@ -222,8 +224,9 @@ public partial class World : Node3D
             var p = new Vector2(wx, wz);
             var gravel = Mathf.Max(1 - Mathf.SmoothStep(1.5f, 4f, DistanceToRect(Site.Building, p)),
                                    1 - Mathf.SmoothStep(2.4f, 4.2f, Mathf.Abs(wz - Site.RailZ)));
-            // R 풀, G 자갈, B 암석 — 셰이더가 경사에 따라 다시 조정한다
-            st.SetColor(new Color(1 - gravel, gravel, Mathf.Clamp((h - 6) / 4, 0, 1)));
+            var cover = Mathf.SmoothStep(-0.65f, 0.2f, meadow.GetNoise2D(wx, wz) + groundDetail.GetNoise2D(wx, wz) * 0.16f);
+            // 풀과 흙이 노이즈 군락으로 이어지고, 구조물 주변만 자갈이 된다.
+            st.SetColor(new Color((1 - gravel) * cover, gravel + (1 - gravel) * (1 - cover), Mathf.Clamp((h - 6) / 4, 0, 1)));
             st.SetUV2(Vector2.Zero);
             st.AddVertex(new Vector3(wx, h, wz));
         }

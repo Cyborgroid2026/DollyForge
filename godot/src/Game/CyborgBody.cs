@@ -4,8 +4,7 @@ using DollyForge.Core;
 namespace DollyForge.Game;
 
 /// <summary>
-/// 전신 사이보그 몸. 곡면 chassis 가 하중을 연속적으로 나누고, 관절은 유연한 외피 아래에서 움직인다.
-/// 얼굴과 머리카락 없이, Analog 설계의 topology(연결), chassis(지지), circuit(움직임), instrument(감각)를 몸의 형태로 드러낸다.
+/// 전신 티타늄 인형. 성체 비례의 연속 곡면과 분해 가능한 관절을 갖고, 생체 기관이나 감각부는 표현하지 않는다.
 /// </summary>
 public partial class CyborgBody : Node3D
 {
@@ -105,7 +104,7 @@ public partial class CyborgBody : Node3D
     // ------------------------------------------------------------------ 체형 (m)
 
     sealed record Proportions(
-        Sec[] Torso, float Sq, (float Y0, float Y1, float R) Neck, (float Base, float Scale, float Jaw, float Chin) Head,
+        Sec[] Torso, float Sq, (float Y0, float Y1, float R) Neck, (float Base, float Scale) Head,
         (float X, float Y) Shoulder, (float Upper, float Fore, float R, float Bicep) Arm,
         (float X, float Y) Hip, (float Thigh, float Shin, float R, float Q) Leg, float Foot, float WaistY,
         float UnderbustY, float LowHipY);
@@ -113,12 +112,13 @@ public partial class CyborgBody : Node3D
     // 여성형: 성체 키 1.80 m, 허리·골반·가슴의 완만한 전환과 실물 크기의 인체 비례
     static readonly Proportions Female = new(
         [
-            new(0.735f, 0.032f, 0.032f, 0.042f, Cz: -0.005f),
-            new(0.765f, 0.115f, 0.072f, 0.088f),
-            new(0.815f, 0.165f, 0.084f, 0.100f, Glute: 0.012f),
-            new(0.87f, 0.172f, 0.088f, 0.107f, Glute: 0.018f),
-            new(0.93f, 0.164f, 0.085f, 0.100f, Glute: 0.010f),
-            new(0.99f, 0.148f, 0.082f, 0.088f),
+            new(0.70f, 0.16f, 0.098f, 0.108f, Cz: -0.005f),
+            new(0.75f, 0.17f, 0.10f, 0.116f, Glute: 0.014f),
+            new(0.80f, 0.19f, 0.102f, 0.122f, Glute: 0.028f),
+            new(0.85f, 0.198f, 0.104f, 0.126f, Glute: 0.036f),
+            new(0.89f, 0.198f, 0.104f, 0.126f, Glute: 0.036f),
+            new(0.945f, 0.188f, 0.098f, 0.116f, Glute: 0.026f),
+            new(0.99f, 0.158f, 0.084f, 0.096f, Glute: 0.016f),
             new(1.05f, 0.112f, 0.070f, 0.068f),                // 잘록한 허리 (폭 0.112m)
             new(1.11f, 0.124f, 0.076f, 0.074f),
             new(1.16f, 0.138f, 0.080f, 0.078f, Bust: 0.018f), // 언더버스트 시작 라인
@@ -129,17 +129,17 @@ public partial class CyborgBody : Node3D
             new(1.385f, 0.096f, 0.046f, 0.052f),
             new(1.4f, 0.048f, 0.040f, 0.040f),
         ],
-        1.0f, (1.36f, 1.5f, 0.042f), (1.425f, 1.0f, 0.054f, 0.022f), (0.168f, 1.335f), (0.285f, 0.24f, 1.0f, 0f),
-        (0.096f, 0.84f), (0.40f, 0.38f, 1.04f, 0.042f), 0.228f, 1.05f, 1.16f, 0.94f);
+        1.0f, (1.36f, 1.5f, 0.042f), (1.425f, 1.0f), (0.168f, 1.335f), (0.285f, 0.24f, 1.0f, 0f),
+        (0.065f, 0.84f), (0.40f, 0.38f, 1.04f, 0.042f), 0.228f, 1.05f, 1.16f, 0.94f);
 
     // 남성형: 성체 키 1.86m, 역삼각형 흉근과 다부진 실루엣
     static readonly Proportions Male = new(
         [
-            new(0.785f, 0.038f, 0.038f, 0.042f),
-            new(0.815f, 0.115f, 0.076f, 0.085f),
-            new(0.87f, 0.178f, 0.098f, 0.106f, Glute: 0.012f),
-            new(0.92f, 0.182f, 0.102f, 0.114f, Glute: 0.016f),
-            new(0.99f, 0.162f, 0.098f, 0.100f),
+            new(0.74f, 0.15f, 0.09f, 0.10f),
+            new(0.80f, 0.16f, 0.098f, 0.112f, Glute: 0.008f),
+            new(0.86f, 0.181f, 0.102f, 0.114f, Glute: 0.018f),
+            new(0.945f, 0.194f, 0.108f, 0.12f, Glute: 0.026f),
+            new(0.99f, 0.176f, 0.098f, 0.108f, Glute: 0.020f),
             new(1.06f, 0.144f, 0.094f, 0.092f),
             new(1.14f, 0.158f, 0.102f, 0.098f),
             new(1.22f, 0.180f, 0.110f, 0.106f),
@@ -149,8 +149,8 @@ public partial class CyborgBody : Node3D
             new(1.465f, 0.145f, 0.068f, 0.074f),
             new(1.49f, 0.068f, 0.058f, 0.058f),
         ],
-        1.18f, (1.44f, 1.6f, 0.055f), (1.525f, 1.08f, 0.066f, 0.032f), (0.212f, 1.415f), (0.31f, 0.27f, 1.22f, 0.012f),
-        (0.095f, 0.9f), (0.44f, 0.42f, 1.07f, 0.02f), 0.26f, 1.06f, 1.22f, 0.98f);
+        1.18f, (1.44f, 1.6f, 0.055f), (1.525f, 1.08f), (0.212f, 1.415f), (0.31f, 0.27f, 1.22f, 0.012f),
+        (0.074f, 0.9f), (0.44f, 0.42f, 1.07f, 0.02f), 0.26f, 1.06f, 1.22f, 0.98f);
 
     // ------------------------------------------------------------------ 재질
 
@@ -161,30 +161,27 @@ public partial class CyborgBody : Node3D
     static StandardMaterial3D Shell => _shell ??= new StandardMaterial3D
     {
         AlbedoColor = new Color(0.60f, 0.66f, 0.71f),
-        Metallic = 0.82f,
-        Roughness = 0.39f,
-        ClearcoatEnabled = true,
-        Clearcoat = 0.08f,
-        ClearcoatRoughness = 0.34f,
+        Metallic = 0.78f,
+        Roughness = 0.52f,
         NormalEnabled = ResourceLoader.Exists("res://assets/tex/metal_plate/nor_gl.jpg"),
         NormalTexture = ResourceLoader.Exists("res://assets/tex/metal_plate/nor_gl.jpg")
             ? GD.Load<Texture2D>("res://assets/tex/metal_plate/nor_gl.jpg")
             : null,
-        NormalScale = 0.055f,
+        NormalScale = 0.035f,
     };
 
     static StandardMaterial3D HeavyTitanium => _heavyTitanium ??= new StandardMaterial3D
     {
-        AlbedoColor = new Color(0.44f, 0.51f, 0.56f),
-        Metallic = 0.88f,
-        Roughness = 0.46f,
+        AlbedoColor = new Color(0.52f, 0.59f, 0.63f),
+        Metallic = 0.78f,
+        Roughness = 0.56f,
     };
 
     static StandardMaterial3D LightTitanium => _lightTitanium ??= new StandardMaterial3D
     {
-        AlbedoColor = new Color(0.70f, 0.74f, 0.77f),
-        Metallic = 0.84f,
-        Roughness = 0.32f,
+        AlbedoColor = new Color(0.64f, 0.68f, 0.71f),
+        Metallic = 0.78f,
+        Roughness = 0.46f,
     };
 
     static Material ModuleTitanium(ModuleVariant variant) => variant switch
@@ -212,9 +209,9 @@ public partial class CyborgBody : Node3D
 
     public float Height { get; private set; }
     Node3D _legL = null!, _legR = null!, _kneeL = null!, _kneeR = null!, _ankleL = null!, _ankleR = null!;
-    Node3D _armL = null!, _armR = null!, _elbowL = null!, _elbowR = null!, _handL = null!, _handR = null!, _thumbL = null!, _thumbR = null!, _head = null!;
+    Node3D _armL = null!, _armR = null!, _elbowL = null!, _elbowR = null!, _handL = null!, _handR = null!, _thumbL = null!, _thumbR = null!;
     Node3D[] _fingersL = [], _fingersR = [];
-    float _phase, _amp, _time;
+    float _phase, _amp;
 
     public static CyborgBody Build(byte gender) => Build(BodyConfig.Default(gender));
 
@@ -234,7 +231,7 @@ public partial class CyborgBody : Node3D
             .ToArray();
         Add(g, Loft(torso, 64, 7), ModuleTitanium(body.VariantAt(BodySlot.Torso)));
 
-        g._head = BuildHead(P, g);
+        BuildHead(P, g);
         (g._armL, g._elbowL, g._handL, g._fingersL, g._thumbL) = BuildArm(P, -1,
             body.VariantAt(BodySlot.UpperArmL), body.VariantAt(BodySlot.ForearmL), body.VariantAt(BodySlot.HandL));
         (g._armR, g._elbowR, g._handR, g._fingersR, g._thumbR) = BuildArm(P, 1,
@@ -254,81 +251,25 @@ public partial class CyborgBody : Node3D
         return m;
     }
 
-    /// <summary>스케치(sketch_01.jpg)의 허벅지 외측 모듈형 장갑 플레이트</summary>
-    static MeshInstance3D BuildThighPlate(float scale, ModuleVariant variant)
-    {
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
-        float w = 0.050f * scale, h = 0.138f * scale, ch = 0.015f * scale, d = 0.014f * scale;
-        float hw = w * 0.5f, hh = h * 0.5f;
-        Vector2[] poly = [
-            new(-hw + ch,  hh),
-            new( hw - ch,  hh),
-            new( hw,       hh - ch),
-            new( hw,      -hh + ch),
-            new( hw - ch, -hh),
-            new(-hw + ch, -hh),
-            new(-hw,      -hh + ch),
-            new(-hw,       hh - ch),
-        ];
-        int n = poly.Length;
-        for (int i = 0; i < n; i++)
-        {
-            int next = (i + 1) % n;
-            var p0 = new Vector3(d, poly[i].Y, poly[i].X);
-            var p1 = new Vector3(d, poly[next].Y, poly[next].X);
-            var p2 = new Vector3(0, poly[next].Y, poly[next].X);
-            var p3 = new Vector3(0, poly[i].Y, poly[i].X);
-
-            var norm = new Vector3(0, (poly[i].Y + poly[next].Y) * 0.5f, (poly[i].X + poly[next].X) * 0.5f).Normalized();
-            st.SetNormal(norm); st.AddVertex(p0);
-            st.SetNormal(norm); st.AddVertex(p1);
-            st.SetNormal(norm); st.AddVertex(p2);
-
-            st.SetNormal(norm); st.AddVertex(p0);
-            st.SetNormal(norm); st.AddVertex(p2);
-            st.SetNormal(norm); st.AddVertex(p3);
-        }
-        var frontCenter = new Vector3(d, 0, 0);
-        for (int i = 0; i < n; i++)
-        {
-            int next = (i + 1) % n;
-            st.SetNormal(Vector3.Right);
-            st.AddVertex(frontCenter);
-            st.AddVertex(new Vector3(d, poly[i].Y, poly[i].X));
-            st.AddVertex(new Vector3(d, poly[next].Y, poly[next].X));
-        }
-        st.GenerateNormals();
-        return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = ModuleTitanium(variant) };
-    }
-
     static Node3D BuildHead(Proportions P, Node3D g)
     {
-        var (b, k, jaw, chin) = P.Head;
+        var (b, k) = P.Head;
         var head = new Node3D { Position = new Vector3(0, b, 0) };
 
-        // 눈·코·입이나 머리카락 없이 매끈한 티타늄 감각 셸 하나로 마감한다.
+        // 얼굴 요소와 센서 없이 앞뒤가 같은 둥근 티타늄 양철 머리 셸.
         Sec[] s =
         [
-            new(0, chin * 0.65f, 0.016f, 0.014f, Cz: 0.038f),
-            new(0.018f, chin * 1.05f, 0.028f, 0.026f, Cz: 0.034f, Sq: P.Sq),
-            new(0.052f, jaw * 1.05f, 0.060f, 0.062f, Cz: 0.016f, Sq: P.Sq),
-            new(0.092f, jaw * 1.15f, 0.088f, 0.088f, Cz: 0.006f),
-            new(0.132f, 0.076f, 0.094f, 0.100f),
-            new(0.170f, 0.076f, 0.088f, 0.104f, Cz: -0.004f),
-            new(0.204f, 0.068f, 0.072f, 0.094f, Cz: -0.008f),
-            new(0.228f, 0.044f, 0.044f, 0.062f, Cz: -0.012f),
-            new(0.240f, 0.006f, 0.006f, 0.008f, Cz: -0.014f),
+            new(0, 0.045f, 0.048f, 0.048f),
+            new(0.018f, 0.065f, 0.068f, 0.068f),
+            new(0.052f, 0.084f, 0.088f, 0.088f),
+            new(0.092f, 0.094f, 0.098f, 0.098f),
+            new(0.132f, 0.095f, 0.100f, 0.100f),
+            new(0.170f, 0.087f, 0.092f, 0.092f),
+            new(0.204f, 0.068f, 0.074f, 0.074f),
+            new(0.228f, 0.040f, 0.044f, 0.044f),
+            new(0.240f, 0.006f, 0.007f, 0.007f),
         ];
         Add(head, Loft(s.Select(x => x with { Y = x.Y * k, Rx = x.Rx * k, F = x.F * k, B = x.B * k, Cz = x.Cz * k }).ToArray(), 56, 7), Shell);
-
-        // 센서는 얼굴이 아닌 관자 양옆에 작게 두어 비인간적인 실루엣을 유지한다.
-        foreach (var side in new[] { -1, 1 })
-        {
-            var sensor = Add(head, new SphereMesh { Radius = 0.018f * k, Height = 0.034f * k, RadialSegments = 24, Rings = 12 },
-                JointMaterial, new Vector3(side * 0.091f * k, 0.122f * k, -0.004f * k));
-            sensor.Scale = new Vector3(0.65f, 0.9f, 1f);
-        }
 
         g.AddChild(head);
         return head;
@@ -408,22 +349,18 @@ public partial class CyborgBody : Node3D
     {
         var (T, N, r, q) = P.Leg;
         var leg = new Node3D { Position = new Vector3(side * P.Hip.X, P.Hip.Y, 0), Rotation = new Vector3(0, 0, -side * q) };
-        AddJointSeam(leg, 0.064f * r, 0.003f * r, new Vector3(0, -0.018f, 0), alongY: true);
+        // 골반 접합부는 외부 링을 드러내지 않고 겹치는 티타늄 외피 안에 숨긴다.
         Sec[] thigh = [
-            new(0, 0.046f, 0.048f, 0.044f),
-            new(T * 0.12f, 0.052f, 0.054f, 0.048f),
-            new(T * 0.45f, 0.068f, 0.070f, 0.066f),
-            new(T * 0.8f, 0.082f, 0.078f, 0.082f),
+            new(0, 0.062f, 0.060f, 0.058f),
+            new(T * 0.12f, 0.074f, 0.070f, 0.066f),
+            new(T * 0.38f, 0.084f, 0.078f, 0.076f),
+            new(T * 0.7f, 0.086f, 0.080f, 0.082f),
             new(T, 0.082f, 0.078f, 0.084f),
-            new(T + 0.05f, 0.062f, 0.060f, 0.066f, Cx: -0.010f),
-            new(T + 0.09f, 0.026f, 0.026f, 0.026f, Cx: -0.018f)
+            new(T + 0.05f, 0.072f, 0.070f, 0.074f, Cx: -0.008f),
+            new(T + 0.12f, 0.064f, 0.064f, 0.068f, Cx: -0.014f),
+            new(T + 0.18f, 0.042f, 0.044f, 0.046f, Cx: -0.018f)
         ];
         Add(leg, Loft(thigh.Select(x => x.Scale(r)).ToArray(), 40, 5), ModuleTitanium(thighVariant), new Vector3(0, -T, 0));
-
-        // 스케치(sketch_01.jpg)의 허벅지 외측 장갑 패널
-        var plate = BuildThighPlate(r, thighVariant);
-        plate.Position = new Vector3(0.088f * r, -T * 0.42f, 0);
-        leg.AddChild(plate);
 
         var knee = new Node3D { Position = new Vector3(0, -T, 0) };
         leg.AddChild(knee);
@@ -472,20 +409,13 @@ public partial class CyborgBody : Node3D
         if (alongY) seam.Rotation = new Vector3(Mathf.Pi / 2, seam.Rotation.Y, seam.Rotation.Z);
     }
 
-    /// <summary>걷기 주기와 팔 흔들기를 속도(m/s)에 맞춘다. 서 있을 때는 살아있는 듯한 미세 호흡과 자연스러운 휴식 자세.</summary>
+    /// <summary>인형의 관절은 이동할 때만 움직인다. 정지 중에는 고정된 중립 자세를 유지한다.</summary>
     public void Animate(float dt, float speed)
     {
-        _time += dt;
         var target = Mathf.Min(1, speed / 3);
         _amp += (target - _amp) * Mathf.Min(1, dt * 8);
         _phase += dt * (2.2f + speed * 1.1f);
         var s = Mathf.Sin(_phase);
-
-        // 유기적인 호흡(약 4.2초 주기)과 휴식 자세
-        float breath = Mathf.Sin(_time * 1.5f);
-        float idleArmL = 0.05f + breath * 0.006f;
-        float idleArmR = -0.05f - breath * 0.006f;
-        float idlePitch = breath * 0.012f;
 
         _legL.Rotation = new Vector3(s * 0.5f * _amp, 0, 0);
         _legR.Rotation = new Vector3(-s * 0.5f * _amp, 0, 0);
@@ -494,22 +424,17 @@ public partial class CyborgBody : Node3D
         _ankleL.Rotation = new Vector3(-s * 0.12f * _amp, 0, 0);
         _ankleR.Rotation = new Vector3(s * 0.12f * _amp, 0, 0);
 
-        // 걷지 않을 때도 팔이 몸 옆으로 자연스럽게 벌어지고 미세 호흡
-        _armL.Rotation = new Vector3(-s * 0.35f * _amp + idlePitch * (1 - _amp), 0, idleArmL * (1 - _amp) + 0.03f * _amp);
-        _armR.Rotation = new Vector3(s * 0.35f * _amp + idlePitch * (1 - _amp), 0, idleArmR * (1 - _amp) - 0.03f * _amp);
+        _armL.Rotation = new Vector3(-s * 0.35f * _amp, 0, 0.03f * _amp);
+        _armR.Rotation = new Vector3(s * 0.35f * _amp, 0, -0.03f * _amp);
         _elbowL.Rotation = new Vector3(-0.14f - Mathf.Max(0, s) * 0.22f * _amp, 0, 0);
         _elbowR.Rotation = new Vector3(-0.14f - Mathf.Max(0, -s) * 0.22f * _amp, 0, 0);
         _handL.Rotation = new Vector3(0.025f * s * _amp, 0, 0);
         _handR.Rotation = new Vector3(-0.025f * s * _amp, 0, 0);
-        var fingerCurl = 0.08f + 0.035f * breath + 0.08f * _amp;
+        var fingerCurl = 0.08f + 0.08f * _amp;
         _thumbL.Rotation = new Vector3(-0.7f + s * 0.025f * _amp, 0, -0.35f + fingerCurl * 0.14f);
         _thumbR.Rotation = new Vector3(-0.7f - s * 0.025f * _amp, 0, -0.35f - fingerCurl * 0.14f);
         foreach (var finger in _fingersL) finger.Rotation = new Vector3(0, 0, -0.22f - fingerCurl);
         foreach (var finger in _fingersR) finger.Rotation = new Vector3(0, 0, -0.22f - fingerCurl);
 
-        // 머리: 미세한 호흡 고개 끄덕임과 자연스러운 시선 방향 탐색
-        float headPitch = Mathf.Sin(_time * 1.5f) * 0.012f;
-        float headYaw = Mathf.Sin(_time * 0.55f) * 0.025f;
-        _head.Rotation = new Vector3(headPitch, headYaw, 0);
     }
 }
