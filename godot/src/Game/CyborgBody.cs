@@ -4,8 +4,11 @@ namespace DollyForge.Game;
 
 /// <summary>
 /// 전신 사이보그 몸. 해부학적 단면(타원)을 높이별로 정의하고 Catmull-Rom 으로 이어 하나의 곡면으로 만든다(loft).
-/// 디자인 원칙: 어디에서도 참조하지 않은, 특징이 거의 없는 완벽한 사이보그.
-/// 얼굴·문양·발광 표식     // ------------------------------------------------------------------ 로프트
+/// 스케치(sketch_01.jpg)의 실루엣 비례: 잘록한 모래시계 허리, 풍만한 가슴과 와이드 힙, 챔퍼 헬멧 셸.
+/// </summary>
+public partial class CyborgBody : Node3D
+{
+    // ------------------------------------------------------------------ 로프트
 
     record struct Sec(float Y, float Rx, float F, float B, float Cx = 0, float Cz = 0, float Sq = 1, float Bust = 0, float Glute = 0, float Pec = 0)
     {
