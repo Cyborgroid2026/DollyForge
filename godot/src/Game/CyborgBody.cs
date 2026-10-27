@@ -163,9 +163,9 @@ public partial class CyborgBody : Node3D
         ClearcoatEnabled = true,
         Clearcoat = 1.0f,
         ClearcoatRoughness = 0.05f,
-        SubsurfaceScatteringEnabled = true,
-        SubsurfaceScatteringStrength = 0.08f,
-        SubsurfaceScatteringTransmittanceColor = new Color(1.0f, 0.97f, 0.94f),
+        SubsurfScatterEnabled = true,
+        SubsurfScatterStrength = 0.08f,
+        SubsurfScatterTransmittanceColor = new Color(1.0f, 0.97f, 0.94f),
     };
 
     /// <summary>머리 헬멧 셸 및 외장 플레이트용 고강도 무광 세라믹 복합체</summary>
