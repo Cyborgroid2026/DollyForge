@@ -109,8 +109,8 @@ public partial class World : Node3D
             // 실제 대기 산란(Rayleigh & Mie): 지평선 너머와 먼 도시가 자연스러운 푸른 하늘빛에 융합
             FogEnabled = true,
             FogLightColor = new Color(0.68f, 0.76f, 0.88f),
-            FogDensity = 0.0011f,
-            FogAerialPerspective = 0.85f,
+            FogDensity = 0.0009f,
+            FogAerialPerspective = 0.68f,
             FogSunScatter = 0.40f,
             FogSkyAffect = 0.35f, // 하늘과 지평선이 칼같이 분리되지 않고 자연스럽게 융합
             FogHeight = 1.5f,

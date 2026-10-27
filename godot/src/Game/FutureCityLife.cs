@@ -102,18 +102,24 @@ public partial class FutureCity
         var pitched = new List<(Transform3D X, Color C)>();  // 외곽 집의 경사 지붕
         var trees = new List<(Transform3D X, Color C)>();
         var resonance = new Vector2(60, -950);
+        var district = new FastNoiseLite { Seed = 84, Frequency = 0.0045f, FractalOctaves = 2 };
         const float cell = 34f, ground = -0.6f;
 
         for (var gx = -900f; gx <= 900f; gx += cell)
         for (var gz = -1000f; gz <= -400f; gz += cell)
         {
-            var p = new Vector2(gx + Jitter(5), gz + Jitter(5));
+            var row = Mathf.RoundToInt((gz + 1000f) / cell);
+            var stagger = row % 2 == 0 ? cell * 0.5f : 0f;
+            var p = new Vector2(gx + stagger + Jitter(6), gz + Jitter(6));
             var r = p.Length();
             if (r < 460 || r > 1000 || p.DistanceTo(resonance) < 60) continue;
             // 도심: 북쪽 720 m 근처가 가장 높고 촘촘하다
-            var downtown = Mathf.Exp(-(p.X * p.X) / (260f * 260f) - (p.Y + 720) * (p.Y + 720) / (170f * 170f));
+            var neighborhood = district.GetNoise2D(p.X, p.Y);
+            var downtown = Mathf.Exp(-(p.X * p.X) / (260f * 260f) - (p.Y + 720) * (p.Y + 720) / (170f * 170f))
+                * Mathf.Clamp(0.9f + neighborhood * 0.3f, 0.65f, 1.15f);
             var spread = Mathf.Clamp(1 - Mathf.Abs(p.X) / 950f, 0, 1);
-            if (_rng.Randf() > 0.35f + 0.6f * spread)
+            var density = Mathf.Clamp(0.35f + 0.6f * spread + neighborhood * 0.12f, 0.25f, 0.95f);
+            if (_rng.Randf() > density)
             {
                 if (_rng.Randf() < 0.5f) AddPark(trees, p, cell); // 빈 칸의 절반은 공원
                 continue;
@@ -121,7 +127,7 @@ public partial class FutureCity
             var w = _rng.RandfRange(14, 30);
             var d = _rng.RandfRange(14, 30);
             var h = downtown > 0.25f
-                ? 40 + 220 * downtown * Mathf.Pow(_rng.Randf(), 0.7f)
+                ? 40 + 220 * downtown * Mathf.Pow(_rng.Randf(), 0.7f) * _rng.RandfRange(0.85f, 1.15f)
                 : _rng.Randf() < 0.35f + 0.4f * spread ? _rng.RandfRange(14, 45) : _rng.RandfRange(7, 13);
             var basis = new Basis(Vector3.Up, Jitter(0.06f));
             if (h < 14)
