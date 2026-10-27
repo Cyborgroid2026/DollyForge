@@ -154,42 +154,45 @@ public partial class CyborgBody : Node3D
 
     static StandardMaterial3D? _shell, _cowlShell, _seam, _brassMat;
 
-    /// <summary>고순도 새틴 화이트 티타늄 에나멜: 은은한 실크 광택과 펄 반사</summary>
+    /// <summary>고순도 새틴 화이트 세라믹/펄 에나멜 외장: 비금속 유전체 표면으로 따뜻한 미색 실크 광택과 리퀴드 클리어코트</summary>
     static StandardMaterial3D Shell => _shell ??= new StandardMaterial3D
     {
-        AlbedoColor = new Color(0.91f, 0.93f, 0.95f),
-        Metallic = 0.84f,
-        Roughness = 0.22f,
+        AlbedoColor = new Color(0.96f, 0.955f, 0.94f),
+        Metallic = 0.0f, // 비금속 유전체! 크롬/양철통 느낌 전면 제거
+        Roughness = 0.20f,
         ClearcoatEnabled = true,
-        Clearcoat = 0.65f,
-        ClearcoatRoughness = 0.20f,
+        Clearcoat = 1.0f,
+        ClearcoatRoughness = 0.05f,
+        SubsurfaceScatteringEnabled = true,
+        SubsurfaceScatteringStrength = 0.08f,
+        SubsurfaceScatteringTransmittanceColor = new Color(1.0f, 0.97f, 0.94f),
     };
 
-    /// <summary>머리 헬멧 셸 및 외장 플레이트용 고강도 세라믹 복합체</summary>
+    /// <summary>머리 헬멧 셸 및 외장 플레이트용 고강도 무광 세라믹 복합체</summary>
     static StandardMaterial3D CowlShell => _cowlShell ??= new StandardMaterial3D
     {
-        AlbedoColor = new Color(0.94f, 0.95f, 0.96f),
-        Metallic = 0.88f,
+        AlbedoColor = new Color(0.93f, 0.925f, 0.91f),
+        Metallic = 0.0f,
         Roughness = 0.26f,
         ClearcoatEnabled = true,
-        Clearcoat = 0.75f,
-        ClearcoatRoughness = 0.16f,
+        Clearcoat = 0.5f,
+        ClearcoatRoughness = 0.12f,
     };
 
     /// <summary>정밀 관절 및 분할선 (어두운 건메탈 티타늄)</summary>
     static StandardMaterial3D Seam => _seam ??= new StandardMaterial3D
     {
-        AlbedoColor = new Color(0.18f, 0.20f, 0.22f),
-        Metallic = 0.90f,
-        Roughness = 0.32f,
+        AlbedoColor = new Color(0.14f, 0.15f, 0.17f),
+        Metallic = 0.92f,
+        Roughness = 0.38f,
     };
 
-    /// <summary>레트로퓨처 놋쇠 악센트</summary>
+    /// <summary>레트로퓨처 정밀 가공 놋쇠 악센트</summary>
     static StandardMaterial3D Brass => _brassMat ??= new StandardMaterial3D
     {
-        AlbedoColor = new Color(0.88f, 0.70f, 0.38f),
-        Metallic = 0.95f,
-        Roughness = 0.24f,
+        AlbedoColor = new Color(0.92f, 0.72f, 0.36f),
+        Metallic = 1.0f,
+        Roughness = 0.20f,
     };
 
     // ------------------------------------------------------------------ 조립
@@ -504,7 +507,7 @@ public partial class CyborgBody : Node3D
         return (leg, knee);
     }
 
-    /// <summary>걷기 주기와 팔 흔들기를 속도(m/s)에 맞춘다. 서 있을 때는 아주 미세한 움직임만.</summary>
+    /// <summary>걷기 주기와 팔 흔들기를 속도(m/s)에 맞춘다. 서 있을 때는 살아있는 듯한 미세 호흡과 자연스러운 휴식 자세.</summary>
     public void Animate(float dt, float speed)
     {
         _time += dt;
@@ -512,12 +515,25 @@ public partial class CyborgBody : Node3D
         _amp += (target - _amp) * Mathf.Min(1, dt * 8);
         _phase += dt * (2.2f + speed * 1.1f);
         var s = Mathf.Sin(_phase);
-        _legL.Rotation = _legL.Rotation with { X = s * 0.5f * _amp };
-        _legR.Rotation = _legR.Rotation with { X = -s * 0.5f * _amp };
+
+        // 유기적인 호흡(약 4.2초 주기)과 휴식 자세
+        float breath = Mathf.Sin(_time * 1.5f);
+        float idleArmL = 0.05f + breath * 0.006f;
+        float idleArmR = -0.05f - breath * 0.006f;
+        float idlePitch = breath * 0.012f;
+
+        _legL.Rotation = new Vector3(s * 0.5f * _amp, 0, 0);
+        _legR.Rotation = new Vector3(-s * 0.5f * _amp, 0, 0);
         _kneeL.Rotation = new Vector3(Mathf.Max(0, -Mathf.Cos(_phase)) * 0.7f * _amp, 0, 0);
         _kneeR.Rotation = new Vector3(Mathf.Max(0, Mathf.Cos(_phase)) * 0.7f * _amp, 0, 0);
-        _armL.Rotation = _armL.Rotation with { X = -s * 0.35f * _amp };
-        _armR.Rotation = _armR.Rotation with { X = s * 0.35f * _amp };
-        _head.Rotation = new Vector3(Mathf.Sin(_time / 0.9f) * 0.006f, 0, 0);
+
+        // 걷지 않을 때도 팔이 몸 옆으로 자연스럽게 벌어지고 미세 호흡
+        _armL.Rotation = new Vector3(-s * 0.35f * _amp + idlePitch * (1 - _amp), 0, idleArmL * (1 - _amp) + 0.03f * _amp);
+        _armR.Rotation = new Vector3(s * 0.35f * _amp + idlePitch * (1 - _amp), 0, idleArmR * (1 - _amp) - 0.03f * _amp);
+
+        // 머리: 미세한 호흡 고개 끄덕임과 자연스러운 시선 방향 탐색
+        float headPitch = Mathf.Sin(_time * 1.5f) * 0.012f;
+        float headYaw = Mathf.Sin(_time * 0.55f) * 0.025f;
+        _head.Rotation = new Vector3(headPitch, headYaw, 0);
     }
 }

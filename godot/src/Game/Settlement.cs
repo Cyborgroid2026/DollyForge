@@ -528,31 +528,94 @@ public partial class Settlement : Node3D
 
     // ------------------------------------------------------------------ 자작나무
 
-    /// <summary>자작나무 껍질: 크림빛 흰 바탕, 가로로 짧은 검은 껍질눈, 아래쪽일수록 거칠고 짙다</summary>
-    Texture2D BirchBark()
+    /// <summary>자작나무 껍질 텍스처 맵: 크림빛 흰 바탕, 가로 껍질눈(lenticels), 노멀 범프 및 거칠기</summary>
+    (Texture2D Albedo, Texture2D Normal, Texture2D Rough) BirchBarkMaps()
     {
-        const int w = 128, h = 512;
-        var img = Image.CreateEmpty(w, h, true, Image.Format.Rgb8);
+        const int w = 128, h = 256;
+        var alb = Image.CreateEmpty(w, h, true, Image.Format.Rgb8);
+        var nor = Image.CreateEmpty(w, h, true, Image.Format.Rgb8);
+        var rgh = Image.CreateEmpty(w, h, true, Image.Format.Rgb8);
         var n = new FastNoiseLite { Seed = 9, Frequency = 0.05f };
+
         for (var y = 0; y < h; y++)
-        for (var x = 0; x < w; x++)
         {
-            var v = 0.86f + n.GetNoise2D(x * 2, y * 0.6f) * 0.06f;
-            img.SetPixel(x, y, new Color(v, v * 0.985f, v * 0.94f));
+            var uY = (float)y / h;
+            var baseDark = Mathf.SmoothStep(0.32f, 0.02f, uY);
+            for (var x = 0; x < w; x++)
+            {
+                var grain = 0.88f + n.GetNoise2D(x * 2.5f, y * 0.7f) * 0.08f;
+                var c = new Color(grain, grain * 0.985f, grain * 0.93f);
+                c = c.Lerp(new Color(0.12f, 0.12f, 0.13f), baseDark * 0.9f);
+                alb.SetPixel(x, y, c);
+                rgh.SetPixel(x, y, new Color(Mathf.Lerp(0.55f, 0.92f, baseDark), 0, 0));
+                nor.SetPixel(x, y, new Color(0.5f, 0.5f, 1.0f));
+            }
         }
-        for (var k = 0; k < 260; k++)
+        for (var k = 0; k < 240; k++)
         {
             var y = _rng.RandiRange(0, h - 3);
             var x = _rng.RandiRange(0, w - 1);
-            var len = _rng.RandiRange(4, 26);
+            var len = _rng.RandiRange(5, 26);
             var th = _rng.RandiRange(1, 3);
-            var dark = _rng.RandfRange(0.05f, 0.25f);
+            var dark = _rng.RandfRange(0.06f, 0.22f);
             for (var dx = 0; dx < len; dx++)
             for (var dy = 0; dy < th; dy++)
-                img.SetPixel((x + dx) % w, y + dy, new Color(dark, dark * 0.95f, dark * 0.9f));
+            {
+                var px = (x + dx) % w;
+                var py = y + dy;
+                alb.SetPixel(px, py, new Color(dark, dark * 0.95f, dark * 0.9f));
+                rgh.SetPixel(px, py, new Color(0.85f, 0, 0));
+                nor.SetPixel(px, py, new Color(0.5f, dy == 0 ? 0.38f : 0.62f, 0.92f));
+            }
         }
-        img.GenerateMipmaps();
-        return ImageTexture.CreateFromImage(img);
+        alb.GenerateMipmaps();
+        nor.GenerateMipmaps();
+        rgh.GenerateMipmaps();
+        return (ImageTexture.CreateFromImage(alb), ImageTexture.CreateFromImage(nor), ImageTexture.CreateFromImage(rgh));
+    }
+
+    /// <summary>유기적인 자작나무 줄기 메시: 밑동 플레어(root flare), 자연스러운 S자 곡선, 상부 테이퍼</summary>
+    static ArrayMesh BirchTrunkMesh()
+    {
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+        const int rings = 14;
+        const int segs = 16;
+        for (var r = 0; r <= rings; r++)
+        {
+            var t = (float)r / rings;
+            var flare = r == 0 ? 1.70f : r == 1 ? 1.30f : 1.0f;
+            var taper = Mathf.Lerp(1.0f, 0.22f, Mathf.Pow(t, 0.85f)) * flare;
+            var curveX = Mathf.Sin(t * Mathf.Pi) * 0.14f + Mathf.Sin(t * Mathf.Tau) * 0.04f;
+            var curveZ = Mathf.Cos(t * Mathf.Pi) * 0.09f;
+            var y = t;
+
+            for (var s = 0; s <= segs; s++)
+            {
+                var a = (float)s / segs * Mathf.Tau;
+                var rootFlute = r <= 1 ? (1.0f + Mathf.Cos(a * 4) * 0.14f) : 1.0f;
+                var rad = taper * rootFlute;
+                var vx = curveX + Mathf.Cos(a) * rad;
+                var vz = curveZ + Mathf.Sin(a) * rad;
+                var norm = new Vector3(Mathf.Cos(a), 0.04f, Mathf.Sin(a)).Normalized();
+
+                st.SetUV(new Vector2((float)s / segs * 2f, t * 4f));
+                st.SetNormal(norm);
+                st.AddVertex(new Vector3(vx, y, vz));
+            }
+        }
+        for (var r = 0; r < rings; r++)
+        for (var s = 0; s < segs; s++)
+        {
+            int i0 = r * (segs + 1) + s;
+            int i1 = i0 + 1;
+            int i2 = (r + 1) * (segs + 1) + s;
+            int i3 = i2 + 1;
+            st.AddIndex(i0); st.AddIndex(i2); st.AddIndex(i1);
+            st.AddIndex(i1); st.AddIndex(i2); st.AddIndex(i3);
+        }
+        st.GenerateTangents();
+        return st.Commit();
     }
 
     /// <summary>활엽수 잎 카드: tree_small_02 잎 아틀라스 오른쪽의 잔가지 한 줄기를 잘라 쓴다 (+Y 가 가지 끝)</summary>
@@ -612,23 +675,53 @@ public partial class Settlement : Node3D
             planted++;
         }
 
+        var (barkAlb, barkNor, barkRgh) = BirchBarkMaps();
         var bark = new StandardMaterial3D
         {
-            AlbedoTexture = BirchBark(), Roughness = 0.75f, Uv1Scale = new Vector3(2, 5, 1),
+            AlbedoTexture = barkAlb,
+            NormalEnabled = true,
+            NormalTexture = barkNor,
+            RoughnessTexture = barkRgh,
+            Roughness = 0.82f,
             TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
         };
+        var trunkMesh = BirchTrunkMesh();
         var trunks = new MultiMesh
         {
             TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, InstanceCount = stems.Count,
-            Mesh = new CylinderMesh { TopRadius = 0.3f, BottomRadius = 1f, Height = 1, RadialSegments = 10 },
+            Mesh = trunkMesh,
         };
         for (var i = 0; i < stems.Count; i++)
         {
             var (x, h) = stems[i];
-            var r = h * 0.014f * _rng.RandfRange(0.85f, 1.15f);
-            trunks.SetInstanceTransform(i, x * new Transform3D(Basis.Identity.Scaled(new Vector3(r, h, r)), new Vector3(0, h / 2, 0)));
+            var r = h * 0.015f * _rng.RandfRange(0.85f, 1.15f);
+            trunks.SetInstanceTransform(i, x * new Transform3D(Basis.Identity.Scaled(new Vector3(r, h, r)), Vector3.Zero));
         }
         AddChild(new MultiMeshInstance3D { Multimesh = trunks, MaterialOverride = bark });
+
+        // 자작나무 늘어진 큰 가지들 (수관 골격)
+        var branchMesh = new CylinderMesh { TopRadius = 0.02f, BottomRadius = 0.045f, Height = 1.0f, RadialSegments = 8 };
+        var branchMat = new StandardMaterial3D { AlbedoColor = new Color(0.20f, 0.17f, 0.15f), Roughness = 0.88f };
+        var bTransforms = new List<Transform3D>();
+        foreach (var (x, h) in stems)
+        {
+            var bCount = _rng.RandiRange(5, 8);
+            for (var b = 0; b < bCount; b++)
+            {
+                var u = _rng.RandfRange(0.42f, 0.86f);
+                var a = _rng.RandfRange(0, Mathf.Tau);
+                var droop = _rng.RandfRange(0.25f, 0.60f);
+                var dir = new Vector3(Mathf.Cos(a) * Mathf.Cos(droop), -Mathf.Sin(droop), Mathf.Sin(a) * Mathf.Cos(droop)).Normalized();
+                var len = _rng.RandfRange(1.6f, 3.2f);
+                var bPos = new Vector3(0, u * h, 0);
+                var bBasis = Basis.LookingAt(dir, Vector3.Up) * new Basis(Vector3.Right, Mathf.Pi / 2);
+                bBasis = bBasis.Scaled(new Vector3(1, len, 1));
+                bTransforms.Add(x * new Transform3D(bBasis, bPos + dir * (len * 0.5f)));
+            }
+        }
+        var bMulti = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = branchMesh, InstanceCount = bTransforms.Count };
+        for (var i = 0; i < bTransforms.Count; i++) bMulti.SetInstanceTransform(i, bTransforms[i]);
+        AddChild(new MultiMeshInstance3D { Multimesh = bMulti, MaterialOverride = branchMat });
 
         if (Leaves() is not { } leaf) return;
         var cards = new List<(Transform3D X, Color C)>();

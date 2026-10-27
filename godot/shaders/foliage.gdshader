@@ -1,6 +1,6 @@
-// 소나무 가지 카드: 실사 가지 텍스처(알파 포함)를 쓰고, 나무 높이에 따라 바람에 흔들린다.
+// 수목 잎·가지 셰이더: 실제 활엽수/침엽수의 엽육 투과광(Translucency)과 큐티클 왁스층의 반사
 shader_type spatial;
-render_mode cull_disabled;
+render_mode cull_disabled, depth_prepass_alpha;
 
 global uniform float wind_strength;
 global uniform vec2 wind_direction;
@@ -8,10 +8,13 @@ uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic;
 uniform float alpha_cut = 0.45;
 
 void vertex() {
-	vec3 origin = MODEL_MATRIX[3].xyz; // 카드(가지)의 위치
-	float sway = sin(TIME * 0.9 + origin.x * 0.21 + origin.z * 0.17) + 0.5 * sin(TIME * 2.3 + origin.x);
+	vec3 origin = MODEL_MATRIX[3].xyz; // 가지 카드의 기저 위치
+	float sway = sin(TIME * 1.1 + origin.x * 0.35 + origin.z * 0.28) * 0.7 + sin(TIME * 2.6 + origin.x * 1.2) * 0.3;
+	float micro_rustle = sin(TIME * 6.5 + dot(VERTEX, vec3(4.2))) * 0.04;
+	
 	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	world.xz += normalize(wind_direction) * sway * wind_strength * 0.05 * max(origin.y - 1.0, 0.0) * 0.3;
+	float height_weight = clamp((origin.y - 1.0) * 0.15, 0.0, 1.5);
+	world.xz += normalize(wind_direction) * (sway + micro_rustle) * wind_strength * 0.08 * height_weight;
 	VERTEX = (inverse(MODEL_MATRIX) * vec4(world, 1.0)).xyz;
 }
 
@@ -20,6 +23,13 @@ void fragment() {
 	ALBEDO = t.rgb * COLOR.rgb;
 	ALPHA = t.a;
 	ALPHA_SCISSOR_THRESHOLD = alpha_cut;
-	ROUGHNESS = 0.85;
-	BACKLIGHT = t.rgb * 0.35;
+	ALPHA_ANTIALIASING_EDGE = 0.35;
+	ALPHA_TEXTURE_COORDINATE = UV;
+	
+	// 식물 큐티클층 프레넬 광택: 비단결 같은 잎사귀 표면 반사
+	ROUGHNESS = 0.38;
+	SPECULAR = 0.40;
+	
+	// 엽록소 투과 산란(Subsurface Chlorophyll Scattering): 역광에서 잎이 보석처럼 투명하게 빛남
+	BACKLIGHT = t.rgb * COLOR.rgb * 0.85;
 }
