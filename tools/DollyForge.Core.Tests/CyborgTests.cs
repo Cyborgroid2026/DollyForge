@@ -17,12 +17,13 @@ public class CyborgTests
         Assert.Equal(16, body.Joints.Count);
         Assert.Single(body.Parts, p => p.Def.Role == PartRole.BioCore);
         Assert.Single(body.Parts, p => p.Def.Role == PartRole.LifeSupport);
+        Assert.Equal(gender == 0 ? 1.80f : 1.86f, b.Height);
         // 분절 질량 합 ≈ 체중 (Winter 비율 합 ≈ 1)
         Assert.InRange(body.TotalMass, b.Mass * 0.97f, b.Mass * 1.03f);
         // 머리 꼭대기 ≈ 키
         var head = body.Parts.First(p => Cyborg.SlotOf(p.Def) == BodySlot.Head);
         var top = head.Pose.Position.Y + head.Def.Shape.Radius;
-        Assert.InRange(top, b.Height * 0.93f, b.Height * 1.07f);
+        Assert.InRange(top, b.Height * 0.99f, b.Height * 1.01f);
         // 무게중심은 사람처럼 골반 근처 (키의 약 55 %)
         var com = body.ComputeMassProperties().CenterOfMass.Y / b.Height;
         Assert.InRange(com, 0.5f, 0.62f);
@@ -104,6 +105,9 @@ public class CyborgTests
         Assert.Equal(BodySlot.ShinL, Cyborg.SlotOf(hd));
         Assert.Equal(ModuleVariant.Lite, Cyborg.VariantOf(lite));
         Assert.Equal((byte)0, Cyborg.GenderOf(lite));
+        Assert.Equal(Materials.Titanium, std.Material);
+        Assert.Equal(Materials.Titanium, hd.Material);
+        Assert.Equal(Materials.Titanium, lite.Material);
         Assert.Equal(std.Actuator!.MaxTorque * 1.8f, hd.Actuator!.MaxTorque, 3);
         Assert.True(hd.Mass > std.Mass && lite.Mass < std.Mass);
         Assert.True(hd.PriceKrw > lite.PriceKrw && lite.PriceKrw > std.PriceKrw);

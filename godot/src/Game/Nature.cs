@@ -191,6 +191,41 @@ public partial class Nature : Node3D
 
     // ------------------------------------------------------------------ 연못
 
+    static ArrayMesh WaterBody(float radius)
+    {
+        const int rings = 10, segments = 96;
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+        for (var ring = 0; ring <= rings; ring++)
+        {
+            var t = ring / (float)rings;
+            for (var segment = 0; segment < segments; segment++)
+            {
+                var a = segment * Mathf.Tau / segments;
+                var coast = 1f + 0.11f * Mathf.Sin(a * 3f + 0.7f)
+                                + 0.055f * Mathf.Sin(a * 5f - 1.2f)
+                                + 0.025f * Mathf.Sin(a * 8f + 1.8f);
+                var r = radius * t * coast;
+                var p = new Vector3(Mathf.Cos(a) * r, 0, Mathf.Sin(a) * r);
+                st.SetUV(new Vector2(p.X, p.Z) * 0.1f);
+                st.AddVertex(p);
+            }
+        }
+        for (var ring = 0; ring < rings; ring++)
+        for (var segment = 0; segment < segments; segment++)
+        {
+            var next = (segment + 1) % segments;
+            var a = ring * segments + segment;
+            var b = ring * segments + next;
+            var c = (ring + 1) * segments + segment;
+            var d = (ring + 1) * segments + next;
+            st.AddIndex(a); st.AddIndex(b); st.AddIndex(c);
+            st.AddIndex(b); st.AddIndex(d); st.AddIndex(c);
+        }
+        st.GenerateNormals();
+        return st.Commit();
+    }
+
     void BuildPond()
     {
         // 수면 높이: 연못 둘레 지형의 가장 낮은 곳보다 조금 아래 (물이 넘치지 않게)
@@ -209,7 +244,7 @@ public partial class Nature : Node3D
         mat.SetShaderParameter("ripple_b", Ripple(52, 0.06f));
         AddChild(new MeshInstance3D
         {
-            Mesh = new PlaneMesh { Size = Vector2.One * (World.PondRadius * 2 + 8), SubdivideWidth = 8, SubdivideDepth = 8 },
+            Mesh = WaterBody(World.PondRadius + 4f),
             MaterialOverride = mat, Position = new Vector3(c.X, level, c.Y), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         });
         // 물가의 갈대 무더기 (불규칙한 경계)

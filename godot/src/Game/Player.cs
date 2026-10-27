@@ -51,7 +51,7 @@ public partial class Player : CharacterBody3D
     Camera3D _viewCamera = null!;
     /// <summary>3인칭에서 보이는 내 몸 (1인칭에서는 숨긴다: 카메라가 머리 안에 있다)</summary>
     CyborgBody? _avatar;
-    byte _avatarGender = byte.MaxValue;
+    internal CyborgBody? Avatar => _avatar;
 
     public void CycleView() => SetView(View switch
     {
@@ -70,13 +70,12 @@ public partial class Player : CharacterBody3D
         if (_avatar is not null) _avatar.Visible = mode != ViewMode.FirstPerson;
     }
 
-    /// <summary>체형이 바뀌면 3인칭용 몸을 다시 만든다 (몸 앞(+Z)이 플레이어 앞(-Z)을 보게)</summary>
+    /// <summary>모듈 구성이 바뀔 때 외형도 다시 조립한다 (몸 앞(+Z)이 플레이어 앞(-Z)을 보게)</summary>
     void RebuildAvatar()
     {
-        if (_viewArm is null || Body.Gender == _avatarGender) return;
+        if (_viewArm is null) return;
         _avatar?.QueueFree();
-        _avatarGender = Body.Gender;
-        _avatar = CyborgBody.Build(Body.Gender);
+        _avatar = CyborgBody.Build(Body);
         _avatar.Rotation = new Vector3(0, Mathf.Pi, 0);
         _avatar.Visible = View != ViewMode.FirstPerson;
         AddChild(_avatar);

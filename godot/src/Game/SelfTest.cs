@@ -178,7 +178,10 @@ public partial class SelfTest : Node
         await Wait(0.5);
         var nearby = main.NearbyModules();
         Check(nearby.Count == 2, $"수술대 곁 모듈 {nearby.Count}개");
+        var standardAvatar = player.Avatar;
         foreach (var m in nearby) GD.Print("  " + main.InstallModule(m));
+        Check(standardAvatar is not null && !ReferenceEquals(standardAvatar, player.Avatar),
+            "같은 체형에서 모듈 교체 시 외형을 다시 조립");
         var hd = player.Caps;
         Check(main.NearbyModules().Count == 0 && player.Body.VariantAt(BodySlot.ShinR) == ModuleVariant.HeavyDuty,
             "이식한 모듈은 수술대에서 사라지고 몸 구성에 들어감");
@@ -188,10 +191,13 @@ public partial class SelfTest : Node
         GD.Print("  " + main.ExportBody());
 
         // 표준으로 되돌리면 떼어 낸 HD 모듈이 수술대 위에 실물로 나온다
+        var upgradedAvatar = player.Avatar;
         GD.Print("  " + main.RevertModule(BodySlot.ShinL));
         var back = main.NearbyModules();
         Check(back.Count == 1 && back[0].Part.Def.Sku == "CY-F-SHINL-HD" && player.Caps.JumpHeight < hd.JumpHeight,
             $"왼 하퇴를 표준으로: 떼어 낸 HD 모듈이 수술대에 놓임, 점프 계산 {player.Caps.JumpHeight:0.00} m");
+        Check(upgradedAvatar is not null && !ReferenceEquals(upgradedAvatar, player.Avatar),
+            "분리 후 표준 티타늄 모듈 외형을 재조립");
     }
 
     /// <summary>제자리에서 한 번 뛰어 최고 높이 (m) 를 잰다</summary>

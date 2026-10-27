@@ -7,7 +7,7 @@ public enum BodySlot { Pelvis, Torso, Head, UpperArmL, UpperArmR, ForearmL, Fore
 
 /// <summary>
 /// 팔다리 모듈 종류. 실제 구동기 선택처럼 득실이 있다:
-/// 표준, 고출력(HD: 토크 ×1.8, 질량 ×1.25, 값 ×2.2), 경량(LITE: 토크 그대로, 질량 ×0.7, 값 ×1.6 — 탄소섬유 골격).
+/// 표준, 고출력(HD: 토크 ×1.8, 질량 ×1.25, 값 ×2.2), 경량(LITE: 토크 그대로, 질량 ×0.7, 값 ×1.6 — 박육 티타늄 격자).
 /// </summary>
 public enum ModuleVariant { Standard, HeavyDuty, Lite }
 
@@ -58,8 +58,8 @@ public static class Cyborg
 
     public sealed record BodyType(byte Gender, string NameKo, float Height, float Mass, float ShoulderWidth, float HipWidth);
 
-    public static readonly BodyType Female = new(0, "여성형", 1.66f, 60f, 0.37f, 0.35f);
-    public static readonly BodyType Male = new(1, "남성형", 1.78f, 76f, 0.46f, 0.33f);
+    public static readonly BodyType Female = new(0, "여성형", 1.80f, 60f, 0.37f, 0.35f);
+    public static readonly BodyType Male = new(1, "남성형", 1.86f, 76f, 0.46f, 0.33f);
     public static BodyType Of(byte gender) => gender == 1 ? Male : Female;
 
     /// <summary>분절: Winter (2009) 분절 질량 비율과 길이 비율</summary>
@@ -139,7 +139,7 @@ public static class Cyborg
             $"cy_{(body.Gender == 1 ? "m" : "f")}_{slot.ToString().ToLowerInvariant()}{t.Sku.ToLowerInvariant()}",
             $"{body.NameKo} {seg.NameKo}{t.Ko}",
             seg.Shape(body),
-            variant == ModuleVariant.Lite ? Materials.Aluminium : Materials.Titanium,
+            Materials.Titanium,
             $"전신 사이보그 모듈. {seg.ActuatorKo}" + (torque > 0 ? $" (최대 {torque:0} N·m)" : "") + ". 모듈 커넥터로 떼고 붙인다.",
             mass,
             torque > 0 ? new ActuatorSpec(torque, seg.Speed, 0) : null)
@@ -219,7 +219,8 @@ public static class Cyborg
         PartInstance Put(BodySlot slot, Vector3 at, Quaternion rot) => parts[slot] = a.AddPart(Module(b, slot, config.VariantAt(slot)), new Pose(at, rot));
         Put(BodySlot.Pelvis, new(feet.X, hipY, feet.Z), Quaternion.Identity);
         var torso = Put(BodySlot.Torso, new(feet.X, hipY + pelvisH / 2 + torsoH / 2, feet.Z), Quaternion.Identity);
-        Put(BodySlot.Head, new(feet.X, shoulderY + 0.05f * H + 0.105f * H / 1.7f, feet.Z), Quaternion.Identity);
+        var headRadius = 0.105f * H / 1.7f;
+        Put(BodySlot.Head, new(feet.X, shoulderY + 0.0055f * H + headRadius, feet.Z), Quaternion.Identity);
         foreach (var (side, ua, fa, hd, th, sh, ft) in new[]
                  {
                      (-1f, BodySlot.UpperArmL, BodySlot.ForearmL, BodySlot.HandL, BodySlot.ThighL, BodySlot.ShinL, BodySlot.FootL),
