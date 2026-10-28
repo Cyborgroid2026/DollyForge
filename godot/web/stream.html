@@ -24,10 +24,27 @@ const ctx = canvas.getContext('2d');
 const hint = document.getElementById('hint');
 const hintText = document.getElementById('hintText');
 let ws = null, captured = false, drawing = false, replaced = false;
+let softCaptured = false, lastClientX = 0, lastClientY = 0;
+const inIframe = (() => { try { return window.self !== window.top; } catch { return true; } })();
 
 function say(text) { hintText.textContent = text; hint.hidden = !text; }
 function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
 const locked = () => document.pointerLockElement === canvas;
+const active = () => locked() || softCaptured;
+
+function enterSoftCapture(e) {
+  softCaptured = true;
+  lastClientX = e.clientX;
+  lastClientY = e.clientY;
+  canvas.style.cursor = 'none';
+  updateHint();
+}
+function exitSoftCapture() {
+  softCaptured = false;
+  canvas.style.cursor = 'default';
+  send({ t: 'unlock' });
+  updateHint();
+}
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
@@ -87,7 +104,7 @@ function playAudio(buf) {
 
 function updateHint() {
   if (!ws || ws.readyState !== 1) return;
-  say(captured && !locked() ? '화면을 클릭하면 조작합니다 · Esc 로 마우스 놓기' : '');
+  say(captured && !active() ? '화면을 클릭하면 조작합니다 · Esc 로 마우스 놓기' : '');
 }
 
 // 화면 좌표 → 게임 화면 안의 0..1 좌표 (object-fit: contain 여백 제외)
@@ -105,12 +122,25 @@ canvas.addEventListener('mousedown', (e) => {
   canvas.focus();
   wakeAudio();
   if (replaced) { replaced = false; connect(); return; }
-  if (captured && !locked()) { canvas.requestPointerLock(); return; } // 첫 클릭은 마우스를 잡기만
+  if (captured && !active()) {
+    if (inIframe) { enterSoftCapture(e); } else { canvas.requestPointerLock(); }
+    return; // 첫 클릭은 마우스를 잡기만
+  }
   send({ t: 'mb', b: e.button, down: true, ...norm(e) });
 });
-canvas.addEventListener('mouseup', (e) => { if (captured && !locked()) return; send({ t: 'mb', b: e.button, down: false, ...norm(e) }); });
-// 시점 회전은 포인터 잠금 중에만: 잠그기 전에 화면 위를 지나는 마우스를 시점이 따라가지 않게 한다
-canvas.addEventListener('mousemove', (e) => { if (captured && !locked()) return; send({ t: 'mm', dx: e.movementX, dy: e.movementY, ...norm(e) }); });
+canvas.addEventListener('mouseup', (e) => { if (captured && !active()) return; send({ t: 'mb', b: e.button, down: false, ...norm(e) }); });
+// 시점 회전: 포인터 잠금 또는 소프트 캡처 중에만 (잠그기 전에 화면 위를 지나는 마우스를 시점이 따라가지 않게 한다)
+canvas.addEventListener('mousemove', (e) => {
+  if (captured && !active()) return;
+  if (softCaptured) {
+    const dx = e.clientX - lastClientX, dy = e.clientY - lastClientY;
+    lastClientX = e.clientX; lastClientY = e.clientY;
+    send({ t: 'mm', dx, dy, ...norm(e) });
+  } else {
+    send({ t: 'mm', dx: e.movementX, dy: e.movementY, ...norm(e) });
+  }
+});
+canvas.addEventListener('mouseleave', () => { if (softCaptured) exitSoftCapture(); });
 canvas.addEventListener('wheel', (e) => { e.preventDefault(); send({ t: 'mb', b: e.deltaY < 0 ? 3 : 4, down: true, ...norm(e) }); }, { passive: false });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('pointerlockchange', () => {
@@ -122,6 +152,7 @@ document.addEventListener('pointerlockchange', () => {
 function key(e, down) {
   if (e.isComposing) return;
   wakeAudio();
+  if (softCaptured && e.code === 'Escape' && down) { e.preventDefault(); exitSoftCapture(); return; }
   e.preventDefault();
   send({ t: 'k', code: e.code, key: e.key, down, rep: e.repeat, shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey });
 }
