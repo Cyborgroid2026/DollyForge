@@ -12,7 +12,7 @@ namespace DollyForge.Game;
 /// Godot 4 는 C# 프로젝트를 웹으로 내보낼 수 없으므로, 게임은 이 컴퓨터의 Godot 에서 그대로(Forward+, Jolt) 돌고
 /// 렌더링한 화면을 JPEG 로 브라우저에 보낸다. 브라우저의 키보드·마우스는 Godot 입력 이벤트로 되돌려 넣는다.
 ///   http://127.0.0.1:7780/    화면 페이지 (godot/web/stream.html)
-///   ws://127.0.0.1:7780/ws    ← 화면(JPEG 바이너리)·상태(JSON 텍스트) / → 입력(JSON 텍스트)
+///   ws://127.0.0.1:7780/ws    ← 화면(JPEG 바이너리)·소리('A' 머리 + 16비트 PCM 바이너리)·상태(JSON 텍스트) / → 입력(JSON 텍스트)
 ///   GET  /frame.jpg           지금 화면 한 장 (탭의 연결을 빼앗지 않고 같은 화면을 본다: 개발·점검용)
 ///   POST /input               입력 JSON 한 개 (ws 와 같은 형식, 점검 도구가 게임 안에서만 조작한다)
 /// 로컬 주소에서만 연다.
@@ -41,6 +41,8 @@ public partial class BrowserStream : Node
     string? _lastStatus;
     Vector2 _mouse, _seen;
     byte[]? _lastJpg;
+    /// <summary>주 버스에 건 소리 잡기: 게임이 내는 소리(발소리 등)를 브라우저로 보낸다</summary>
+    AudioEffectCapture? _capture;
     /// <summary>/frame.jpg 요청이 있으면 탭이 없어도 잠시 화면을 굽는다</summary>
     long _observeUntil;
 
@@ -75,6 +77,8 @@ public partial class BrowserStream : Node
         Engine.MaxFps = 60;
         PutWindowAway();
         _page = System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://web/stream.html"));
+        _capture = new AudioEffectCapture { BufferLength = 0.5f };
+        AudioServer.AddBusEffect(0, _capture);
         _http = new HttpListener();
         _http.Prefixes.Add($"http://127.0.0.1:{Port}/");
         try { _http.Start(); }
@@ -217,7 +221,11 @@ public partial class BrowserStream : Node
         {
             if (System.Environment.TickCount64 > Interlocked.Read(ref _observeUntil)) return;
         }
-        else SendStatus(ws);
+        else
+        {
+            SendStatus(ws);
+            SendAudio(ws);
+        }
         Stats(delta);
 
         _frameTimer += delta;
@@ -229,6 +237,24 @@ public partial class BrowserStream : Node
         // 읽을 수 없는 형식이면 예전처럼 동기 읽기(GetImage)로 돌아간다.
         if (!RequestFrameAsync(seq, ws))
             Encode(GetViewport().GetTexture().GetImage(), seq, ws);
+    }
+
+    /// <summary>잡힌 소리를 모노 16비트로 줄여 보낸다: 'A' 0 0 0 + 표본율(uint32) + 표본들</summary>
+    void SendAudio(WebSocket ws)
+    {
+        if (_capture is null) return;
+        var frames = _capture.GetFramesAvailable();
+        if (frames < 256) return;
+        var buffer = _capture.GetBuffer(frames);
+        var packet = new byte[8 + buffer.Length * 2];
+        packet[0] = (byte)'A';
+        BitConverter.TryWriteBytes(packet.AsSpan(4), (uint)AudioServer.GetMixRate());
+        for (var i = 0; i < buffer.Length; i++)
+        {
+            var mono = Mathf.Clamp((buffer[i].X + buffer[i].Y) * 0.5f, -1f, 1f);
+            BitConverter.TryWriteBytes(packet.AsSpan(8 + i * 2), (short)(mono * 32767));
+        }
+        _ = Send(ws, packet, WebSocketMessageType.Binary);
     }
 
     void SendStatus(WebSocket ws)

@@ -68,6 +68,7 @@ internal static class StreetEnvironment
     {
         (_parent, _world, _path, _sidewalk) = (parent, world, path, sidewalk);
         Census.Clear();
+        Senses.Odors.Clear();
         var root = new Node3D { Name = "StreetEnvironment" };
         parent.AddChild(root);
 
@@ -80,11 +81,12 @@ internal static class StreetEnvironment
             asphalt.SetShaderParameter("has_texture", true);
         }
         var concrete = Look.Painted("painted_concrete", 2f, new Color(0.55f, 0.54f, 0.51f));
-        BuildSurface(root, world, path, -3.2f, 3.2f, 0.18f, asphalt);
-        BuildSurface(root, world, path, -4.9f, -3.2f, 0.18f, sidewalk);
-        BuildSurface(root, world, path, 3.2f, 4.9f, 0.18f, sidewalk);
-        BuildSurface(root, world, path, -3.38f, -3.18f, 0.25f, concrete);
-        BuildSurface(root, world, path, 3.18f, 3.38f, 0.25f, concrete);
+        // 보이는 면마다 같은 모양의 충돌면을 깔고 표면 물성을 붙인다 (질감이 물리에 들어간다)
+        BuildSurface(root, world, path, -3.2f, 3.2f, 0.18f, asphalt, Surface.Asphalt);
+        BuildSurface(root, world, path, -4.9f, -3.2f, 0.18f, sidewalk, Surface.Paver);
+        BuildSurface(root, world, path, 3.2f, 4.9f, 0.18f, sidewalk, Surface.Paver);
+        BuildSurface(root, world, path, -3.38f, -3.18f, 0.25f, concrete, Surface.Concrete);
+        BuildSurface(root, world, path, 3.18f, 3.38f, 0.25f, concrete, Surface.Concrete);
         AddSidewalkJoints(root, world, path);
         AddRoadMarkings(root, world, path);
         AddRoadFurniture(root, world, path);
@@ -162,12 +164,28 @@ internal static class StreetEnvironment
         Count("도로명판", endAt, 1);
     }
 
-    static void BuildSurface(Node3D root, World world, IReadOnlyList<Vector2> path, float inner, float outer, float lift, Material material)
+    /// <summary>
+    /// 길을 따라 inner..outer 폭의 띠. surface 를 주면 같은 모양의 충돌면도 깐다
+    /// (도색처럼 얇은 것은 colliderLift 로 아스팔트 바로 위에 두어 굴러가는 바퀴가 턱에 걸리지 않게).
+    /// </summary>
+    static void BuildSurface(Node3D root, World world, IReadOnlyList<Vector2> path, float inner, float outer, float lift, Material material,
+        Surface? surface = null, float? colliderLift = null)
     {
         if (path.Count < 2) return;
         var surfaceMaterial = material.Duplicate() as Material ?? material;
         if (surfaceMaterial is BaseMaterial3D baseMaterial)
             baseMaterial.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
+        var mesh = Strip(world, path, inner, outer, lift);
+        root.AddChild(new MeshInstance3D { Mesh = mesh, MaterialOverride = surfaceMaterial, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+        if (surface is null) return;
+        var collider = colliderLift is { } y ? Strip(world, path, inner, outer, y) : mesh;
+        var body = surface.Apply(new StaticBody3D { Name = $"Surface_{surface.Id}", CollisionLayer = PartBody.LayerWorld, CollisionMask = 0 });
+        body.AddChild(new CollisionShape3D { Shape = collider.CreateTrimeshShape() });
+        root.AddChild(body);
+    }
+
+    static ArrayMesh Strip(World world, IReadOnlyList<Vector2> path, float inner, float outer, float lift)
+    {
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
         float distance = 0;
@@ -193,7 +211,7 @@ internal static class StreetEnvironment
             st.AddIndex(a); st.AddIndex(c); st.AddIndex(b);
             st.AddIndex(b); st.AddIndex(c); st.AddIndex(d);
         }
-        root.AddChild(new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = surfaceMaterial, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+        return st.Commit();
     }
 
     /// <summary>
@@ -233,7 +251,7 @@ internal static class StreetEnvironment
         foreach (var side in new[] { -1f, 1f })
         {
             if (Style.Edge == LinePattern.Solid)
-                BuildSurface(root, world, path, side < 0 ? -2.83f : 2.72f, side < 0 ? -2.72f : 2.83f, 0.205f, edgePaint);
+                BuildSurface(root, world, path, side < 0 ? -2.83f : 2.72f, side < 0 ? -2.72f : 2.83f, 0.205f, edgePaint, Surface.Paint, PaintColliderLift);
             else if (Style.Edge == LinePattern.LongDashed)
                 Dashes(root, world, path, side * 2.78f, 0.11f, 9f, 3f, edgePaint);
             else if (Style.Edge == LinePattern.DoubleYellowKerb)
@@ -241,23 +259,26 @@ internal static class StreetEnvironment
                 // 영국: 연석 바로 옆 노란 이중선 (언제나 주정차 금지)
                 var yellow = new StandardMaterial3D { AlbedoColor = new Color(0.88f, 0.7f, 0.12f), Roughness = 0.9f };
                 foreach (var (a, b) in new[] { (2.95f, 3.03f), (3.08f, 3.16f) })
-                    BuildSurface(root, world, path, side < 0 ? -b : a, side < 0 ? -a : b, 0.205f, yellow);
+                    BuildSurface(root, world, path, side < 0 ? -b : a, side < 0 ? -a : b, 0.205f, yellow, Surface.Paint, PaintColliderLift);
             }
         }
         switch (Style.Center)
         {
             case LinePattern.Solid:
-                BuildSurface(root, world, path, -0.06f, 0.06f, 0.205f, centerPaint);
+                BuildSurface(root, world, path, -0.06f, 0.06f, 0.205f, centerPaint, Surface.Paint, PaintColliderLift);
                 break;
             case LinePattern.Double:
-                BuildSurface(root, world, path, -0.2f, -0.09f, 0.205f, centerPaint);
-                BuildSurface(root, world, path, 0.09f, 0.2f, 0.205f, centerPaint);
+                BuildSurface(root, world, path, -0.2f, -0.09f, 0.205f, centerPaint, Surface.Paint, PaintColliderLift);
+                BuildSurface(root, world, path, 0.09f, 0.2f, 0.205f, centerPaint, Surface.Paint, PaintColliderLift);
                 break;
             case LinePattern.Dashed:
                 Dashes(root, world, path, 0, 0.11f, 3f, 5f, centerPaint);
                 break;
         }
     }
+
+    /// <summary>도색 충돌면 높이: 아스팔트(0.18) 바로 위</summary>
+    const float PaintColliderLift = 0.181f;
 
     /// <summary>길을 따라 offset 위치에 길이 dash, 틈 gap 의 점선</summary>
     static void Dashes(Node3D root, World world, IReadOnlyList<Vector2> path, float offset, float width, float dash, float gap, Material paint)
@@ -276,6 +297,15 @@ internal static class StreetEnvironment
                 Rotation = new Vector3(0, Mathf.Atan2(tangent.X, tangent.Y), 0),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             });
+            var dashBody = Surface.Paint.Apply(new StaticBody3D
+            {
+                Position = new Vector3(p.X, RoadY(world, position, normal, offset) + PaintColliderLift - 0.002f, p.Y),
+                Rotation = new Vector3(0, Mathf.Atan2(tangent.X, tangent.Y), 0),
+                CollisionLayer = PartBody.LayerWorld,
+                CollisionMask = 0,
+            });
+            dashBody.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(width, 0.004f, dash) } });
+            root.AddChild(dashBody);
         }
     }
 
@@ -345,10 +375,14 @@ internal static class StreetEnvironment
         {
             var (position, _) = AtDistance(path, distance);
             Count("맨홀", distance, 0);
-            var manhole = new Node3D
+            var (_, manholeTangent) = AtDistance(path, distance);
+            var manhole = Surface.Steel.Apply(new StaticBody3D
             {
-                Position = new Vector3(position.X, world.HeightAt(position.X, position.Y) + 0.182f, position.Y),
-            };
+                Position = new Vector3(position.X, RoadY(world, position, new Vector2(-manholeTangent.Y, manholeTangent.X), 0) + 0.182f, position.Y),
+                CollisionLayer = PartBody.LayerWorld,
+                CollisionMask = 0,
+            });
+            manhole.AddChild(new CollisionShape3D { Position = new Vector3(0, 0.024f, 0), Shape = new CylinderShape3D { Radius = 0.43f, Height = 0.05f } });
             root.AddChild(manhole);
             manhole.AddChild(new MeshInstance3D
             {
@@ -377,12 +411,15 @@ internal static class StreetEnvironment
             var (position, tangent) = AtDistance(path, distance);
             var side = ((int)(distance / 12f) % 2 == 0) ? -1f : 1f;
             Count("빗물받이", distance, side);
-            var drain = new Node3D
+            var drainAt = position + new Vector2(-tangent.Y, tangent.X) * side * 3.83f;
+            var drain = Surface.Steel.Apply(new StaticBody3D
             {
-                Position = new Vector3(position.X, world.HeightAt(position.X, position.Y) + 0.185f, position.Y)
-                    + new Vector3(-tangent.Y, 0, tangent.X) * side * 3.83f,
+                Position = new Vector3(drainAt.X, world.HeightAt(drainAt.X, drainAt.Y) + 0.185f, drainAt.Y),
                 Rotation = new Vector3(0, Mathf.Atan2(tangent.X, tangent.Y), 0),
-            };
+                CollisionLayer = PartBody.LayerWorld,
+                CollisionMask = 0,
+            });
+            drain.AddChild(new CollisionShape3D { Position = new Vector3(0, 0.005f, 0), Shape = new BoxShape3D { Size = new Vector3(0.44f, 0.03f, 0.68f) } });
             root.AddChild(drain);
             drain.AddChild(new MeshInstance3D
             {
@@ -424,7 +461,7 @@ internal static class StreetEnvironment
                 Count("건물", center, side);
                 if (pilotis)
                 {
-                    AddCar(root, world, point + normal * side * (FrontageOffset + depth / 2f), normal * side, seed + 20);
+                    AddCar(root, world, point + normal * side * (FrontageOffset + depth / 2f), normal * side, seed + 20, 0.04f);
                     Count("필로티 주차", center, side);
                     if (Style.TrashBags && Hash(seed, 19) < 0.7f)
                     {
@@ -436,14 +473,18 @@ internal static class StreetEnvironment
                 if (Style.TrashBags && Hash(seed, 21) < 0.45f)
                 {
                     var (bags, bagsTangent) = AtDistance(path, bagsAt);
-                    StreetDetail.TrashBags(root, world, bags + new Vector2(-bagsTangent.Y, bagsTangent.X) * side * 4.6f, seed);
+                    var bagsPoint = bags + new Vector2(-bagsTangent.Y, bagsTangent.X) * side * 4.6f;
+                    StreetDetail.TrashBags(root, world, bagsPoint, seed);
+                    Senses.Odors.Add((new Vector3(bagsPoint.X, world.HeightAt(bagsPoint.X, bagsPoint.Y) + 0.5f, bagsPoint.Y), "음식물 쓰레기 냄새", 0.7f));
                     Count("종량제 봉투", bagsAt, side);
                 }
                 if (Style.Styrofoam && !pilotis && Hash(seed, 22) < 0.4f)
                 {
                     var gardenAt = center + width * 0.22f;
                     var (garden, gardenTangent) = AtDistance(path, gardenAt);
-                    StreetDetail.StyrofoamGarden(root, world, garden + new Vector2(-gardenTangent.Y, gardenTangent.X) * side * 5.3f, gardenTangent, seed);
+                    var gardenPoint = garden + new Vector2(-gardenTangent.Y, gardenTangent.X) * side * 5.3f;
+                    StreetDetail.StyrofoamGarden(root, world, gardenPoint, gardenTangent, seed);
+                    Senses.Odors.Add((new Vector3(gardenPoint.X, world.HeightAt(gardenPoint.X, gardenPoint.Y) + 0.5f, gardenPoint.Y), "흙과 상추·파 냄새", 0.35f));
                     Count("스티로폼 텃밭", gardenAt, side);
                 }
                 if (Style.Scooter && Hash(seed, 23) < 0.25f)
@@ -484,6 +525,8 @@ internal static class StreetEnvironment
                 if (Hash(seed, 6) < 0.55f && center - lastCar > 9f)
                 {
                     AddCar(root, world, point + normal * side * 2.35f, tangent, seed + 10);
+                    var carPoint = point + normal * side * 2.35f;
+                    Senses.Odors.Add((new Vector3(carPoint.X, world.HeightAt(carPoint.X, carPoint.Y) + 0.5f, carPoint.Y), "배기가스와 타이어 고무 냄새", 0.2f));
                     Count("주차된 차", center, side);
                     lastCar = center;
                 }
@@ -573,11 +616,14 @@ internal static class StreetEnvironment
     {
         var normal = new Vector2(-tangent.Y, tangent.X);
         var tileCenter = center + normal * side * 4.02f;
-        var tile = new Node3D
+        var tile = Surface.Tactile.Apply(new StaticBody3D
         {
             Position = new Vector3(tileCenter.X, world.HeightAt(tileCenter.X, tileCenter.Y) + 0.198f, tileCenter.Y),
             Rotation = new Vector3(0, Mathf.Atan2(tangent.X, tangent.Y), 0),
-        };
+            CollisionLayer = PartBody.LayerWorld,
+            CollisionMask = 0,
+        });
+        tile.AddChild(new CollisionShape3D { Position = new Vector3(0, 0.01f, 0), Shape = new BoxShape3D { Size = new Vector3(0.82f, 0.045f, 0.82f) } });
         root.AddChild(tile);
         tile.AddChild(new MeshInstance3D
         {
@@ -597,12 +643,15 @@ internal static class StreetEnvironment
 
     static void AddStreetBin(Node3D root, World world, Vector2 center, Vector2 tangent, int seed)
     {
-        var bin = new Node3D
+        var bin = Surface.Plastic.Apply(new StaticBody3D
         {
             Name = $"StreetBin{seed}",
-            Position = new Vector3(center.X, world.HeightAt(center.X, center.Y), center.Y),
+            Position = new Vector3(center.X, world.HeightAt(center.X, center.Y) + 0.18f, center.Y), // 보도 위
             Rotation = new Vector3(0, Mathf.Atan2(tangent.X, tangent.Y), 0),
-        };
+            CollisionLayer = PartBody.LayerWorld,
+            CollisionMask = 0,
+        });
+        bin.AddChild(new CollisionShape3D { Position = new Vector3(0, 0.48f, 0), Shape = new BoxShape3D { Size = new Vector3(0.6f, 0.96f, 0.58f) } });
         root.AddChild(bin);
 
         var body = Look.Painted("painted_concrete", 0.7f, Style.BinColor.Lightened(seed % 2 == 0 ? 0f : 0.08f));
@@ -931,6 +980,13 @@ internal static class StreetEnvironment
 
         var facade = Style.Facade(Hash(seed, 14));
         var wall = Look.Scanned(facade.Texture, facade.Tile, facade.Tint.Lightened((Hash(seed, 12) - 0.5f) * 0.12f));
+        // 손으로 벽을 짚었을 때의 질감도 외벽 재질을 따른다
+        (facade.Texture switch
+        {
+            "red_brick_03" => Surface.Brick,
+            "beige_wall_001" => Surface.Plaster,
+            _ => Surface.Concrete,
+        }).Apply(building);
         var trim = new StandardMaterial3D { AlbedoColor = new Color(0.74f, 0.72f, 0.67f), Roughness = 0.78f };
         var bottom = -height / 2f;
         var frontZ = depth / 2f + 0.045f;
@@ -1017,7 +1073,9 @@ internal static class StreetEnvironment
                     AddBox(building, new Vector3(shopWidth / 7f, 0.04f, 0.95f),
                         new Vector3(-width * 0.08f + (panel - 3) * shopWidth / 7f, bottom + 2.42f, frontZ + 0.5f),
                         panel % 2 == 0 ? awning : stripe, new Vector3(0.22f, 0, 0));
-            StreetDetail.ShopSigns(building, width, height, frontZ, seed, Style);
+            var shopName = StreetDetail.ShopSigns(building, width, height, frontZ, seed, Style);
+            if (Senses.SmellOfShop(shopName) is { } smell)
+                Senses.Odors.Add((new Vector3(front.X, baseY + 1.2f, front.Y), smell, 1f));
             if (Style.PharmacyCross && Hash(seed, 13) < 0.4f)
                 StreetDetail.PharmacyCross(building, new Vector3(width / 2f - 0.6f, bottom + 3.3f, frontZ + 0.5f));
         }
@@ -1049,14 +1107,14 @@ internal static class StreetEnvironment
 
     static void AddPlanter(Node3D root, World world, Vector2 center, Vector2 tangent, float direction, int seed)
     {
-        var planter = new StaticBody3D
+        var planter = Surface.Concrete.Apply(new StaticBody3D
         {
             Name = $"Planter{seed}",
             Position = new Vector3(center.X, world.HeightAt(center.X, center.Y) + 0.28f, center.Y),
             Rotation = new Vector3(0, Mathf.Atan2(tangent.X, tangent.Y), 0),
             CollisionLayer = PartBody.LayerWorld,
             CollisionMask = 0,
-        };
+        });
         var box = new BoxMesh { Size = new Vector3(1.0f, 0.45f, 0.72f) };
         var concrete = Look.Painted("painted_concrete", 0.8f, new Color(0.48f, 0.47f, 0.43f));
         var soil = Look.Scanned("forrest_ground_01", 0.5f, new Color(0.72f, 0.67f, 0.54f));
@@ -1086,13 +1144,15 @@ internal static class StreetEnvironment
         });
     }
 
-    static void AddCar(Node3D root, World world, Vector2 center, Vector2 tangent, int seed)
+    /// <summary>주차된 차. lift: 서 있는 바닥 높이 (차로·보도 0.18, 필로티 바닥 0.04)</summary>
+    static void AddCar(Node3D root, World world, Vector2 center, Vector2 tangent, int seed, float lift = 0.18f)
     {
         var widthScale = Style.CarLength < 1f ? 0.88f : 1f; // 일본 경차는 짧고 좁다, 미국 차는 길다
         var car = new StaticBody3D
         {
             Name = $"ParkedCar{seed}",
-            Position = new Vector3(center.X, world.HeightAt(center.X, center.Y), center.Y),
+            Position = new Vector3(center.X, world.HeightAt(center.X, center.Y) + lift, center.Y),
+            PhysicsMaterialOverride = Surface.PaintedSteel.PhysicsMaterial(),
             Rotation = new Vector3(0, Mathf.Atan2(tangent.X, tangent.Y), 0),
             CollisionLayer = PartBody.LayerWorld,
             CollisionMask = 0,
@@ -1102,6 +1162,7 @@ internal static class StreetEnvironment
             Position = new Vector3(0, 0.72f, 0),
             Shape = new BoxShape3D { Size = new Vector3(1.78f * widthScale, 1.35f, 4.25f * Style.CarLength) },
         });
+        car.SetMeta(Surface.MetaKey, Surface.PaintedSteel.Id);
         root.AddChild(car);
         // 물리 몸체는 축척하지 않고 보이는 부분만 늘이거나 줄인다
         var visual = new Node3D { Scale = new Vector3(widthScale, 1f, Style.CarLength) };

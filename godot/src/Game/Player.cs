@@ -55,7 +55,9 @@ public partial class Player : CharacterBody3D
     /// <summary>3인칭 카메라: 눈(Camera)에서 뒤나 앞으로 뻗은 팔 끝. 벽에 닿으면 몸 쪽으로 당겨진다.</summary>
     SpringArm3D _viewArm = null!;
     Camera3D _viewCamera = null!;
-    Label _compassNeedle = null!, _zoomLabel = null!, _bearingLabel = null!, _viewLabel = null!;
+    Label _compassNeedle = null!, _zoomLabel = null!, _bearingLabel = null!, _viewLabel = null!, _senseLabel = null!;
+    /// <summary>다섯 감각: 발밑 질감·발소리·냄새·쥔 것의 맛</summary>
+    internal Senses Senses { get; private set; } = null!;
     /// <summary>3인칭에서 보이는 내 몸 (1인칭에서는 숨긴다: 카메라가 머리 안에 있다)</summary>
     CyborgBody? _avatar;
     internal CyborgBody? Avatar => _avatar;
@@ -238,7 +240,10 @@ public partial class Player : CharacterBody3D
         _tag.Visible = false;
         _tag.TopLevel = true;
         AddChild(_tag);
+        Senses = new Senses { Name = "Senses" };
+        AddChild(Senses);
         BuildStreetViewHud();
+        BuildSenseRecord();
     }
 
     void BuildStreetViewHud()
@@ -361,6 +366,33 @@ public partial class Player : CharacterBody3D
         UpdateStreetViewZoomLabel();
     }
 
+    /// <summary>오른쪽 아래의 감각 기록지: 발밑·냄새·맛을 말로 적는다</summary>
+    void BuildSenseRecord()
+    {
+        var layer = new CanvasLayer { Layer = 1 };
+        AddChild(layer);
+        var panel = new PanelContainer
+        {
+            AnchorLeft = 1, AnchorRight = 1, AnchorTop = 1, AnchorBottom = 1,
+            OffsetLeft = -16, OffsetRight = -16, OffsetTop = -16, OffsetBottom = -16,
+            GrowHorizontal = Control.GrowDirection.Begin,
+            GrowVertical = Control.GrowDirection.Begin,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        panel.AddThemeStyleboxOverride("panel", new StyleBoxFlat
+        {
+            BgColor = new Color(0.93f, 0.9f, 0.82f, 0.88f),
+            BorderColor = new Color(0.3f, 0.27f, 0.22f, 0.5f),
+            BorderWidthLeft = 1, BorderWidthTop = 1, BorderWidthRight = 1, BorderWidthBottom = 1,
+            ContentMarginLeft = 12, ContentMarginTop = 8, ContentMarginRight = 12, ContentMarginBottom = 8,
+        });
+        _senseLabel = new Label { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _senseLabel.AddThemeFontSizeOverride("font_size", 12);
+        _senseLabel.AddThemeColorOverride("font_color", new Color(0.16f, 0.14f, 0.12f));
+        panel.AddChild(_senseLabel);
+        layer.AddChild(panel);
+    }
+
     static Button StreetViewButton(string text)
     {
         var button = new Button
@@ -418,6 +450,8 @@ public partial class Player : CharacterBody3D
             _bearingLabel.Text = $"{heading:000}°";
             var view = Site.NearestView(new Vector2(GlobalPosition.X, GlobalPosition.Z));
             _viewLabel.Text = $"뷰 {view + 1}/{Site.Views.Length} · {ViewKindName(Site.Views[view].Kind)}";
+            Senses.Taste = _held is { } held ? $"{held.Part.Def.NameKo}: {Surface.TasteOf(held.Part.Def.Material.Id)}" : null;
+            _senseLabel.Text = Senses.Record();
         }
     }
 
@@ -576,7 +610,8 @@ public partial class Player : CharacterBody3D
         var speed = Input.IsActionPressed("run") ? Run : Walk;
         var v = Velocity;
         var target = wish.LimitLength(1) * speed;
-        var horizontal = new Vector3(v.X, 0, v.Z).MoveToward(target, (IsOnFloor() ? GroundAccel : AirAccel) * dt);
+        // 발밑 질감: 미끄러운 표면(도색·풀·금속)에서는 출발·멈춤이 느려진다
+        var horizontal = new Vector3(v.X, 0, v.Z).MoveToward(target, (IsOnFloor() ? GroundAccel * Senses.Grip : AirAccel) * dt);
         v = new Vector3(horizontal.X, v.Y, horizontal.Z);
         var jump = Input.IsActionJustPressed("jump") || JumpRequest;
         JumpRequest = false;
@@ -619,7 +654,12 @@ public partial class Player : CharacterBody3D
         var intensity = firstPerson ? 1f : 0f;
 
         if (grounded && speed > 0.12f)
+        {
+            // 한 주기에 두 발: 위상이 0 과 π 를 지날 때 발이 닿는다
+            var before = _headBobPhase;
             _headBobPhase = Mathf.PosMod(_headBobPhase + speed * dt * Mathf.Tau / 1.35f, Mathf.Tau);
+            if (_headBobPhase < before || (before < Mathf.Pi && _headBobPhase >= Mathf.Pi)) Senses.Step(speed);
+        }
 
         var bob = grounded && speed > 0.12f
             ? new Vector3(
@@ -629,7 +669,10 @@ public partial class Player : CharacterBody3D
             : Vector3.Zero;
 
         if (!_wasOnFloor && grounded && verticalVelocity < 0)
+        {
             _landingVelocity += Mathf.Min(-verticalVelocity * 0.018f, 0.22f);
+            if (verticalVelocity < -1.5f) Senses.Step(speed, -verticalVelocity);
+        }
         _wasOnFloor = grounded;
 
         var landingAmount = _landingVelocity;

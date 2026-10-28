@@ -80,7 +80,7 @@ public partial class Settlement : Node3D
     {
         var r = Site.Apron;
         var y = World.HeightAt(0, 4) + 0.03f;
-        Solid(new Vector3(r.Size.X, 0.08f, r.Size.Y), new Transform3D(Basis.Identity, new Vector3(r.GetCenter().X, y - 0.04f, r.GetCenter().Y)), _pavers);
+        Surface.Paver.Apply(Solid(new Vector3(r.Size.X, 0.08f, r.Size.Y), new Transform3D(Basis.Identity, new Vector3(r.GetCenter().X, y - 0.04f, r.GetCenter().Y)), _pavers));
         // 마당 가장자리 연석 (흰 콘크리트)
         foreach (var x in new[] { r.Position.X, r.End.X })
             Solid(new Vector3(0.18f, 0.16f, r.Size.Y), new Transform3D(Basis.Identity, new Vector3(x, y, r.GetCenter().Y)), _white);
@@ -89,7 +89,7 @@ public partial class Settlement : Node3D
         var t = Site.TestPad;
         var ty = World.HeightAt(t.GetCenter().X, t.GetCenter().Y) + 0.03f;
         var slab = Look.Scanned("rock_boulder_dry", 2.5f, new Color(0.86f, 0.86f, 0.84f));
-        Solid(new Vector3(t.Size.X, 0.08f, t.Size.Y), new Transform3D(Basis.Identity, new Vector3(t.GetCenter().X, ty - 0.04f, t.GetCenter().Y)), slab);
+        Surface.Concrete.Apply(Solid(new Vector3(t.Size.X, 0.08f, t.Size.Y), new Transform3D(Basis.Identity, new Vector3(t.GetCenter().X, ty - 0.04f, t.GetCenter().Y)), slab));
         for (var k = 0; k < 24; k++)
         {
             var mat = k % 2 == 0 ? _patina : _white;

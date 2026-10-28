@@ -46,7 +46,7 @@ public static class Site
     /// <summary>거리 탐색 시작점: 오솔길이 넓어진 도로 구간의 보행자 시점</summary>
     public static readonly Vector2 StreetSpawn = new(-8.8f, 44.5f);
     public static Vector3 Spawn(World world) =>
-        new(StreetSpawn.X, world.HeightAt(StreetSpawn.X, StreetSpawn.Y) + 0.05f, StreetSpawn.Y);
+        new(StreetSpawn.X, world.HeightAt(StreetSpawn.X, StreetSpawn.Y) + 0.6f, StreetSpawn.Y); // 아스팔트 충돌면(지형 + 0.18 m 이상) 위로 내려선다
     public const float SpawnYawDegrees = 15f;
 
     /// <summary>뷰(거리뷰의 촬영 지점) 사이 간격: 사람이 걸으며 찍는 간격으로 촘촘하게</summary>

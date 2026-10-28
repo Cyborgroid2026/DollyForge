@@ -302,6 +302,10 @@ public partial class Nature : Node3D
         AddChild(_pollen);
     }
 
+    /// <summary>바람이 불어 가는 방향 (수평)과 돌풍 세기. 풀·나무 셰이더와 냄새 퍼짐이 같이 쓴다.</summary>
+    public static Vector2 WindDirection { get; private set; } = new Vector2(0.9f, 0.35f).Normalized();
+    public static float WindStrength { get; private set; } = 0.5f;
+
     public override void _Process(double delta)
     {
         _time += (float)delta;
@@ -310,6 +314,8 @@ public partial class Nature : Node3D
         RenderingServer.GlobalShaderParameterSet("wind_strength", gust);
         var direction = new Vector2(0.9f, 0.35f).Rotated(_gust.GetNoise1D(_time * 0.08f) * 0.22f).Normalized();
         RenderingServer.GlobalShaderParameterSet("wind_direction", direction);
+        WindDirection = direction;
+        WindStrength = gust;
         if (_pollen is not null && GetViewport().GetCamera3D() is { } cam)
             _pollen.GlobalPosition = cam.GlobalPosition;
     }

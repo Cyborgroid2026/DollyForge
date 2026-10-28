@@ -60,6 +60,7 @@ public partial class SelfTest : Node
     async Task Run()
     {
         await StreetViewCoverage();
+        await FiveSenses();
 
         // 1. 구매: 금액·소모품·배송 부품
         var shop = Devices.Shop;
@@ -130,18 +131,20 @@ public partial class SelfTest : Node
         await Wait(0.5);
         var origin = c3.GlobalPosition;
         var heading = (-c3.GlobalBasis.Z) with { Y = 0 };
-        float maxAlong = 0, minAfterMax = float.MaxValue;
+        // 캠 드럼은 전원을 켠 순간의 시계 위상에서 이어 돈다: 전진이 먼저일 수도, 후진이 먼저일 수도 있다.
+        // 그래서 "실제로 지나간 길 − 순이동"으로 왕복을 판정한다 (한 방향으로만 가면 둘이 같다).
+        float travelled = 0, previous = 0;
         for (var t = 0; t < 32; t++)
         {
             await Wait(0.25);
             var along = (c3.GlobalPosition - origin).Dot(heading.Normalized());
-            if (MathF.Abs(along) > MathF.Abs(maxAlong)) { maxAlong = along; minAfterMax = MathF.Abs(along); }
-            minAfterMax = MathF.Min(minAfterMax, MathF.Abs(along));
+            travelled += MathF.Abs(along - previous);
+            previous = along;
         }
         var net = ((c3.GlobalPosition - origin) with { Y = 0 }).Length();
-        var reversed = MathF.Abs(maxAlong) - minAfterMax > 0.2f || MathF.Abs(maxAlong) - net > 0.2f;
+        var reversed = travelled - net > 0.4f;
         Check(net > full * 1.0f && net < full * 3.5f && reversed,
-            $"캠 드럼 8초: 순이동 {net:0.00} m (전속 8초면 {full * 8:0.0} m), 최대 {MathF.Abs(maxAlong):0.00} m 후 되돌아옴");
+            $"캠 드럼 8초: 순이동 {net:0.00} m (전속 8초면 {full * 8:0.0} m), 지나간 길 {travelled:0.00} m — 도중에 되돌아옴");
         Devices.TogglePower(c3);
 
         // 6. Android Tool Environment: 손목 추력기 (시계처럼 찬다)
@@ -257,6 +260,52 @@ public partial class SelfTest : Node
     }
 
     const double ViewWalkSeconds = 3.2;
+
+    /// <summary>
+    /// 다섯 감각: 발밑 표면(차로 = 아스팔트, 보도 = 보도블록)과 그 마찰이 물리에 들어갔는지,
+    /// 손끝 온도감 순서(쇠 &lt; 콘크리트 &lt; 나무), 가게 앞 냄새, 발소리가 실제 소리로 나는지.
+    /// </summary>
+    async Task FiveSenses()
+    {
+        var player = GetTree().Root.GetNode<Main>("Main").PlayerNode;
+        var line = Site.Views.Where(v => v.Kind == Site.ViewKind.Line).Select(v => v.Position).ToArray();
+        var along = (line[3] - line[2]).Normalized();
+        var normal = new Vector2(-along.Y, along.X);
+        async Task<Surface?> StandAt(Vector2 p)
+        {
+            player.GlobalPosition = new Vector3(p.X, World().HeightAt(p.X, p.Y) + 0.6f, p.Y);
+            player.Velocity = Vector3.Zero;
+            await Wait(0.5);
+            return player.Senses.Underfoot;
+        }
+        var road = await StandAt(line[2] + normal * 1.2f);
+        var walk = await StandAt(line[2] + normal * 4.1f);
+        Check(road == Surface.Asphalt && walk == Surface.Paver, $"발밑 촉각: 차로 {road?.Name ?? "없음"}, 보도 {walk?.Name ?? "없음"}");
+
+        var asphaltBody = GetTree().Root.FindChild("Surface_asphalt", true, false) as StaticBody3D;
+        Check(asphaltBody?.PhysicsMaterialOverride?.Friction is 0.75f, $"아스팔트 충돌면 마찰 {asphaltBody?.PhysicsMaterialOverride?.Friction:0.00} (고무–마른 아스팔트 운동 0.5–0.8)");
+
+        float T(Surface s) => s.ContactTemperature(Senses.AmbientC);
+        Check(T(Surface.Steel) < T(Surface.Concrete) && T(Surface.Concrete) < T(Surface.Wood),
+            $"손끝 온도감 (기온 {Senses.AmbientC}°C): 주철 {T(Surface.Steel):0.0} < 콘크리트 {T(Surface.Concrete):0.0} < 나무 {T(Surface.Wood):0.0} °C");
+
+        var shop = Senses.Odors.First(o => o.Smell.Contains("냄새"));
+        var smell = Senses.SmellAt(shop.At + new Vector3(0.5f, 0, 0.5f));
+        Check(smell is not null, $"후각: 냄새원 {Senses.Odors.Count}곳, 가게 앞에서 \"{smell?.Smell}\" ({(smell is { } s1 ? Senses.LevelWord(s1.Level) : "-")})");
+
+        // 청각: 주 버스에 소리 잡기를 걸고 한 발짝 — 아스팔트 발소리가 실제 표본으로 나와야 한다
+        var capture = new AudioEffectCapture { BufferLength = 1f };
+        AudioServer.AddBusEffect(0, capture);
+        await StandAt(line[2] + normal * 1.2f);
+        capture.ClearBuffer();
+        player.Senses.Step(1.6f);
+        await Wait(0.6);
+        var samples = capture.GetBuffer(capture.GetFramesAvailable());
+        var peak = samples.Length == 0 ? 0 : samples.Max(v => Mathf.Abs(v.X));
+        AudioServer.RemoveBusEffect(0, AudioServer.GetBusEffectCount(0) - 1);
+        Check(peak > 0.01f && player.Senses.LastStep == Surface.Asphalt, $"청각: 아스팔트 발소리 최대 진폭 {peak:0.000} ({samples.Length} 표본)");
+        Check(Surface.TasteOf("steel_s235").Contains("쇠"), $"미각(접촉 화학): 강철 = {Surface.TasteOf("steel_s235")}");
+    }
 
     /// <summary>제자리에서 한 번 뛰어 최고 높이 (m) 를 잰다</summary>
     async Task<float> MeasureJump(Player player)

@@ -10,17 +10,17 @@ namespace DollyForge.Game;
 /// </summary>
 internal static class StreetDetail
 {
-    static readonly StandardMaterial3D GasYellow = new() { AlbedoColor = new Color(0.84f, 0.66f, 0.13f), Metallic = 0.25f, Roughness = 0.5f };
-    static readonly StandardMaterial3D Galvanized = new() { AlbedoColor = new Color(0.56f, 0.57f, 0.56f), Metallic = 0.75f, Roughness = 0.42f };
-    static readonly StandardMaterial3D DarkSteel = new() { AlbedoColor = new Color(0.17f, 0.18f, 0.18f), Metallic = 0.55f, Roughness = 0.52f };
-    static readonly StandardMaterial3D AcWhite = new() { AlbedoColor = new Color(0.8f, 0.8f, 0.76f), Roughness = 0.58f };
-    static readonly StandardMaterial3D Insulation = new() { AlbedoColor = new Color(0.86f, 0.86f, 0.82f), Roughness = 0.7f };
-    static readonly StandardMaterial3D PlateBlue = new() { AlbedoColor = new Color(0.07f, 0.2f, 0.47f), Roughness = 0.38f };
+    static readonly StandardMaterial3D GasYellow = Flat(new Color(0.84f, 0.66f, 0.13f), 0.5f, 0.25f);
+    static readonly StandardMaterial3D Galvanized = Flat(new Color(0.56f, 0.57f, 0.56f), 0.42f, 0.75f);
+    static readonly StandardMaterial3D DarkSteel = Flat(new Color(0.17f, 0.18f, 0.18f), 0.52f, 0.55f);
+    static readonly StandardMaterial3D AcWhite = Flat(new Color(0.8f, 0.8f, 0.76f), 0.58f);
+    static readonly StandardMaterial3D Insulation = Flat(new Color(0.86f, 0.86f, 0.82f), 0.7f);
+    static readonly StandardMaterial3D PlateBlue = Flat(new Color(0.07f, 0.2f, 0.47f), 0.38f);
     static readonly StandardMaterial3D Mirror = new() { AlbedoColor = new Color(0.86f, 0.88f, 0.9f), Metallic = 1f, Roughness = 0.04f };
-    static readonly StandardMaterial3D SafetyOrange = new() { AlbedoColor = new Color(0.9f, 0.36f, 0.08f), Roughness = 0.55f };
-    static readonly StandardMaterial3D ReflectWhite = new() { AlbedoColor = new Color(0.9f, 0.9f, 0.87f), Roughness = 0.45f };
-    static readonly StandardMaterial3D Styrofoam = new() { AlbedoColor = new Color(0.9f, 0.9f, 0.86f), Roughness = 0.82f };
-    static readonly StandardMaterial3D Rubber = new() { AlbedoColor = new Color(0.04f, 0.04f, 0.04f), Roughness = 0.88f };
+    static readonly StandardMaterial3D SafetyOrange = Flat(new Color(0.9f, 0.36f, 0.08f), 0.55f);
+    static readonly StandardMaterial3D ReflectWhite = Flat(new Color(0.9f, 0.9f, 0.87f), 0.45f);
+    static readonly StandardMaterial3D Styrofoam = Flat(new Color(0.9f, 0.9f, 0.86f), 0.82f);
+    static readonly StandardMaterial3D Rubber = Flat(new Color(0.04f, 0.04f, 0.04f), 0.88f);
 
     static readonly Color[] SignColors =
     [
@@ -57,7 +57,18 @@ internal static class StreetDetail
         return mesh;
     }
 
-    static StandardMaterial3D Flat(Color color, float roughness = 0.6f) => new() { AlbedoColor = color, Roughness = roughness };
+    /// <summary>
+    /// 칠한 면: 색은 고르지만 손에 닿는 결(미세 요철·거칠기 얼룩)은 실사 스캔에서 빌린다.
+    /// 반들거리는 것(거칠기 0.45 미만)은 금속판 결, 나머지는 도장 콘크리트 결.
+    /// </summary>
+    static StandardMaterial3D Flat(Color color, float roughness = 0.6f, float metallic = 0f)
+    {
+        var m = Look.Painted(roughness < 0.45f || metallic > 0.3f ? "metal_plate" : "painted_concrete", 0.45f, color);
+        m.Roughness = Mathf.Clamp(roughness * 1.25f, 0f, 1f);
+        m.Metallic = metallic;
+        m.NormalScale = 0.35f;
+        return m;
+    }
 
     // ------------------------------------------------------------------ 건물 (로컬 좌표)
 
@@ -141,7 +152,8 @@ internal static class StreetDetail
     }
 
     /// <summary>가게 가로 간판 (상호 글자판)과 옆으로 튀어나온 세로 돌출 간판</summary>
-    public static void ShopSigns(Node3D building, float width, float height, float frontZ, int seed, StreetStyle style)
+    /// <summary>간판을 달고 가게 이름을 돌려준다</summary>
+    public static string ShopSigns(Node3D building, float width, float height, float frontZ, int seed, StreetStyle style)
     {
         var name = style.ShopNames[(int)(Hash(seed, 100) * style.ShopNames.Length) % style.ShopNames.Length];
         var color = SignColors[(int)(Hash(seed, 101) * SignColors.Length) % SignColors.Length];
@@ -173,6 +185,7 @@ internal static class StreetDetail
                 building.AddChild(tag);
             }
         }
+        return name;
     }
 
     /// <summary>건물번호판: 파란 바탕에 흰 글씨 (주택용 가로 26 cm 이상)</summary>
@@ -256,7 +269,7 @@ internal static class StreetDetail
         }
         paint.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
         node.AddChild(new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = paint, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
-        var hump = new StaticBody3D { CollisionLayer = PartBody.LayerWorld, CollisionMask = 0, Position = new Vector3(0, -0.03f, 0) };
+        var hump = Surface.Paint.Apply(new StaticBody3D { CollisionLayer = PartBody.LayerWorld, CollisionMask = 0, Position = new Vector3(0, -0.03f, 0) });
         hump.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(roadWidth, 0.1f, length * 0.6f) } });
         node.AddChild(hump);
     }

@@ -208,7 +208,7 @@ public partial class World : Node3D
         }
 
         var shape = new HeightMapShape3D { MapWidth = n, MapDepth = n, MapData = heights };
-        var body = new StaticBody3D { CollisionLayer = PartBody.LayerWorld, CollisionMask = 0 };
+        var body = Surface.Grass.Apply(new StaticBody3D { CollisionLayer = PartBody.LayerWorld, CollisionMask = 0 }); // 들판: 풀밭의 마찰·발소리·냄새
         body.AddChild(new CollisionShape3D { Shape = shape });
         AddChild(body);
 

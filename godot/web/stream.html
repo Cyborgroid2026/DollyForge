@@ -49,6 +49,8 @@ function connect() {
       }
       return;
     }
+    const head = new Uint8Array(await m.data.slice(0, 1).arrayBuffer());
+    if (head[0] === 0x41) { playAudio(await m.data.arrayBuffer()); return; } // 'A': 소리
     if (drawing) return; // 앞 화면을 아직 그리는 중이면 건너뛴다
     drawing = true;
     try {
@@ -58,6 +60,29 @@ function connect() {
       bmp.close();
     } finally { drawing = false; }
   };
+}
+
+// 소리: 게임이 보낸 16비트 PCM 을 끊김 없이 이어 재생한다. 브라우저는 첫 클릭·키 입력 뒤에만 소리를 낸다.
+let audio = null, audioNext = 0;
+function wakeAudio() {
+  if (!audio) audio = new AudioContext();
+  if (audio.state === 'suspended') audio.resume();
+}
+function playAudio(buf) {
+  if (!audio || audio.state !== 'running') return;
+  const rate = new DataView(buf).getUint32(4, true);
+  const pcm = new Int16Array(buf, 8);
+  if (!pcm.length) return;
+  const clip = audio.createBuffer(1, pcm.length, rate);
+  const out = clip.getChannelData(0);
+  for (let i = 0; i < pcm.length; i++) out[i] = pcm[i] / 32768;
+  const src = audio.createBufferSource();
+  src.buffer = clip;
+  src.connect(audio.destination);
+  const now = audio.currentTime;
+  if (audioNext < now + 0.04 || audioNext > now + 0.4) audioNext = now + 0.06; // 밀리거나 너무 앞서면 다시 맞춘다
+  src.start(audioNext);
+  audioNext += clip.duration;
 }
 
 function updateHint() {
@@ -78,6 +103,7 @@ function norm(e) {
 canvas.addEventListener('mousedown', (e) => {
   e.preventDefault();
   canvas.focus();
+  wakeAudio();
   if (replaced) { replaced = false; connect(); return; }
   if (captured && !locked()) { canvas.requestPointerLock(); return; } // 첫 클릭은 마우스를 잡기만
   send({ t: 'mb', b: e.button, down: true, ...norm(e) });
@@ -95,6 +121,7 @@ document.addEventListener('pointerlockchange', () => {
 // 키보드: F5 새로고침·Tab 이동·Space 스크롤 같은 브라우저 동작을 막고 모두 게임으로 보낸다
 function key(e, down) {
   if (e.isComposing) return;
+  wakeAudio();
   e.preventDefault();
   send({ t: 'k', code: e.code, key: e.key, down, rep: e.repeat, shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey });
 }
