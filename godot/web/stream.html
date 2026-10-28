@@ -131,7 +131,21 @@ canvas.addEventListener('pointerdown', (e) => {
   wakeAudio();
   if (replaced) { replaced = false; connect(); return; }
   if (captured && !active()) {
-    if (inIframe) { enterSoftCapture(e); } else { canvas.requestPointerLock(); }
+    // Pointer Lock 을 우선 시도한다. WebviewPanel 의 allow="pointer-lock" iframe 이면 성공한다.
+    // 실패하면(Simple Browser 등 권한 없는 iframe) 소프트 캡처로 폴백한다.
+    const pid = e.pointerId, cx = e.clientX, cy = e.clientY;
+    try {
+      const result = canvas.requestPointerLock();
+      if (result && typeof result.catch === 'function') {
+        result.catch(() => {
+          softCaptured = true; softPointerId = pid;
+          lastClientX = cx; lastClientY = cy;
+          canvas.style.cursor = 'none'; document.body.style.cursor = 'none';
+          try { canvas.setPointerCapture(pid); } catch {}
+          updateHint();
+        });
+      }
+    } catch { enterSoftCapture(e); }
     return; // 첫 클릭은 마우스를 잡기만
   }
   send({ t: 'mb', b: e.button, down: true, ...norm(e) });
