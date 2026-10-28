@@ -282,18 +282,18 @@ public partial class CyborgBody : Node3D
         var (U, F, r, bicep) = P.Arm;
         var arm = new Node3D { Position = new Vector3(side * P.Shoulder.X, P.Shoulder.Y, 0), Rotation = new Vector3(0, 0, side * 0.05f) };
 
-        // 어깨 접합부: 몸통 외피 안으로 살짝 묻혀 경계 없이 연결된다.
-        var shoulderOverlap = 0.018f * r;
+        // 어깨 접합부: 몸통 쇄골 라인 폭(≈0.154m)과 일치시키고, 몸통 외피 안으로 살짝 겹쳐 경계 없이 연결한다.
+        var shoulderOverlap = 0.04f * r;
 
-        // 상완: 어깨에서 이두 볼륨을 거쳐 팔꿈치로 가늘게 taper.
-        // Bust 파라미터로 정면(+Z)에 이두볼륨을, Sq로 단면을 둥글게 마감한다.
+        // 상완: 팔꿈치(아래, 가늘어짐)에서 어깨(위, 몸통 폭과 일치)로 넓어지며 이두 볼륨.
         Sec[] upper = [
-            new(0, 0.056f, 0.052f, 0.054f, Bust: bicep * 0.45f, Sq: 1.15f),      // 어깨 연결부 (몸통과 겹침)
-            new(U * 0.15f, 0.053f, 0.060f + bicep, 0.056f, Bust: bicep, Sq: 1.2f),  // 이두 볼륨 정면
-            new(U * 0.38f, 0.047f, 0.052f + bicep * 0.7f, 0.050f, Bust: bicep * 0.6f, Sq: 1.15f),
-            new(U * 0.65f, 0.042f, 0.044f, 0.046f, Bust: bicep * 0.3f, Sq: 1.1f),
-            new(U, 0.039f, 0.037f, 0.039f, Bust: bicep * 0.15f, Sq: 1.1f),        // 팔끝
-            new(U + shoulderOverlap, 0.035f, 0.033f, 0.035f),                      // 팔꿈치 관절부
+            new(0, 0.038f, 0.036f, 0.038f),                              // 팔꿈치 (가늘어짐)
+            new(U * 0.28f, 0.044f, 0.046f, 0.048f),                      // 팔꿈치 위
+            new(U * 0.55f, 0.050f, 0.054f + bicep * 0.5f, 0.052f, Bust: bicep * 0.7f, Sq: 1.15f),  // 이두 볼륨 시작
+            new(U * 0.80f, 0.058f, 0.066f + bicep, 0.060f, Bust: bicep, Sq: 1.2f),                 // 이두 볼륨 정점
+            new(U * 0.92f, 0.120f, 0.070f + bicep * 0.3f, 0.068f, Bust: bicep * 0.5f, Sq: 1.15f),   // 어깨로 확장
+            new(U, 0.154f, 0.064f, 0.072f, Sq: 1.15f),                   // 어깨 연결부 (몸통 쇄골 라인과 일치)
+            new(U + 0.04f, 0.154f, 0.064f, 0.072f, Sq: 1.15f),           // 몸통 안으로 살짝 겹침
         ];
         var upperModule = new Node3D();
         arm.AddChild(upperModule);
@@ -301,7 +301,6 @@ public partial class CyborgBody : Node3D
 
         var elbow = new Node3D { Position = new Vector3(0, -U - shoulderOverlap, 0), Rotation = new Vector3(-0.10f, 0, 0) };
         upperModule.AddChild(elbow);
-        // 팔꿈치: 도드라진 구 형태보다 살에 파묻힌 관절 느낌으로, 이음선을 아주 얇게.
         var elbowSkin = Add(elbow, new SphereMesh { Radius = 0.040f * r, Height = 0.085f * r, RadialSegments = 32, Rings = 14 }, JointMaterial);
         elbowSkin.Scale = new Vector3(0.85f, 1f, 0.9f);
         AddJointSeam(elbow, 0.034f * r, 0.0012f * r, Vector3.Zero, alongY: true);
@@ -316,12 +315,12 @@ public partial class CyborgBody : Node3D
         ];
         var forearmModule = new Node3D();
         elbow.AddChild(forearmModule);
-        Add(forearmModule, Loft(fore.Select(x => x.Scale(r)).ToArray(), 36, 6), ModuleTitanium(forearmVariant), new Vector3(0, -F - 0.014f, 0));
+        Add(forearmModule, Loft(fore.Select(x => x.Scale(r)).ToArray(), 36, 6), ModuleTitanium(forearmVariant), new Vector3(0, -F - 0.014f * r, 0));
         var (hand, fingers, thumb) = BuildHand(r, handVariant);
-        hand.Position = new Vector3(0, -F - 0.014f, 0);
+        hand.Position = new Vector3(0, -F - 0.014f * r, 0);
         var wrist = Add(hand, new SphereMesh { Radius = 0.026f * r, Height = 0.050f * r, RadialSegments = 24, Rings = 12 }, JointMaterial);
-        wrist.Position = new Vector3(0, -0.006f, 0);
-        AddJointSeam(hand, 0.021f * r, 0.0012f * r, new Vector3(0, -0.006f, 0), alongY: true);
+        wrist.Position = new Vector3(0, -0.006f * r, 0);
+        AddJointSeam(hand, 0.021f * r, 0.0012f * r, new Vector3(0, -0.006f * r, 0), alongY: true);
         elbow.AddChild(hand);
         if (side < 0) arm.Scale = new Vector3(-1, 1, 1);
         return (arm, elbow, hand, fingers, thumb);
@@ -358,21 +357,18 @@ public partial class CyborgBody : Node3D
         var (T, N, r, q) = P.Leg;
         var leg = new Node3D { Position = new Vector3(side * P.Hip.X, P.Hip.Y, 0), Rotation = new Vector3(0, 0, -side * q) };
 
-        // 골반 접합부: 몸통 외피 안으로 살짝 묻혀 경계 없이 연결된다.
-        var hipOverlap = 0.020f * r;
+        // 골반 접합부: 몸통 골반 라인 폭(≈0.197m)과 일치시키고, 몸통 외피 안으로 살짝 겹쳐 경계 없이 연결한다.
+        var hipOverlap = 0.05f * r;
 
-        // 대퇴: 고관절에서 시작해 사각근 볼륨 정면(+Z, Bust), 슬개골 위쪽으로 가늘게.
-        // Glute 값은 엉덩이 라인을 부드럽게 이어줌.
+        // 대퇴: 무릎(아래, 가늘어짐)에서 고관절(위, 몸통 폭과 일치)로 넓어지며 사각 볼륨과 엉덩이 라인.
         Sec[] thigh = [
-            new(0, 0.068f, 0.064f, 0.062f, Glute: q * 0.35f, Sq: 1.15f),       // 골반 연결부 (몸통과 겹침)
-            new(T * 0.10f, 0.078f, 0.074f + q * 0.5f, 0.070f, Bust: q * 0.6f, Glute: q * 0.3f, Sq: 1.2f), // 사각 볼륨 정면
-            new(T * 0.30f, 0.086f, 0.082f + q * 0.7f, 0.078f, Bust: q * 0.8f, Glute: q * 0.25f, Sq: 1.15f),
-            new(T * 0.55f, 0.084f, 0.080f + q * 0.5f, 0.082f, Bust: q * 0.6f, Glute: q * 0.2f, Sq: 1.1f),
-            new(T * 0.80f, 0.074f, 0.070f, 0.076f, Bust: q * 0.3f, Glute: q * 0.15f, Sq: 1.1f),
-            new(T, 0.064f, 0.060f, 0.064f, Bust: q * 0.15f, Glute: q * 0.1f),   // 무릎 위
-            new(T + 0.05f, 0.055f, 0.052f, 0.056f, Cx: -0.008f),                // 무릎 관절부
-            new(T + 0.12f, 0.048f, 0.046f, 0.050f, Cx: -0.014f),
-            new(T + 0.18f, 0.032f, 0.034f, 0.036f, Cx: -0.018f),
+            new(0, 0.045f, 0.046f, 0.048f, Cx: -0.018f),        // 무릎 아래 (가늘어짐)
+            new(T * 0.25f, 0.052f, 0.050f, 0.056f, Glute: q * 0.2f, Sq: 1.15f),  // 무릎 위
+            new(T * 0.5f, 0.062f, 0.060f, 0.068f, Glute: q * 0.4f, Sq: 1.15f),  // 허벅지 중간
+            new(T * 0.75f, 0.078f, 0.074f + q * 0.5f, 0.078f, Bust: q * 0.6f, Glute: q * 0.3f, Sq: 1.2f),  // 사각 볼륨
+            new(T * 0.9f, 0.140f, 0.095f + q * 0.7f, 0.110f, Bust: q * 0.9f, Glute: q * 0.4f, Sq: 1.15f),  // 허벅지 볼륨 정점
+            new(T, 0.197f, 0.104f, 0.125f, Bust: q * 0.5f, Glute: q * 0.25f, Sq: 1.15f),  // 고관절 연결부 (몸통 골반 라인과 일치)
+            new(T + 0.05f, 0.197f, 0.104f, 0.125f, Bust: q * 0.4f, Glute: q * 0.2f, Sq: 1.15f),  // 몸통 안으로 살짝 겹침
         ];
         Add(leg, Loft(thigh.Select(x => x.Scale(r)).ToArray(), 40, 5), ModuleTitanium(thighVariant), new Vector3(0, -T - hipOverlap, 0));
 
@@ -383,14 +379,14 @@ public partial class CyborgBody : Node3D
         kneeSkin.Scale = new Vector3(0.9f, 1f, 0.88f);
         AddJointSeam(knee, 0.045f * r, 0.0012f * r, Vector3.Zero, alongY: true);
 
-        // 하퇴: 무릎에서 시작해 종아리 볼륨 뒤쪽(-Z, Glute), 발목으로 가늘게.
+        // 하퇴: 발목(아래, 가늘어짐)에서 무릎(위)으로 넓어지며 종아리 볼륨.
         Sec[] shin = [
-            new(0, 0.030f, 0.031f, 0.034f),                                     // 무릎에서 시작
+            new(0, 0.030f, 0.031f, 0.034f),                                     // 발목 (가늘어짐)
             new(N * 0.12f, 0.033f, 0.032f, 0.038f, Glute: q * 0.3f, Sq: 1.15f),
             new(N * 0.42f, 0.042f, 0.039f, 0.056f, Glute: q * 0.55f, Sq: 1.2f),  // 종아리 볼륨 뒤쪽
             new(N * 0.68f, 0.046f, 0.041f, 0.054f, Glute: q * 0.45f, Sq: 1.15f),
             new(N * 0.88f, 0.043f, 0.045f, 0.044f, Glute: q * 0.25f, Sq: 1.1f),
-            new(N, 0.044f, 0.046f, 0.043f, Glute: q * 0.1f),                    // 발목 위
+            new(N, 0.045f, 0.046f, 0.048f, Glute: q * 0.1f),                    // 무릎 위 (대퇴와 폭 일치)
             new(N + 0.032f, 0.038f, 0.040f, 0.038f),                             // 발목 관절부
         ];
         Add(knee, Loft(shin.Select(x => x.Scale(r)).ToArray(), 40, 5), ModuleTitanium(shinVariant), new Vector3(0, -N - 0.032f, 0));
