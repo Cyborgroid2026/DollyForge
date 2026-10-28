@@ -23,7 +23,7 @@ const canvas = document.getElementById('screen');
 const ctx = canvas.getContext('2d');
 const hint = document.getElementById('hint');
 const hintText = document.getElementById('hintText');
-let ws = null, captured = false, drawing = false;
+let ws = null, captured = false, drawing = false, replaced = false;
 
 function say(text) { hintText.textContent = text; hint.hidden = !text; }
 function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
@@ -33,10 +33,15 @@ function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.binaryType = 'blob';
   ws.onopen = () => { say(''); canvas.focus(); };
-  ws.onclose = () => { say('게임과 연결이 끊겼습니다. 다시 연결하는 중…'); setTimeout(connect, 1000); };
+  ws.onclose = () => {
+    if (replaced) { say('다른 탭에서 게임을 보고 있습니다 · 화면을 클릭하면 이 탭으로 가져옵니다'); return; }
+    say('게임과 연결이 끊겼습니다. 다시 연결하는 중…');
+    setTimeout(connect, 1000);
+  };
   ws.onmessage = async (m) => {
     if (typeof m.data === 'string') {
       const s = JSON.parse(m.data);
+      if (s.t === 'replaced') { replaced = true; return; } // 새 탭에 넘겨줬다: 되찾으려고 다시 붙지 않는다
       if (s.t === 'mode') {
         captured = s.captured;
         if (!captured && locked()) document.exitPointerLock();
@@ -73,11 +78,13 @@ function norm(e) {
 canvas.addEventListener('mousedown', (e) => {
   e.preventDefault();
   canvas.focus();
+  if (replaced) { replaced = false; connect(); return; }
   if (captured && !locked()) { canvas.requestPointerLock(); return; } // 첫 클릭은 마우스를 잡기만
   send({ t: 'mb', b: e.button, down: true, ...norm(e) });
 });
 canvas.addEventListener('mouseup', (e) => { if (captured && !locked()) return; send({ t: 'mb', b: e.button, down: false, ...norm(e) }); });
-canvas.addEventListener('mousemove', (e) => send({ t: 'mm', dx: e.movementX, dy: e.movementY, ...norm(e) }));
+// 시점 회전은 포인터 잠금 중에만: 잠그기 전에 화면 위를 지나는 마우스를 시점이 따라가지 않게 한다
+canvas.addEventListener('mousemove', (e) => { if (captured && !locked()) return; send({ t: 'mm', dx: e.movementX, dy: e.movementY, ...norm(e) }); });
 canvas.addEventListener('wheel', (e) => { e.preventDefault(); send({ t: 'mb', b: e.deltaY < 0 ? 3 : 4, down: true, ...norm(e) }); }, { passive: false });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('pointerlockchange', () => {

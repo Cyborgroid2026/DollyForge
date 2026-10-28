@@ -37,7 +37,9 @@ public partial class Player : CharacterBody3D
 
     float _pitch = Mathf.DegToRad(7f);
     float _headBobPhase;
-    float _streetStepRemaining;
+    /// <summary>거리뷰처럼 걸어가는 다음 뷰 지점 (실제 보행 물리로 간다)</summary>
+    Vector2? _stepTarget;
+    float _stepTimeout;
     float _landingVelocity;
     Vector3 _headOffset;
     Vector3 _headOffsetVelocity;
@@ -53,7 +55,7 @@ public partial class Player : CharacterBody3D
     /// <summary>3인칭 카메라: 눈(Camera)에서 뒤나 앞으로 뻗은 팔 끝. 벽에 닿으면 몸 쪽으로 당겨진다.</summary>
     SpringArm3D _viewArm = null!;
     Camera3D _viewCamera = null!;
-    Label _compassNeedle = null!, _zoomLabel = null!, _bearingLabel = null!;
+    Label _compassNeedle = null!, _zoomLabel = null!, _bearingLabel = null!, _viewLabel = null!;
     /// <summary>3인칭에서 보이는 내 몸 (1인칭에서는 숨긴다: 카메라가 머리 안에 있다)</summary>
     CyborgBody? _avatar;
     internal CyborgBody? Avatar => _avatar;
@@ -254,6 +256,7 @@ public partial class Player : CharacterBody3D
             OffsetRight = -16,
             OffsetTop = -112,
             OffsetBottom = 160,
+            GrowHorizontal = Control.GrowDirection.Begin,
             MouseFilter = Control.MouseFilterEnum.Pass,
         };
         panel.AddThemeStyleboxOverride("panel", new StyleBoxFlat
@@ -278,7 +281,7 @@ public partial class Player : CharacterBody3D
         contents.AddThemeConstantOverride("separation", 8);
         panel.AddChild(contents);
 
-        var compass = new Control { CustomMinimumSize = new Vector2(58, 58), MouseFilter = Control.MouseFilterEnum.Ignore };
+        var compass = new Control { CustomMinimumSize = new Vector2(58, 58), SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter, MouseFilter = Control.MouseFilterEnum.Ignore };
         var north = new Label
         {
             Text = "N",
@@ -311,6 +314,15 @@ public partial class Player : CharacterBody3D
         _bearingLabel.AddThemeFontSizeOverride("font_size", 11);
         _bearingLabel.AddThemeColorOverride("font_color", new Color(0.78f, 0.84f, 0.88f));
         contents.AddChild(_bearingLabel);
+        _viewLabel = new Label
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            CustomMinimumSize = new Vector2(108, 0),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        _viewLabel.AddThemeFontSizeOverride("font_size", 10);
+        _viewLabel.AddThemeColorOverride("font_color", new Color(0.55f, 0.75f, 1f));
+        contents.AddChild(_viewLabel);
 
         var zoomRow = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         var zoomOut = StreetViewButton("−");
@@ -330,14 +342,14 @@ public partial class Player : CharacterBody3D
         zoomRow.AddChild(reset);
         contents.AddChild(zoomRow);
 
-        var step = StreetViewButton("↑  앞 지점으로 이동");
+        var step = StreetViewButton("↑  다음 뷰로 이동");
         step.CustomMinimumSize = new Vector2(108, 36);
-        step.Pressed += StartStreetStep;
+        step.Pressed += StepToNextView;
         contents.AddChild(step);
 
         var hint = new Label
         {
-            Text = "마우스로 둘러보기\n휠로 확대 · WASD 이동",
+            Text = "마우스로 둘러보기\n휠로 확대 · WASD 이동\nF4 다른 나라 거리",
             HorizontalAlignment = HorizontalAlignment.Center,
             AutowrapMode = TextServer.AutowrapMode.Word,
         };
@@ -379,7 +391,23 @@ public partial class Player : CharacterBody3D
         _zoomLabel.Text = $"{Mathf.RoundToInt(zoom * 100)}%";
     }
 
-    void StartStreetStep() => _streetStepRemaining = 0.6f;
+    internal void StepToNextView()
+    {
+        var forward = -GlobalBasis.Z;
+        var facing = new Vector2(forward.X, forward.Z).Normalized();
+        var here = new Vector2(GlobalPosition.X, GlobalPosition.Z);
+        var next = Site.NextView(here, facing);
+        var goal = next >= 0 ? Site.Views[next].Position : here + facing * Site.ViewSpacing;
+        _stepTarget = goal;
+        _stepTimeout = goal.DistanceTo(here) / Walk + 1.5f;
+    }
+
+    static string ViewKindName(Site.ViewKind kind) => kind switch
+    {
+        Site.ViewKind.Line => "골목",
+        Site.ViewKind.Spot => "둘러보기",
+        _ => "실내",
+    };
 
     public override void _Process(double delta)
     {
@@ -388,6 +416,8 @@ public partial class Player : CharacterBody3D
             _compassNeedle.Rotation = Rotation.Y;
             var heading = Mathf.PosMod(Mathf.RadToDeg(Rotation.Y), 360f);
             _bearingLabel.Text = $"{heading:000}°";
+            var view = Site.NearestView(new Vector2(GlobalPosition.X, GlobalPosition.Z));
+            _viewLabel.Text = $"뷰 {view + 1}/{Site.Views.Length} · {ViewKindName(Site.Views[view].Kind)}";
         }
     }
 
@@ -486,6 +516,9 @@ public partial class Player : CharacterBody3D
             case Key.F7:
                 ExportBody?.Invoke();
                 break;
+            case Key.F4:
+                Notify?.Invoke(StreetEnvironment.NextStyle());
+                break;
             case Key.F9 when _aimBody is not null:
                 Notify?.Invoke(Devices.Properties(_aimBody));
                 break;
@@ -532,12 +565,14 @@ public partial class Player : CharacterBody3D
 
         // 이동: 입력 방향으로 가속 (사람의 보행·달리기 속도)
         var input = Input.GetVector("move_left", "move_right", "move_forward", "move_back");
-        if (_streetStepRemaining > 0)
-        {
-            _streetStepRemaining = Mathf.Max(0, _streetStepRemaining - dt);
-            input.Y = -1;
-        }
         var wish = (GlobalBasis * new Vector3(input.X, 0, input.Y)) with { Y = 0 };
+        if (_stepTarget is { } goal)
+        {
+            var toGoal = new Vector3(goal.X - GlobalPosition.X, 0, goal.Y - GlobalPosition.Z);
+            _stepTimeout -= dt;
+            if (input != Vector2.Zero || toGoal.Length() < 0.25f || _stepTimeout <= 0) _stepTarget = null;
+            else wish = toGoal.Normalized();
+        }
         var speed = Input.IsActionPressed("run") ? Run : Walk;
         var v = Velocity;
         var target = wish.LimitLength(1) * speed;

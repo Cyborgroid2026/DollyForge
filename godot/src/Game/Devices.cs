@@ -404,6 +404,8 @@ public partial class Devices : Node3D
         if (name.Trim('_').Length == 0) name = $"device_{Stamp()}";
         var dir = ProjectSettings.GlobalizePath("res://exports");
         System.IO.Directory.CreateDirectory(dir);
+        // 내보낸 파일은 게임 리소스가 아니다: Godot 가 BOM CSV 를 번역 파일로 가져오다 멈추지 않게 한다
+        System.IO.File.WriteAllText(System.IO.Path.Combine(dir, ".gdignore"), "");
         var path = System.IO.Path.Combine(dir, name);
         System.IO.File.WriteAllText(path + ".urdf", Export.Urdf(dev));
         System.IO.File.WriteAllText(path + ".usda", Export.Usda(dev));

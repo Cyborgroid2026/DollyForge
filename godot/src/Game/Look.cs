@@ -11,7 +11,7 @@ public static class Look
 {
     static readonly Dictionary<string, Material> Cache = new();
 
-    static Texture2D? Tex(string name, string map)
+    internal static Texture2D? Tex(string name, string map)
     {
         var path = $"res://assets/tex/{name}/{map}.jpg";
         return ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;

@@ -13,6 +13,8 @@ namespace DollyForge.Game;
 /// 렌더링한 화면을 JPEG 로 브라우저에 보낸다. 브라우저의 키보드·마우스는 Godot 입력 이벤트로 되돌려 넣는다.
 ///   http://127.0.0.1:7780/    화면 페이지 (godot/web/stream.html)
 ///   ws://127.0.0.1:7780/ws    ← 화면(JPEG 바이너리)·상태(JSON 텍스트) / → 입력(JSON 텍스트)
+///   GET  /frame.jpg           지금 화면 한 장 (탭의 연결을 빼앗지 않고 같은 화면을 본다: 개발·점검용)
+///   POST /input               입력 JSON 한 개 (ws 와 같은 형식, 점검 도구가 게임 안에서만 조작한다)
 /// 로컬 주소에서만 연다.
 /// </summary>
 public partial class BrowserStream : Node
@@ -38,11 +40,31 @@ public partial class BrowserStream : Node
     string _page = "";
     string? _lastStatus;
     Vector2 _mouse, _seen;
+    byte[]? _lastJpg;
+    /// <summary>/frame.jpg 요청이 있으면 탭이 없어도 잠시 화면을 굽는다</summary>
+    long _observeUntil;
 
-    /// <summary>게임 노드들이 실제로 받은 마우스 위치 (게임 화면 좌표)</summary>
+    /// <summary>브라우저에서 넣은 입력의 장치 번호. 이 번호가 아닌 입력은 OS 의 실제 마우스·키보드다.</summary>
+    internal const int StreamDevice = 0x5D;
+
+    /// <summary>
+    /// 숨은 Godot 창이 받는 실제 마우스·키보드는 버린다: 게임은 브라우저 탭의 입력으로만 움직이고,
+    /// 사용자가 데스크톱에서 마우스를 움직여도 시점이 따라가지 않는다. 게임 노드들이 받은 마우스 위치도 기억한다.
+    /// </summary>
     public override void _Input(InputEvent ev)
     {
+        if (ev is (InputEventMouse or InputEventKey) && ev.Device != StreamDevice)
+        {
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (ev is InputEventMouse m) _seen = m.Position;
+    }
+
+    static void Inject(InputEvent ev)
+    {
+        ev.Device = StreamDevice;
+        Input.ParseInputEvent(ev);
     }
 
     public override void _Ready()
@@ -120,11 +142,38 @@ public partial class BrowserStream : Node
                 var old = _ws;
                 _ws = ws; // 새 탭이 열리면 그쪽으로 넘긴다
                 _lastStatus = null;
-                old?.Abort();
+                if (old is { State: WebSocketState.Open })
+                {
+                    // 예전 탭이 바로 다시 붙어 서로 빼앗지 않게 알린다
+                    await Send(old, Encoding.UTF8.GetBytes("{\"t\":\"replaced\"}"), WebSocketMessageType.Text);
+                    try { await old.CloseAsync(WebSocketCloseStatus.NormalClosure, "replaced", CancellationToken.None); }
+                    catch { old.Abort(); }
+                }
                 _ = Task.Run(() => ReceiveLoop(ws));
                 continue;
             }
-            var body = ctx.Request.Url?.AbsolutePath is "/" or "/index.html" ? Encoding.UTF8.GetBytes(_page) : null;
+            var path = ctx.Request.Url?.AbsolutePath;
+            if (path == "/frame.jpg")
+            {
+                Interlocked.Exchange(ref _observeUntil, System.Environment.TickCount64 + 3000);
+                for (var i = 0; i < 40 && Volatile.Read(ref _lastJpg) is null; i++) await Task.Delay(50);
+                var jpg = Volatile.Read(ref _lastJpg);
+                ctx.Response.StatusCode = jpg is null ? 503 : 200;
+                ctx.Response.ContentType = "image/jpeg";
+                ctx.Response.Headers["Cache-Control"] = "no-store";
+                if (jpg is not null) await ctx.Response.OutputStream.WriteAsync(jpg);
+                ctx.Response.Close();
+                continue;
+            }
+            if (path == "/input" && ctx.Request.HttpMethod == "POST")
+            {
+                using var reader = new System.IO.StreamReader(ctx.Request.InputStream, Encoding.UTF8);
+                _inbox.Enqueue(await reader.ReadToEndAsync());
+                ctx.Response.StatusCode = 204;
+                ctx.Response.Close();
+                continue;
+            }
+            var body = path is "/" or "/index.html" ? Encoding.UTF8.GetBytes(_page) : null;
             ctx.Response.StatusCode = body is null ? 404 : 200;
             ctx.Response.ContentType = "text/html; charset=utf-8";
             ctx.Response.Headers["Cache-Control"] = "no-store";
@@ -163,29 +212,13 @@ public partial class BrowserStream : Node
     public override void _Process(double delta)
     {
         while (_inbox.TryDequeue(out var msg)) HandleInput(msg);
-        if (_ws is not { State: WebSocketState.Open } ws) return;
-
-        var status = Pointer.Captured ? "{\"t\":\"mode\",\"captured\":true}" : "{\"t\":\"mode\",\"captured\":false}";
-        if (status != _lastStatus)
+        var ws = _ws is { State: WebSocketState.Open } open ? open : null;
+        if (ws is null)
         {
-            _lastStatus = status;
-            _ = Send(ws, Encoding.UTF8.GetBytes(status), WebSocketMessageType.Text);
+            if (System.Environment.TickCount64 > Interlocked.Read(ref _observeUntil)) return;
         }
-
-        if (_stats)
-        {
-            RenderingServer.ViewportSetMeasureRenderTime(GetViewport().GetViewportRid(), true);
-            _statsTimer += delta;
-            if (_statsTimer >= 5)
-            {
-                GD.Print($"[stream] 렌더 {Engine.GetFramesPerSecond():0} fps · 전송 {(_frameSeq - _statsSeq) / _statsTimer:0.0} 장/초 · " +
-                         $"처리 {Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000:0} ms · 물리 {Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000:0} ms · " +
-                         $"렌더 CPU {RenderingServer.ViewportGetMeasuredRenderTimeCpu(GetViewport().GetViewportRid()) + RenderingServer.GetFrameSetupTimeCpu():0} ms · " +
-                         $"GPU {RenderingServer.ViewportGetMeasuredRenderTimeGpu(GetViewport().GetViewportRid()):0} ms · 그리기 호출 {Performance.GetMonitor(Performance.Monitor.RenderTotalDrawCallsInFrame):0}");
-                _statsTimer = 0;
-                _statsSeq = _frameSeq;
-            }
-        }
+        else SendStatus(ws);
+        Stats(delta);
 
         _frameTimer += delta;
         if (Volatile.Read(ref _inFlight) >= MaxInFlight || _frameTimer < 1.0 / Fps) return;
@@ -198,10 +231,39 @@ public partial class BrowserStream : Node
             Encode(GetViewport().GetTexture().GetImage(), seq, ws);
     }
 
+    void SendStatus(WebSocket ws)
+    {
+        var status = Pointer.Captured ? "{\"t\":\"mode\",\"captured\":true}" : "{\"t\":\"mode\",\"captured\":false}";
+        if (status != _lastStatus)
+        {
+            _lastStatus = status;
+            _ = Send(ws, Encoding.UTF8.GetBytes(status), WebSocketMessageType.Text);
+        }
+    }
+
+    void Stats(double delta)
+    {
+        if (_stats)
+        {
+            RenderingServer.ViewportSetMeasureRenderTime(GetViewport().GetViewportRid(), true);
+            _statsTimer += delta;
+            if (_statsTimer >= 5)
+            {
+                GD.Print($"[stream] 렌더 {Engine.GetFramesPerSecond():0} fps · 전송 {(_frameSeq - _statsSeq) / _statsTimer:0.0} 장/초 · " +
+                         $"처리 {Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000:0} ms · 물리 {Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000:0} ms · " +
+                         $"렌더 CPU {RenderingServer.ViewportGetMeasuredRenderTimeCpu(GetViewport().GetViewportRid()) + RenderingServer.GetFrameSetupTimeCpu():0} ms · " +
+                         $"GPU {RenderingServer.ViewportGetMeasuredRenderTimeGpu(GetViewport().GetViewportRid()):0} ms · 그리기 호출 {Performance.GetMonitor(Performance.Monitor.RenderTotalDrawCallsInFrame):0} · " +
+                         $"물리 활성 {Performance.GetMonitor(Performance.Monitor.Physics3DActiveObjects):0} · 충돌쌍 {Performance.GetMonitor(Performance.Monitor.Physics3DCollisionPairs):0} · 노드 {Performance.GetMonitor(Performance.Monitor.ObjectNodeCount):0}");
+                _statsTimer = 0;
+                _statsSeq = _frameSeq;
+            }
+        }
+    }
+
     Rid _rdTexture;
     Vector2I _rdSize;
 
-    bool RequestFrameAsync(long seq, WebSocket ws)
+    bool RequestFrameAsync(long seq, WebSocket? ws)
     {
         var rd = RenderingServer.GetRenderingDevice();
         if (rd is null) return false;
@@ -227,7 +289,7 @@ public partial class BrowserStream : Node
     }
     bool _asyncUnsupported;
 
-    void Encode(Image image, long seq, WebSocket ws)
+    void Encode(Image image, long seq, WebSocket? ws)
     {
         _ = Task.Run(async () =>
         {
@@ -237,7 +299,8 @@ public partial class BrowserStream : Node
                 // 더 새 화면이 먼저 나갔으면 이 화면은 버린다 (순서가 뒤바뀌지 않게)
                 if (Interlocked.Read(ref _lastSent) > seq) return;
                 Interlocked.Exchange(ref _lastSent, seq);
-                await Send(ws, jpg, WebSocketMessageType.Binary);
+                Volatile.Write(ref _lastJpg, jpg);
+                if (ws is not null) await Send(ws, jpg, WebSocketMessageType.Binary);
             }
             finally { Interlocked.Decrement(ref _inFlight); }
         });
@@ -268,7 +331,7 @@ public partial class BrowserStream : Node
                 };
                 // 글자 입력(전화번호·이름 칸)용: 한 글자짜리 key 는 유니코드로
                 if (e.GetProperty("key").GetString() is { Length: 1 } ch && !ev.CtrlPressed) ev.Unicode = ch[0];
-                Input.ParseInputEvent(ev);
+                Inject(ev);
                 break;
             case "mm":
                 var to = At();
@@ -277,7 +340,7 @@ public partial class BrowserStream : Node
                 _mouse = to;
                 var w = toWindow * to;
                 var wr = toWindow.BasisXform(rel);
-                Input.ParseInputEvent(new InputEventMouseMotion { Position = w, GlobalPosition = w, Relative = wr, ScreenRelative = wr });
+                Inject(new InputEventMouseMotion { Position = w, GlobalPosition = w, Relative = wr, ScreenRelative = wr });
                 break;
             case "mb":
                 var at = Pointer.Captured ? size / 2 : At();
@@ -289,9 +352,9 @@ public partial class BrowserStream : Node
                 };
                 var down = e.GetProperty("down").GetBoolean();
                 var wa = toWindow * at;
-                Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = button, Pressed = down, Position = wa, GlobalPosition = wa });
+                Inject(new InputEventMouseButton { ButtonIndex = button, Pressed = down, Position = wa, GlobalPosition = wa });
                 if (button is MouseButton.WheelUp or MouseButton.WheelDown && down)
-                    Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = button, Pressed = false, Position = wa, GlobalPosition = wa });
+                    Inject(new InputEventMouseButton { ButtonIndex = button, Pressed = false, Position = wa, GlobalPosition = wa });
                 break;
             case "where": // 시험용: 게임이 받은 마우스 위치를 돌려준다
                 var p = _seen;
@@ -300,8 +363,8 @@ public partial class BrowserStream : Node
             case "unlock":
                 // 브라우저가 Esc 로 포인터 잠금을 풀었다 (그 Esc 는 페이지에 오지 않는다)
                 if (!Pointer.Captured) return;
-                Input.ParseInputEvent(new InputEventKey { Keycode = Key.Escape, PhysicalKeycode = Key.Escape, Pressed = true });
-                Input.ParseInputEvent(new InputEventKey { Keycode = Key.Escape, PhysicalKeycode = Key.Escape, Pressed = false });
+                Inject(new InputEventKey { Keycode = Key.Escape, PhysicalKeycode = Key.Escape, Pressed = true });
+                Inject(new InputEventKey { Keycode = Key.Escape, PhysicalKeycode = Key.Escape, Pressed = false });
                 if (Pointer.Captured) Pointer.Mode = Input.MouseModeEnum.Visible;
                 break;
         }

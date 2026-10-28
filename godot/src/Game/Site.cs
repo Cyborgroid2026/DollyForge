@@ -49,6 +49,64 @@ public static class Site
         new(StreetSpawn.X, world.HeightAt(StreetSpawn.X, StreetSpawn.Y) + 0.05f, StreetSpawn.Y);
     public const float SpawnYawDegrees = 15f;
 
+    /// <summary>뷰(거리뷰의 촬영 지점) 사이 간격: 사람이 걸으며 찍는 간격으로 촘촘하게</summary>
+    public const float ViewSpacing = 3f;
+
+    public enum ViewKind { Line, Spot, Indoor }
+
+    /// <summary>
+    /// 거리뷰 레이어처럼 "사진처럼 보여야 하는" 지점. Line = 파란 선(길을 따라 3 m 마다),
+    /// Spot = 파란 점(멈춰 둘러보는 곳), Indoor = 주황 점(실내).
+    /// </summary>
+    public static readonly (Vector2 Position, ViewKind Kind)[] Views = BuildViews();
+
+    static (Vector2, ViewKind)[] BuildViews()
+    {
+        var views = new List<(Vector2, ViewKind)>();
+        var carry = 0f;
+        for (var i = 0; i < Path.Length - 1; i++)
+        {
+            var a = Path[i];
+            var b = Path[i + 1];
+            var length = a.DistanceTo(b);
+            for (var d = carry; d < length; d += ViewSpacing) views.Add((a.Lerp(b, d / length), ViewKind.Line));
+            carry = (carry - length) % ViewSpacing;
+            if (carry < 0) carry += ViewSpacing;
+        }
+        if (views[^1].Item1.DistanceTo(Path[^1]) > 1f) views.Add((Path[^1], ViewKind.Line));
+        var pondShore = World.PondCenter + (Path[2] - World.PondCenter).Normalized() * (World.PondRadius + 2.5f);
+        views.Add((pondShore, ViewKind.Spot));
+        views.Add((TestPad.GetCenter(), ViewKind.Spot));
+        views.Add((new Vector2(StationX, (PlatformZ0 + PlatformZ1) / 2f), ViewKind.Spot));
+        views.Add((Apron.GetCenter(), ViewKind.Spot));
+        views.Add((Building.GetCenter(), ViewKind.Indoor));
+        return views.ToArray();
+    }
+
+    /// <summary>바라보는 방향(수평)으로 다음 뷰: 1 m 보다 멀고, 시선에서 50° 안에서 가장 가까운 곳</summary>
+    public static int NextView(Vector2 from, Vector2 facing)
+    {
+        var best = -1;
+        var bestDistance = float.MaxValue;
+        for (var i = 0; i < Views.Length; i++)
+        {
+            var to = Views[i].Position - from;
+            var distance = to.Length();
+            if (distance < 1f || distance > 30f || to.Normalized().Dot(facing) < Mathf.Cos(Mathf.DegToRad(50))) continue;
+            if (distance < bestDistance) { best = i; bestDistance = distance; }
+        }
+        return best;
+    }
+
+    /// <summary>가장 가까운 뷰 번호</summary>
+    public static int NearestView(Vector2 p)
+    {
+        var best = 0;
+        for (var i = 1; i < Views.Length; i++)
+            if (Views[i].Position.DistanceSquaredTo(p) < Views[best].Position.DistanceSquaredTo(p)) best = i;
+        return best;
+    }
+
     /// <summary>오솔길 중심선까지의 거리와, 길을 따라 간 비율 (0 = 정류장, 1 = 작업장)</summary>
     public static (float Distance, float Along) PathDistance(Vector2 p)
     {

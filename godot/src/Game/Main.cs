@@ -97,7 +97,8 @@ public partial class Main : Node3D
         void Bind(string action, params Key[] keys)
         {
             if (!InputMap.HasAction(action)) InputMap.AddAction(action);
-            foreach (var k in keys) InputMap.ActionAddEvent(action, new InputEventKey { PhysicalKeycode = k });
+            // Device = -1: 모든 장치. 통합 브라우저에서 넣은 키(장치 번호가 따로 있다)도 같은 동작이 된다
+            foreach (var k in keys) InputMap.ActionAddEvent(action, new InputEventKey { PhysicalKeycode = k, Device = -1 });
         }
         Bind("move_forward", Key.W);
         Bind("move_back", Key.S);
@@ -125,7 +126,7 @@ public partial class Main : Node3D
         Pointer.Mode = Input.MouseModeEnum.Captured;
     }
 
-    const string StartHint = "거리 탐색 — 마우스로 둘러보기 · WASD 이동 · 휠 확대 · ↑ 앞 지점 이동";
+    const string StartHint = "거리 탐색 — 마우스로 둘러보기 · WASD 이동 · 휠 확대 · ↑ 다음 뷰로 이동 · F4 다른 나라 거리";
 
     void StartOffline(bool quiet)
     {

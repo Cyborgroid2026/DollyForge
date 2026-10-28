@@ -59,6 +59,8 @@ public partial class SelfTest : Node
 
     async Task Run()
     {
+        await StreetViewCoverage();
+
         // 1. 구매: 금액·소모품·배송 부품
         var shop = Devices.Shop;
         var before = shop.BalanceKrw;
@@ -199,6 +201,62 @@ public partial class SelfTest : Node
         Check(upgradedAvatar is not null && !ReferenceEquals(upgradedAvatar, player.Avatar),
             "분리 후 표준 티타늄 모듈 외형을 재조립");
     }
+
+    /// <summary>
+    /// 거리뷰 기준: 골목 뷰가 3 m 간격으로 이어지고, 길을 따라 어느 10 m 를 잘라도 길가에 4 종류 이상이 보이며,
+    /// 양쪽 건물 전면이 끊기지 않고, ↑ 버튼이 다음 뷰까지 실제로 걸어간다.
+    /// </summary>
+    async Task StreetViewCoverage()
+    {
+        var line = Site.Views.Where(v => v.Kind == Site.ViewKind.Line).Select(v => v.Position).ToArray();
+        var maxGap = line.Zip(line.Skip(1), (a, b) => a.DistanceTo(b)).Max();
+        Check(line.Length >= 13 && maxGap <= Site.ViewSpacing + 0.01f,
+            $"거리뷰 뷰 {Site.Views.Length}곳: 골목 {line.Length}곳 (간격 최대 {maxGap:0.0} m) + 둘러보기·실내 {Site.Views.Length - line.Length}곳");
+
+        // 나라 양식마다 다시 지어 본다: 어느 양식에서도 10 m 마다 길가 요소 4종 이상
+        var startStyle = StreetEnvironment.Style;
+        foreach (var style in StreetStyle.All.Where(st => st != startStyle).Append(startStyle))
+        {
+            StreetEnvironment.Rebuild(style);
+            var census = StreetEnvironment.Census;
+            var end = census.Where(c => c.Kind == "건물").Max(c => c.Along);
+            var thinnest = int.MaxValue;
+            var thinAt = 0f;
+            for (var w = 0f; w + 10f <= end; w += 0.5f)
+            {
+                var kinds = census.Where(c => c.Along >= w && c.Along < w + 10f).Select(c => c.Kind).Distinct().Count();
+                if (kinds < thinnest) { thinnest = kinds; thinAt = w; }
+            }
+            Check(thinnest >= 4, $"{style.Name}: 어느 10 m 구간에도 길가 {thinnest}종 이상 (가장 적은 곳 {thinAt:0.0}–{thinAt + 10:0.0} m), 전체 {census.Count}개");
+        }
+        await Wait(0.3);
+
+        foreach (var side in new[] { -1, 1 })
+        {
+            var fronts = StreetEnvironment.Census.Where(c => c.Kind == "건물" && c.Side == side).Select(c => c.Along).OrderBy(a => a).ToArray();
+            var widest = fronts.Zip(fronts.Skip(1), (a, b) => b - a).DefaultIfEmpty(99f).Max();
+            Check(fronts.Length >= 4 && widest < 8.5f, $"{(side < 0 ? "왼" : "오른")}쪽 건물 전면 {fronts.Length}채, 중심 간격 최대 {widest:0.0} m");
+        }
+
+        // 통합 브라우저가 넣은 키(별도 장치 번호)도 이동 동작이어야 한다
+        var browserW = new InputEventKey { PhysicalKeycode = Key.W, Keycode = Key.W, Pressed = true, Device = BrowserStream.StreamDevice };
+        Check(browserW.IsAction("move_forward"), "통합 브라우저의 W 키 = 앞으로 이동");
+
+        var player = GetTree().Root.GetNode<Main>("Main").PlayerNode;
+        var from = line[1];
+        var to = line[2];
+        var direction = (to - from).Normalized();
+        player.GlobalPosition = new Vector3(from.X, World().HeightAt(from.X, from.Y) + 0.3f, from.Y);
+        player.Rotation = new Vector3(0, Mathf.Atan2(-direction.X, -direction.Y), 0);
+        player.Velocity = Vector3.Zero;
+        await Wait(0.6);
+        player.StepToNextView();
+        await Wait(ViewWalkSeconds);
+        var arrived = new Vector2(player.GlobalPosition.X, player.GlobalPosition.Z).DistanceTo(to);
+        Check(arrived < 0.4f, $"↑ 다음 뷰로 이동: 3 m 앞 뷰까지 걸어서 도착 (오차 {arrived:0.00} m)");
+    }
+
+    const double ViewWalkSeconds = 3.2;
 
     /// <summary>제자리에서 한 번 뛰어 최고 높이 (m) 를 잰다</summary>
     async Task<float> MeasureJump(Player player)
