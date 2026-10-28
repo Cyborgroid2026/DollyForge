@@ -92,6 +92,8 @@ internal static class StreetEnvironment
         BuildStreetLights(root, world, path);
         BuildUtilityLines(root, world, path);
         AddAlleySigns(root, world, path);
+        var (before, after) = MeshBatcher.Merge(root);
+        GD.Print($"[street] {Style.Name}: 길가 {Census.Count}개, 메시 {before}개 → 재질별 {after}개로 합침");
     }
 
     /// <summary>과속방지턱 하나, 굽은 곳 바깥의 도로반사경, 길 시작·끝의 도로명판</summary>
@@ -141,12 +143,12 @@ internal static class StreetEnvironment
         }
 
         // 프랑스 법랑판은 건물 벽에 붙으므로 벽이 있는 곳까지 들어가서 단다
-        var wallPlate = Style.RoadSign == RoadSignKind.FranceWallPlate;
+        var wallPlate = Style.RoadSign is RoadSignKind.FranceWallPlate or RoadSignKind.UkWallPlate;
         var startAt = wallPlate ? 6.5f : 2.5f;
         var endAt = wallPlate ? length - 8f : length - 4f;
         var (start, startTangent) = AtDistance(path, startAt);
         var startNormal = new Vector2(-startTangent.Y, startTangent.X);
-        if (Style.RoadSign == RoadSignKind.FranceWallPlate)
+        if (wallPlate)
             StreetDetail.RoadSign(root, world, start - startNormal * (FrontageOffset - 0.02f), startNormal, Style.RoadSign, Style.RoadName);
         else
             StreetDetail.RoadSign(root, world, start - startNormal * 4.6f, startNormal, Style.RoadSign, Style.RoadName);
@@ -156,7 +158,7 @@ internal static class StreetEnvironment
         if (Style.RoadSign == RoadSignKind.KoreaPlate)
             StreetDetail.RoadNamePlate(root, world, end + endNormal * 4.6f, -endNormal, $"{Style.RoadName} →", "41 → 1");
         else
-            StreetDetail.RoadSign(root, world, end + endNormal * (Style.RoadSign == RoadSignKind.FranceWallPlate ? FrontageOffset - 0.02f : 4.6f), -endNormal, Style.RoadSign, Style.RoadName);
+            StreetDetail.RoadSign(root, world, end + endNormal * (wallPlate ? FrontageOffset - 0.02f : 4.6f), -endNormal, Style.RoadSign, Style.RoadName);
         Count("도로명판", endAt, 1);
     }
 
@@ -234,6 +236,13 @@ internal static class StreetEnvironment
                 BuildSurface(root, world, path, side < 0 ? -2.83f : 2.72f, side < 0 ? -2.72f : 2.83f, 0.205f, edgePaint);
             else if (Style.Edge == LinePattern.LongDashed)
                 Dashes(root, world, path, side * 2.78f, 0.11f, 9f, 3f, edgePaint);
+            else if (Style.Edge == LinePattern.DoubleYellowKerb)
+            {
+                // 영국: 연석 바로 옆 노란 이중선 (언제나 주정차 금지)
+                var yellow = new StandardMaterial3D { AlbedoColor = new Color(0.88f, 0.7f, 0.12f), Roughness = 0.9f };
+                foreach (var (a, b) in new[] { (2.95f, 3.03f), (3.08f, 3.16f) })
+                    BuildSurface(root, world, path, side < 0 ? -b : a, side < 0 ? -a : b, 0.205f, yellow);
+            }
         }
         switch (Style.Center)
         {
@@ -508,6 +517,13 @@ internal static class StreetEnvironment
             var (p, t) = AtDistance(path, at);
             StreetDetail.CafeTerrace(root, world, p + new Vector2(-t.Y, t.X) * side * 4.45f, t, seed);
             Count("카페 테라스", at, side);
+        }
+        if (Style.PostBox && Hash(seed, 28) < 0.3f)
+        {
+            var at = center + width * 0.3f;
+            var (p, t) = AtDistance(path, at);
+            StreetDetail.PostBox(root, world, p + new Vector2(-t.Y, t.X) * side * 3.75f, -new Vector2(-t.Y, t.X) * side);
+            Count("우체통", at, side);
         }
         if (Style.Mailbox && Hash(seed, 26) < 0.35f)
         {

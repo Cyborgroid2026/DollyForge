@@ -524,6 +524,18 @@ internal static class StreetDetail
         }
     }
 
+    /// <summary>빨간 원통 우체통 (영국): 둥근 모자, 검은 밑동, 투입구</summary>
+    public static void PostBox(Node3D root, World world, Vector2 at, Vector2 facing)
+    {
+        var node = Place(root, world, at, facing, 0.18f);
+        var red = Flat(new Color(0.72f, 0.06f, 0.05f), 0.35f);
+        Cylinder(node, 0.25f, 0.12f, new Vector3(0, 0.06f, 0), Flat(new Color(0.05f, 0.05f, 0.05f), 0.6f), segments: 18);
+        Cylinder(node, 0.23f, 1.25f, new Vector3(0, 0.74f, 0), red, segments: 18);
+        node.AddChild(new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.26f, Height = 0.24f, RadialSegments = 18, Rings = 6 }, Position = new Vector3(0, 1.4f, 0), MaterialOverride = red });
+        Box(node, new Vector3(0.26f, 0.035f, 0.04f), new Vector3(0, 1.12f, 0.22f), Flat(new Color(0.05f, 0.05f, 0.05f), 0.6f));
+        Box(node, new Vector3(0.2f, 0.14f, 0.02f), new Vector3(0, 0.9f, 0.23f), Flat(new Color(0.9f, 0.9f, 0.86f), 0.4f));
+    }
+
     /// <summary>약국의 초록 십자 (프랑스): 벽에서 튀어나온 발광 십자</summary>
     public static void PharmacyCross(Node3D building, Vector3 at)
     {
@@ -574,6 +586,27 @@ internal static class StreetDetail
                 plate.Position = new Vector3(0, 2.7f, 0.02f);
                 plate.Modulate = white;
                 node.AddChild(plate);
+                break;
+            case RoadSignKind.UkWallPlate:
+                // 영국: 벽에 붙은 흰 판, 검은 글씨와 검은 테
+                Box(node, new Vector3(0.9f, 0.24f, 0.025f), new Vector3(0, 2.6f, 0), Flat(new Color(0.08f, 0.08f, 0.08f), 0.4f));
+                Box(node, new Vector3(0.86f, 0.2f, 0.03f), new Vector3(0, 2.6f, 0), Flat(new Color(0.95f, 0.95f, 0.93f), 0.35f));
+                var uk = Look.Tag(road.ToUpperInvariant(), 0.0018f, Look.Stamp);
+                uk.Position = new Vector3(0, 2.6f, 0.02f);
+                uk.Modulate = new Color(0.08f, 0.08f, 0.08f);
+                node.AddChild(uk);
+                break;
+            case RoadSignKind.BrazilPlate:
+                Cylinder(node, 0.035f, 2.8f, new Vector3(0, 1.4f, 0), Galvanized);
+                Box(node, new Vector3(0.8f, 0.26f, 0.02f), new Vector3(0, 2.65f, 0), PlateBlue);
+                var br = Look.Tag(road, 0.0019f, Look.Stamp);
+                br.Position = new Vector3(0, 2.67f, 0.015f);
+                br.Modulate = white;
+                node.AddChild(br);
+                var district = Look.Tag("Jardim das Flores", 0.0009f, Look.Stamp);
+                district.Position = new Vector3(0, 2.57f, 0.015f);
+                district.Modulate = white;
+                node.AddChild(district);
                 break;
             case RoadSignKind.JapanPlate:
                 Box(node, new Vector3(0.26f, 0.4f, 0.02f), new Vector3(0, 2.3f, 0), PlateBlue);
