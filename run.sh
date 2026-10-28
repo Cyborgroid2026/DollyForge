@@ -23,11 +23,10 @@ listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 open_integrated_browser() {
   command -v code >/dev/null || return 1
   local id=dollyforge.dollyforge-browser
-  if ! code --list-extensions 2>/dev/null | grep -qx "$id"; then
-    python3 tools/vscode-browser/build.py "$LOG_DIR/dollyforge-browser.vsix" &&
-      code --install-extension "$LOG_DIR/dollyforge-browser.vsix" >/dev/null 2>&1 || return 1
+  # 확장이 바뀌었을 수 있으므로 매번 다시 빌드·설치한다 (WebviewPanel 대신 통합 브라우저를 연다)
+  if python3 tools/vscode-browser/build.py "$LOG_DIR/dollyforge-browser.vsix" >/dev/null 2>&1 &&      code --install-extension "$LOG_DIR/dollyforge-browser.vsix" --force >/dev/null 2>&1; then
+    code --open-url "vscode://$id/open?url=$STREAM_URL" >/dev/null 2>&1
   fi
-  code --open-url "vscode://$id/open?url=$STREAM_URL" >/dev/null 2>&1
 }
 
 banner() {
