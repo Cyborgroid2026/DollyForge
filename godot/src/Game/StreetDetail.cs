@@ -215,9 +215,10 @@ internal static class StreetDetail
     /// 원호형 과속방지턱: 진행 방향 길이 3.6 m, 높이 10 cm, 흰색·노란색 45° 사선 도색.
     /// 노드의 +Z 가 길 방향이다.
     /// </summary>
-    public static void SpeedHump(Node3D root, World world, Vector2 at, Vector2 tangent, float roadWidth)
+    public static void SpeedHump(Node3D root, World world, Vector2 at, Vector2 tangent, float roadWidth, float surfaceY)
     {
-        var node = Place(root, world, at, tangent, 0.18f);
+        var node = Place(root, world, at, tangent);
+        node.Position = node.Position with { Y = surfaceY };
         var image = Image.CreateEmpty(64, 64, false, Image.Format.Rgb8);
         for (var y = 0; y < 64; y++)
         for (var x = 0; x < 64; x++)

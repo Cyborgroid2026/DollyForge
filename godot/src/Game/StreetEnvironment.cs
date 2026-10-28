@@ -102,7 +102,7 @@ internal static class StreetEnvironment
         {
             var humpAt = length * 0.46f;
             var (hump, humpTangent) = AtDistance(path, humpAt);
-            StreetDetail.SpeedHump(root, world, hump, humpTangent, 6.4f);
+            StreetDetail.SpeedHump(root, world, hump, humpTangent, 6.4f, RoadY(world, hump, new Vector2(-humpTangent.Y, humpTangent.X), 0) + 0.18f);
             Count("과속방지턱", humpAt, 0);
         }
         if (Style.Bollard != BollardKind.None)
@@ -179,7 +179,7 @@ internal static class StreetEnvironment
                 var p = path[i] + side * offset;
                 st.SetNormal(Vector3.Up);
                 st.SetUV(new Vector2(offset, distance));
-                st.AddVertex(new Vector3(p.X, world.HeightAt(p.X, p.Y) + lift, p.Y));
+                st.AddVertex(new Vector3(p.X, RoadY(world, path[i], side, offset) + lift, p.Y));
             }
         }
         for (var i = 0; i < path.Count - 1; i++)
@@ -193,6 +193,20 @@ internal static class StreetEnvironment
         }
         root.AddChild(new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = surfaceMaterial, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
     }
+
+    /// <summary>
+    /// 차로 위 높이. 아스팔트는 양쪽 가장자리(±3.2 m) 높이 사이를 평평하게 잇는 면이라,
+    /// 그 위의 도색·과속방지턱은 지형 높이가 아니라 이 면을 따라야 묻히지 않는다.
+    /// </summary>
+    internal static float RoadY(World world, Vector2 center, Vector2 normal, float offset)
+    {
+        if (Mathf.Abs(offset) > RoadHalfWidth) return world.HeightAt(center.X + normal.X * offset, center.Y + normal.Y * offset);
+        var a = center - normal * RoadHalfWidth;
+        var b = center + normal * RoadHalfWidth;
+        return Mathf.Lerp(world.HeightAt(a.X, a.Y), world.HeightAt(b.X, b.Y), (offset + RoadHalfWidth) / (2f * RoadHalfWidth));
+    }
+
+    const float RoadHalfWidth = 3.2f;
 
     static Vector2 Tangent(IReadOnlyList<Vector2> path, int i)
     {
@@ -243,12 +257,13 @@ internal static class StreetEnvironment
         for (var distance = 2f + dash / 2f; distance < length - 1f; distance += dash + gap)
         {
             var (position, tangent) = AtDistance(path, distance);
-            var p = position + new Vector2(-tangent.Y, tangent.X) * offset;
+            var normal = new Vector2(-tangent.Y, tangent.X);
+            var p = position + normal * offset;
             root.AddChild(new MeshInstance3D
             {
                 Mesh = new BoxMesh { Size = new Vector3(width, 0.012f, dash) },
                 MaterialOverride = paint,
-                Position = new Vector3(p.X, world.HeightAt(p.X, p.Y) + 0.205f, p.Y),
+                Position = new Vector3(p.X, RoadY(world, position, normal, offset) + 0.2f, p.Y),
                 Rotation = new Vector3(0, Mathf.Atan2(tangent.X, tangent.Y), 0),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             });
