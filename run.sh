@@ -31,15 +31,9 @@ open_integrated_browser() {
 }
 
 banner() {
-  if open_integrated_browser; then
-    printf '\n\033[1;32m  Dolly Forge → VS Code 통합 브라우저에 열었습니다 (%s)\033[0m\n' "$STREAM_URL"
-    printf '  탭이 보이지 않으면: 명령 팔레트(Ctrl+Shift+P) → "Open Integrated Browser" → 위 주소\n'
-    printf '  화면을 클릭하면 마우스가 잡히고 Esc 로 놓입니다. 끝내려면 이 터미널에서 Ctrl+C.\n\n'
-    return
-  fi
   printf '\n\033[1;32m%s\033[0m\n' "════════════════════════════════════════════════════════════"
   printf '\033[1;32m  Dolly Forge 실행 중 → %s\033[0m\n' "$STREAM_URL"
-  printf '  VS Code: 명령 팔레트(Ctrl+Shift+P) → "Open Integrated Browser" → 위 주소\n'
+  printf '  브라우저에서 위 주소를 여세요.\n'
   printf '  화면을 클릭하면 마우스가 잡히고 Esc 로 놓입니다. 끝내려면 이 터미널에서 Ctrl+C.\n'
   printf '\033[1;32m%s\033[0m\n\n' "════════════════════════════════════════════════════════════"
 }

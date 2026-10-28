@@ -1,7 +1,8 @@
 // vscode://dollyforge.dollyforge-browser/open?url=http://127.0.0.1:7780/ 를 받으면
-// WebviewPanel 안의 iframe(allow="pointer-lock")으로 연다.
-// Simple Browser 와 달리 Pointer Lock 이 작동하므로 3D 시점 조작이 된다.
+// stream.html 을 게임 서버에서 가져와 WebviewPanel 에 직접 표시한다.
+// iframe 중첩 없이 최상위 문서로 로드하므로 setPointerCapture 가 패널 전체에서 동작한다.
 const vscode = require('vscode');
+const http = require('http');
 
 let currentPanel = null;
 
@@ -16,37 +17,38 @@ exports.activate = (context) => {
 };
 
 function openGamePanel(url) {
-  if (currentPanel) {
-    currentPanel.reveal(vscode.ViewColumn.One);
-    currentPanel.webview.html = getWebviewContent(url);
-    return;
-  }
+  const parsed = new URL(url);
 
-  currentPanel = vscode.window.createWebviewPanel(
-    'dollyforge-game',
-    'Dolly Forge',
-    vscode.ViewColumn.One,
-    { enableScripts: true, retainContextWhenHidden: true }
-  );
+  http.get(url, (res) => {
+    let body = '';
+    res.on('data', chunk => body += chunk);
+    res.on('end', () => {
+      // location.host → 실제 호스트로 교체 (WebSocket 연결용)
+      let html = body.replace('location.host', JSON.stringify(parsed.host));
 
-  currentPanel.webview.html = getWebviewContent(url);
-  currentPanel.onDidDispose(() => { currentPanel = null; });
-}
+      // Webview CSP: WebSocket·blob·인라인 스크립트 허용
+      const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src ws://${parsed.host} wss://${parsed.host}; img-src blob: data:; media-src blob: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src https:;">`;
+      html = html.replace('<head>', '<head>\n' + csp);
 
-function getWebviewContent(url) {
-  return `<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy"
-  content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline';">
-<style>
-  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0b0c0e; }
-  iframe { border: none; width: 100%; height: 100%; display: block; }
-</style>
-</head>
-<body>
-<iframe src="${url}" allow="pointer-lock; autoplay" allowfullscreen></iframe>
-</body>
-</html>`;
+      if (currentPanel) {
+        currentPanel.reveal(vscode.ViewColumn.One);
+        currentPanel.webview.html = '';          // 강제 새로고침
+        setTimeout(() => { currentPanel.webview.html = html; }, 50);
+        return;
+      }
+
+      currentPanel = vscode.window.createWebviewPanel(
+        'dollyforge-game',
+        'Dolly Forge',
+        vscode.ViewColumn.One,
+        { enableScripts: true, retainContextWhenHidden: true }
+      );
+
+      currentPanel.webview.html = html;
+      currentPanel.onDidDispose(() => { currentPanel = null; });
+    });
+  }).on('error', () => {
+    // 게임 서버에 연결할 수 없으면 Simple Browser 로 폴백
+    vscode.commands.executeCommand('simpleBrowser.show', url).catch(() => {});
+  });
 }
