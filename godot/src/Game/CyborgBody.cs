@@ -357,33 +357,43 @@ public partial class CyborgBody : Node3D
     {
         var (T, N, r, q) = P.Leg;
         var leg = new Node3D { Position = new Vector3(side * P.Hip.X, P.Hip.Y, 0), Rotation = new Vector3(0, 0, -side * q) };
-        // 골반 접합부는 외부 링을 드러내지 않고 겹치는 티타늄 외피 안에 숨긴다.
-        Sec[] thigh = [
-            new(0, 0.062f, 0.060f, 0.058f),
-            new(T * 0.12f, 0.074f, 0.070f, 0.066f),
-            new(T * 0.38f, 0.084f, 0.078f, 0.076f),
-            new(T * 0.7f, 0.086f, 0.080f, 0.082f),
-            new(T, 0.082f, 0.078f, 0.084f),
-            new(T + 0.05f, 0.072f, 0.070f, 0.074f, Cx: -0.008f),
-            new(T + 0.12f, 0.064f, 0.064f, 0.068f, Cx: -0.014f),
-            new(T + 0.18f, 0.042f, 0.044f, 0.046f, Cx: -0.018f)
-        ];
-        Add(leg, Loft(thigh.Select(x => x.Scale(r)).ToArray(), 40, 5), ModuleTitanium(thighVariant), new Vector3(0, -T, 0));
 
-        var knee = new Node3D { Position = new Vector3(0, -T, 0) };
-        leg.AddChild(knee);
-        var kneeSkin = Add(knee, new SphereMesh { Radius = 0.054f * r, Height = 0.12f * r, RadialSegments = 32, Rings = 16 }, JointMaterial);
-        kneeSkin.Scale = new Vector3(0.9f, 1f, 0.88f);
-        AddJointSeam(knee, 0.049f * r, 0.0025f * r, Vector3.Zero, alongY: true);
-        Sec[] shin = [
-            new(0, 0.026f, 0.027f, 0.03f),
-            new(N * 0.15f, 0.029f, 0.029f, 0.034f),
-            new(N * 0.55f, 0.044f, 0.04f, 0.058f),
-            new(N * 0.75f, 0.046f, 0.041f, 0.056f),
-            new(N * 0.92f, 0.043f, 0.045f, 0.043f),
-            new(N, 0.044f, 0.046f, 0.043f)
+        // 골반 접합부: 몸통 외피 안으로 살짝 묻혀 경계 없이 연결된다.
+        var hipOverlap = 0.020f * r;
+
+        // 대퇴: 고관절에서 시작해 사각근 볼륨 정면(+Z, Bust), 슬개골 위쪽으로 가늘게.
+        // Glute 값은 엉덩이 라인을 부드럽게 이어줌.
+        Sec[] thigh = [
+            new(0, 0.068f, 0.064f, 0.062f, Glute: q * 0.35f, Sq: 1.15f),       // 골반 연결부 (몸통과 겹침)
+            new(T * 0.10f, 0.078f, 0.074f + q * 0.5f, 0.070f, Bust: q * 0.6f, Glute: q * 0.3f, Sq: 1.2f), // 사각 볼륨 정면
+            new(T * 0.30f, 0.086f, 0.082f + q * 0.7f, 0.078f, Bust: q * 0.8f, Glute: q * 0.25f, Sq: 1.15f),
+            new(T * 0.55f, 0.084f, 0.080f + q * 0.5f, 0.082f, Bust: q * 0.6f, Glute: q * 0.2f, Sq: 1.1f),
+            new(T * 0.80f, 0.074f, 0.070f, 0.076f, Bust: q * 0.3f, Glute: q * 0.15f, Sq: 1.1f),
+            new(T, 0.064f, 0.060f, 0.064f, Bust: q * 0.15f, Glute: q * 0.1f),   // 무릎 위
+            new(T + 0.05f, 0.055f, 0.052f, 0.056f, Cx: -0.008f),                // 무릎 관절부
+            new(T + 0.12f, 0.048f, 0.046f, 0.050f, Cx: -0.014f),
+            new(T + 0.18f, 0.032f, 0.034f, 0.036f, Cx: -0.018f),
         ];
-        Add(knee, Loft(shin.Select(x => x.Scale(r)).ToArray(), 40, 5), ModuleTitanium(shinVariant), new Vector3(0, -N, 0));
+        Add(leg, Loft(thigh.Select(x => x.Scale(r)).ToArray(), 40, 5), ModuleTitanium(thighVariant), new Vector3(0, -T - hipOverlap, 0));
+
+        var knee = new Node3D { Position = new Vector3(0, -T - hipOverlap, 0) };
+        leg.AddChild(knee);
+        // 무릎: 도드라진 구 형태보다 매끄러운 관절 감싸는 형태.
+        var kneeSkin = Add(knee, new SphereMesh { Radius = 0.050f * r, Height = 0.105f * r, RadialSegments = 32, Rings = 16 }, JointMaterial);
+        kneeSkin.Scale = new Vector3(0.9f, 1f, 0.88f);
+        AddJointSeam(knee, 0.045f * r, 0.0012f * r, Vector3.Zero, alongY: true);
+
+        // 하퇴: 무릎에서 시작해 종아리 볼륨 뒤쪽(-Z, Glute), 발목으로 가늘게.
+        Sec[] shin = [
+            new(0, 0.030f, 0.031f, 0.034f),                                     // 무릎에서 시작
+            new(N * 0.12f, 0.033f, 0.032f, 0.038f, Glute: q * 0.3f, Sq: 1.15f),
+            new(N * 0.42f, 0.042f, 0.039f, 0.056f, Glute: q * 0.55f, Sq: 1.2f),  // 종아리 볼륨 뒤쪽
+            new(N * 0.68f, 0.046f, 0.041f, 0.054f, Glute: q * 0.45f, Sq: 1.15f),
+            new(N * 0.88f, 0.043f, 0.045f, 0.044f, Glute: q * 0.25f, Sq: 1.1f),
+            new(N, 0.044f, 0.046f, 0.043f, Glute: q * 0.1f),                    // 발목 위
+            new(N + 0.032f, 0.038f, 0.040f, 0.038f),                             // 발목 관절부
+        ];
+        Add(knee, Loft(shin.Select(x => x.Scale(r)).ToArray(), 40, 5), ModuleTitanium(shinVariant), new Vector3(0, -N - 0.032f, 0));
         // 발: 로컬 Y(발끝 방향) → +Z 로 눕힌다, F(앞)=발바닥
         var FL = P.Foot;
         Sec[] foot = [
@@ -394,11 +404,11 @@ public partial class CyborgBody : Node3D
             new(FL * 0.92f, 0.036f, 0.016f, 0.014f),
             new(FL, 0.012f, 0.006f, 0.005f)
         ];
-        var ankle = new Node3D { Position = new Vector3(0, -N - 0.032f, -0.05f) };
+        var ankle = new Node3D { Position = new Vector3(0, -N - 0.032f - 0.032f, -0.05f) };
         knee.AddChild(ankle);
-        var ankleSkin = Add(ankle, new SphereMesh { Radius = 0.036f * r, Height = 0.07f * r, RadialSegments = 24, Rings = 12 }, JointMaterial);
+        var ankleSkin = Add(ankle, new SphereMesh { Radius = 0.034f * r, Height = 0.065f * r, RadialSegments = 24, Rings = 12 }, JointMaterial);
         ankleSkin.Scale = new Vector3(1f, 0.8f, 0.95f);
-        AddJointSeam(ankle, 0.034f * r, 0.002f * r, Vector3.Zero, alongY: true);
+        AddJointSeam(ankle, 0.032f * r, 0.0012f * r, Vector3.Zero, alongY: true);
         var f = Add(ankle, Loft(foot.Select(x => x.Scale(Mathf.Sqrt(r))).ToArray(), 28, 4), ModuleTitanium(footVariant));
         f.Rotation = new Vector3(Mathf.Pi / 2, 0, 0);
         if (side < 0) leg.Scale = new Vector3(-1, 1, 1);
