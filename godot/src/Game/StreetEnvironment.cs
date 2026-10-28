@@ -73,11 +73,13 @@ internal static class StreetEnvironment
         parent.AddChild(root);
 
         var asphalt = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/asphalt.gdshader") };
-        if (Look.Tex("worn_asphalt", "diff") is { } asphaltScan)
+        if (Look.Tex("worn_asphalt", "diff") is { } asphaltScan
+            && Look.Tex("worn_asphalt", "nor_gl") is { } asphaltNor
+            && Look.Tex("worn_asphalt", "rough") is { } asphaltRgh)
         {
             asphalt.SetShaderParameter("asphalt_albedo", asphaltScan);
-            asphalt.SetShaderParameter("asphalt_normal", Look.Tex("worn_asphalt", "nor_gl"));
-            asphalt.SetShaderParameter("asphalt_roughness", Look.Tex("worn_asphalt", "rough"));
+            asphalt.SetShaderParameter("asphalt_normal", asphaltNor);
+            asphalt.SetShaderParameter("asphalt_roughness", asphaltRgh);
             asphalt.SetShaderParameter("has_texture", true);
         }
         var concrete = Look.Painted("painted_concrete", 2f, new Color(0.55f, 0.54f, 0.51f));
