@@ -24,7 +24,7 @@ const ctx = canvas.getContext('2d');
 const hint = document.getElementById('hint');
 const hintText = document.getElementById('hintText');
 let ws = null, captured = false, drawing = false, replaced = false;
-let softCaptured = false, lastClientX = 0, lastClientY = 0;
+let softCaptured = false, softPointerId = null, lastClientX = 0, lastClientY = 0;
 const inIframe = (() => { try { return window.self !== window.top; } catch { return true; } })();
 
 function say(text) { hintText.textContent = text; hint.hidden = !text; }
@@ -34,14 +34,22 @@ const active = () => locked() || softCaptured;
 
 function enterSoftCapture(e) {
   softCaptured = true;
+  softPointerId = e.pointerId;
   lastClientX = e.clientX;
   lastClientY = e.clientY;
+  canvas.setPointerCapture(e.pointerId);
   canvas.style.cursor = 'none';
+  document.body.style.cursor = 'none';
   updateHint();
 }
 function exitSoftCapture() {
   softCaptured = false;
+  if (softPointerId != null) {
+    try { canvas.releasePointerCapture(softPointerId); } catch {}
+    softPointerId = null;
+  }
   canvas.style.cursor = 'default';
+  document.body.style.cursor = '';
   send({ t: 'unlock' });
   updateHint();
 }
@@ -117,7 +125,7 @@ function norm(e) {
   return { x: Math.min(Math.max(x, 0), 1), y: Math.min(Math.max(y, 0), 1) };
 }
 
-canvas.addEventListener('mousedown', (e) => {
+canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   canvas.focus();
   wakeAudio();
@@ -128,9 +136,9 @@ canvas.addEventListener('mousedown', (e) => {
   }
   send({ t: 'mb', b: e.button, down: true, ...norm(e) });
 });
-canvas.addEventListener('mouseup', (e) => { if (captured && !active()) return; send({ t: 'mb', b: e.button, down: false, ...norm(e) }); });
-// 시점 회전: 포인터 잠금 또는 소프트 캡처 중에만 (잠그기 전에 화면 위를 지나는 마우스를 시점이 따라가지 않게 한다)
-canvas.addEventListener('mousemove', (e) => {
+canvas.addEventListener('pointerup', (e) => { if (captured && !active()) return; send({ t: 'mb', b: e.button, down: false, ...norm(e) }); });
+// 시점 회전: 포인터 잠금 또는 소프트 캡처 중에만
+canvas.addEventListener('pointermove', (e) => {
   if (captured && !active()) return;
   if (softCaptured) {
     const dx = e.clientX - lastClientX, dy = e.clientY - lastClientY;
@@ -140,7 +148,12 @@ canvas.addEventListener('mousemove', (e) => {
     send({ t: 'mm', dx: e.movementX, dy: e.movementY, ...norm(e) });
   }
 });
-canvas.addEventListener('mouseleave', () => { if (softCaptured) exitSoftCapture(); });
+// setPointerCapture 는 pointerup 때 풀리므로, 소프트 캡처 중이면 즉시 다시 잡는다
+canvas.addEventListener('lostpointercapture', (e) => {
+  if (softCaptured) {
+    try { canvas.setPointerCapture(e.pointerId); softPointerId = e.pointerId; } catch {}
+  }
+});
 canvas.addEventListener('wheel', (e) => { e.preventDefault(); send({ t: 'mb', b: e.deltaY < 0 ? 3 : 4, down: true, ...norm(e) }); }, { passive: false });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('pointerlockchange', () => {
