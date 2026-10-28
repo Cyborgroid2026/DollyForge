@@ -280,41 +280,48 @@ public partial class CyborgBody : Node3D
         Proportions P, int side, ModuleVariant upperVariant, ModuleVariant forearmVariant, ModuleVariant handVariant)
     {
         var (U, F, r, bicep) = P.Arm;
-        var arm = new Node3D { Position = new Vector3(side * P.Shoulder.X, P.Shoulder.Y, 0), Rotation = new Vector3(0, 0, side * 0.09f) };
-        AddJointSeam(arm, 0.046f * r, 0.003f * r, new Vector3(0, -0.01f, 0), alongY: true);
+        var arm = new Node3D { Position = new Vector3(side * P.Shoulder.X, P.Shoulder.Y, 0), Rotation = new Vector3(0, 0, side * 0.05f) };
 
-        // 어깨에서 팔로 좁아지는 곡면을 키워 몸통과 팔이 한 덩어리로 겹쳐지게 한다.
+        // 어깨 접합부: 몸통 외피 안으로 살짝 묻혀 경계 없이 연결된다.
+        var shoulderOverlap = 0.018f * r;
+
+        // 상완: 어깨에서 이두 볼륨을 거쳐 팔꿈치로 가늘게 taper.
+        // Bust 파라미터로 정면(+Z)에 이두볼륨을, Sq로 단면을 둥글게 마감한다.
         Sec[] upper = [
-            new(0, 0.052f, 0.057f, 0.058f),
-            new(U * 0.18f, 0.050f, 0.058f + bicep * 0.4f, 0.056f),
-            new(U * 0.45f, 0.042f, 0.046f + bicep, 0.045f),
-            new(U * 0.78f, 0.041f, 0.040f, 0.042f),
-            new(U, 0.043f, 0.04f, 0.042f)
+            new(0, 0.056f, 0.052f, 0.054f, Bust: bicep * 0.45f, Sq: 1.15f),      // 어깨 연결부 (몸통과 겹침)
+            new(U * 0.15f, 0.053f, 0.060f + bicep, 0.056f, Bust: bicep, Sq: 1.2f),  // 이두 볼륨 정면
+            new(U * 0.38f, 0.047f, 0.052f + bicep * 0.7f, 0.050f, Bust: bicep * 0.6f, Sq: 1.15f),
+            new(U * 0.65f, 0.042f, 0.044f, 0.046f, Bust: bicep * 0.3f, Sq: 1.1f),
+            new(U, 0.039f, 0.037f, 0.039f, Bust: bicep * 0.15f, Sq: 1.1f),        // 팔끝
+            new(U + shoulderOverlap, 0.035f, 0.033f, 0.035f),                      // 팔꿈치 관절부
         ];
         var upperModule = new Node3D();
         arm.AddChild(upperModule);
-        Add(upperModule, Loft(upper.Select(x => x.Scale(r)).ToArray(), 32, 5), ModuleTitanium(upperVariant), new Vector3(0, -U, 0));
+        Add(upperModule, Loft(upper.Select(x => x.Scale(r)).ToArray(), 36, 6), ModuleTitanium(upperVariant), new Vector3(0, -U - shoulderOverlap, 0));
 
-        var elbow = new Node3D { Position = new Vector3(0, -U, 0), Rotation = new Vector3(-0.14f, 0, 0) };
+        var elbow = new Node3D { Position = new Vector3(0, -U - shoulderOverlap, 0), Rotation = new Vector3(-0.10f, 0, 0) };
         upperModule.AddChild(elbow);
-        var elbowSkin = Add(elbow, new SphereMesh { Radius = 0.047f * r, Height = 0.108f * r, RadialSegments = 32, Rings = 16 }, JointMaterial);
-        elbowSkin.Scale = new Vector3(0.9f, 1f, 0.86f);
-        AddJointSeam(elbow, 0.042f * r, 0.0025f * r, Vector3.Zero, alongY: true);
+        // 팔꿈치: 도드라진 구 형태보다 살에 파묻힌 관절 느낌으로, 이음선을 아주 얇게.
+        var elbowSkin = Add(elbow, new SphereMesh { Radius = 0.040f * r, Height = 0.085f * r, RadialSegments = 32, Rings = 14 }, JointMaterial);
+        elbowSkin.Scale = new Vector3(0.85f, 1f, 0.9f);
+        AddJointSeam(elbow, 0.034f * r, 0.0012f * r, Vector3.Zero, alongY: true);
+
         Sec[] fore = [
-            new(0, 0.025f, 0.018f, 0.019f),
-            new(F * 0.3f, 0.028f, 0.022f, 0.024f),
-            new(F * 0.7f, 0.036f, 0.031f, 0.033f),
-            new(F * 0.92f, 0.035f, 0.032f, 0.033f),
-            new(F, 0.031f, 0.031f, 0.031f)
+            new(0, 0.034f, 0.032f, 0.034f),                                   // 팔꿈치에서 시작
+            new(F * 0.22f, 0.030f, 0.028f, 0.030f),
+            new(F * 0.52f, 0.028f, 0.026f, 0.028f),
+            new(F * 0.8f, 0.027f, 0.025f, 0.026f),
+            new(F, 0.025f, 0.024f, 0.025f),                                    // 손목
+            new(F + 0.014f, 0.022f, 0.021f, 0.022f),                           // 손목 관절부
         ];
         var forearmModule = new Node3D();
         elbow.AddChild(forearmModule);
-        Add(forearmModule, Loft(fore.Select(x => x.Scale(r)).ToArray(), 32, 5), ModuleTitanium(forearmVariant), new Vector3(0, -F, 0));
+        Add(forearmModule, Loft(fore.Select(x => x.Scale(r)).ToArray(), 36, 6), ModuleTitanium(forearmVariant), new Vector3(0, -F - 0.014f, 0));
         var (hand, fingers, thumb) = BuildHand(r, handVariant);
-        hand.Position = new Vector3(0, -F, 0);
-        var wrist = Add(hand, new SphereMesh { Radius = 0.028f * r, Height = 0.058f * r, RadialSegments = 24, Rings = 12 }, JointMaterial);
-        wrist.Position = new Vector3(0, -0.008f, 0);
-        AddJointSeam(hand, 0.026f * r, 0.002f * r, new Vector3(0, -0.008f, 0), alongY: true);
+        hand.Position = new Vector3(0, -F - 0.014f, 0);
+        var wrist = Add(hand, new SphereMesh { Radius = 0.026f * r, Height = 0.050f * r, RadialSegments = 24, Rings = 12 }, JointMaterial);
+        wrist.Position = new Vector3(0, -0.006f, 0);
+        AddJointSeam(hand, 0.021f * r, 0.0012f * r, new Vector3(0, -0.006f, 0), alongY: true);
         elbow.AddChild(hand);
         if (side < 0) arm.Scale = new Vector3(-1, 1, 1);
         return (arm, elbow, hand, fingers, thumb);
