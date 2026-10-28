@@ -319,22 +319,27 @@ internal static class StreetDetail
     /// <summary>수거일을 기다리는 종량제 봉투 더미 (흰색·노란색 반투명 비닐)</summary>
     public static void TrashBags(Node3D root, World world, Vector2 at, int seed)
     {
-        var node = Place(root, world, at, Vector2.Down, 0.18f);
+        var node = Place(root, world, at, Vector2.Down, StreetEnvironment.SidewalkLift);
         var count = 3 + (int)(Hash(seed, 110) * 4.99f);
         for (var i = 0; i < count; i++)
         {
             var yellow = Hash(seed, 111 + i) < 0.35f;
+            // 얇은 비닐: 반들거리고(거칠기 0.32) 구김이 깊다 (노멀 세게), 빛이 가장자리에서 조금 비친다
             var bag = new StandardMaterial3D
             {
-                AlbedoColor = yellow ? new Color(0.86f, 0.76f, 0.36f) : new Color(0.8f, 0.8f, 0.77f),
-                Roughness = 0.5f,
+                AlbedoColor = yellow ? new Color(0.86f, 0.76f, 0.36f) : new Color(0.82f, 0.82f, 0.8f),
+                Roughness = 0.32f,
                 NormalEnabled = true,
                 NormalTexture = Look.Tex("painted_concrete", "nor_gl"),
-                NormalScale = 1.6f,
+                NormalScale = 2.4f,
                 Uv1Triplanar = true,
-                Uv1Scale = Vector3.One * 3f,
+                Uv1Scale = Vector3.One * 2.2f,
+                RimEnabled = true,
+                Rim = 0.35f,
+                BacklightEnabled = true,
+                Backlight = new Color(0.25f, 0.25f, 0.22f),
             };
-            var r = 0.15f + Hash(seed, 120 + i) * 0.1f;
+            var r = 0.13f + Hash(seed, 120 + i) * 0.09f;
             var angle = Hash(seed, 130 + i) * Mathf.Tau;
             var spread = Hash(seed, 140 + i) * 0.45f;
             var stack = i >= 4 ? r * 1.1f : 0f;
@@ -346,38 +351,59 @@ internal static class StreetDetail
                 Rotation = new Vector3((Hash(seed, 165 + i) - 0.5f) * 0.7f, angle, (Hash(seed, 160 + i) - 0.5f) * 0.9f),
                 MaterialOverride = bag,
             });
-            // 묶은 손잡이
+            // 오므린 목과 묶은 두 귀
+            var top = new Vector3(Mathf.Cos(angle) * spread, r * 1.45f + stack, Mathf.Sin(angle) * spread);
             node.AddChild(new MeshInstance3D
             {
-                Mesh = new SphereMesh { Radius = 0.05f, Height = 0.1f, RadialSegments = 6, Rings = 4 },
-                Position = new Vector3(Mathf.Cos(angle) * spread, r * 1.55f + stack, Mathf.Sin(angle) * spread),
+                Mesh = new CylinderMesh { TopRadius = 0.015f, BottomRadius = r * 0.45f, Height = r * 0.55f, RadialSegments = 8 },
+                Position = top,
+                Rotation = new Vector3(0, angle, (Hash(seed, 170 + i) - 0.5f) * 0.6f),
                 MaterialOverride = bag,
             });
+            foreach (var ear in new[] { -1f, 1f })
+                node.AddChild(new MeshInstance3D
+                {
+                    Mesh = new SphereMesh { Radius = 0.035f, Height = 0.09f, RadialSegments = 6, Rings = 4 },
+                    Position = top + new Vector3(Mathf.Cos(angle + ear) * 0.035f, r * 0.32f, Mathf.Sin(angle + ear) * 0.035f),
+                    Rotation = new Vector3(0, 0, ear * 0.6f),
+                    MaterialOverride = bag,
+                });
         }
     }
 
-    /// <summary>배달 오토바이: 두 바퀴, 차체, 뒤의 배달통</summary>
+    /// <summary>
+    /// 배달 오토바이 (언더본 스쿠터): 옆모습 단면을 밀어 낸 앞 가림막·발판·뒤 차체·앞 흙받기, 안장, 핸들과 전조등, 뒤 배달통.
+    /// </summary>
     public static void Scooter(Node3D root, World world, Vector2 at, Vector2 facing, int seed)
     {
-        var node = Place(root, world, at, facing, 0.18f);
+        var node = Place(root, world, at, facing, StreetEnvironment.SidewalkLift);
         var body = Flat(Hash(seed, 170) < 0.5f ? new Color(0.72f, 0.1f, 0.08f) : new Color(0.85f, 0.85f, 0.82f), 0.35f);
-        foreach (var z in new[] { -0.62f, 0.62f })
+        foreach (var z in new[] { -0.6f, 0.62f })
         {
-            Cylinder(node, 0.27f, 0.11f, new Vector3(0, 0.27f, z), Rubber, new Vector3(0, 0, Mathf.Pi / 2), 16);
-            Cylinder(node, 0.12f, 0.12f, new Vector3(0, 0.27f, z), Galvanized, new Vector3(0, 0, Mathf.Pi / 2), 12);
+            Cylinder(node, 0.25f, 0.1f, new Vector3(0, 0.25f, z), Rubber, new Vector3(0, 0, Mathf.Pi / 2), 18);
+            Cylinder(node, 0.13f, 0.11f, new Vector3(0, 0.25f, z), Galvanized, new Vector3(0, 0, Mathf.Pi / 2), 12);
         }
-        Box(node, new Vector3(0.36f, 0.32f, 0.95f), new Vector3(0, 0.5f, -0.05f), body);
-        Box(node, new Vector3(0.3f, 0.1f, 0.62f), new Vector3(0, 0.72f, -0.2f), Rubber);
-        Box(node, new Vector3(0.34f, 0.7f, 0.22f), new Vector3(0, 0.62f, 0.5f), body, new Vector3(-0.3f, 0, 0));
-        Box(node, new Vector3(0.62f, 0.04f, 0.04f), new Vector3(0, 1.02f, 0.58f), DarkSteel);
-        Box(node, new Vector3(0.48f, 0.42f, 0.42f), new Vector3(0, 0.98f, -0.6f), Flat(new Color(0.88f, 0.86f, 0.8f), 0.5f));
-        Box(node, new Vector3(0.12f, 0.06f, 0.03f), new Vector3(0, 0.75f, 0.68f), Flat(new Color(0.9f, 0.88f, 0.75f), 0.3f));
+        node.AddChild(Extrude([new(-0.02f, 0.34f), new(0.08f, 0.58f), new(-0.28f, 0.74f), new(-0.78f, 0.74f), new(-0.88f, 0.56f), new(-0.62f, 0.34f)], 0.34f, body));
+        node.AddChild(Extrude([new(0.42f, 0.27f), new(0.42f, 0.33f), new(-0.05f, 0.33f), new(-0.05f, 0.27f)], 0.3f, Rubber));
+        node.AddChild(Extrude([new(0.38f, 0.27f), new(0.6f, 0.98f), new(0.52f, 1.02f), new(0.34f, 0.42f)], 0.42f, body));
+        node.AddChild(Extrude([new(0.44f, 0.5f), new(0.64f, 0.56f), new(0.88f, 0.44f), new(0.84f, 0.4f), new(0.62f, 0.5f), new(0.46f, 0.46f)], 0.16f, body));
+        node.AddChild(Extrude([new(-0.1f, 0.74f), new(-0.13f, 0.83f), new(-0.7f, 0.85f), new(-0.8f, 0.76f)], 0.3f, Rubber));
+        // 조향 기둥: 앞바퀴 축에서 핸들까지 비스듬히
+        Box(node, new Vector3(0.05f, 0.82f, 0.05f), new Vector3(0, 0.66f, 0.6f), DarkSteel, new Vector3(-0.12f, 0, 0));
+        Box(node, new Vector3(0.66f, 0.035f, 0.035f), new Vector3(0, 1.06f, 0.55f), DarkSteel);
+        foreach (var x in new[] { -0.31f, 0.31f })
+            Cylinder(node, 0.022f, 0.12f, new Vector3(x, 1.06f, 0.55f), Rubber, new Vector3(0, 0, Mathf.Pi / 2), 8);
+        Cylinder(node, 0.07f, 0.06f, new Vector3(0, 0.98f, 0.62f), Flat(new Color(0.9f, 0.88f, 0.75f), 0.2f), new Vector3(Mathf.Pi / 2, 0, 0), 14);
+        foreach (var x in new[] { -0.2f, 0.2f })
+            Box(node, new Vector3(0.01f, 0.18f, 0.01f), new Vector3(x, 1.15f, 0.52f), DarkSteel); // 백미러 대
+        Box(node, new Vector3(0.48f, 0.42f, 0.42f), new Vector3(0, 1.08f, -0.62f), Flat(new Color(0.88f, 0.86f, 0.8f), 0.5f));
+        Box(node, new Vector3(0.4f, 0.03f, 0.36f), new Vector3(0, 0.86f, -0.62f), DarkSteel); // 짐받이
     }
 
     /// <summary>담벼락 밑의 스티로폼 상자 텃밭: 흰 상자에 상추·고추·파</summary>
     public static void StyrofoamGarden(Node3D root, World world, Vector2 at, Vector2 tangent, int seed)
     {
-        var node = Place(root, world, at, tangent, 0.18f);
+        var node = Place(root, world, at, tangent, StreetEnvironment.SidewalkLift);
         var leaves = Look.Scanned("leafy_grass", 0.4f, new Color(0.6f, 0.78f, 0.45f));
         var count = 2 + (int)(Hash(seed, 180) * 2.99f);
         for (var i = 0; i < count; i++)
@@ -399,7 +425,7 @@ internal static class StreetDetail
     /// <summary>집 앞 주차를 막는 주황·흰 줄무늬 플라스틱 드럼</summary>
     public static void ParkingDrum(Node3D root, World world, Vector2 at)
     {
-        var node = Place(root, world, at, Vector2.Down, 0.18f);
+        var node = Place(root, world, at, Vector2.Down, StreetEnvironment.SidewalkLift);
         for (var band = 0; band < 4; band++)
         {
             var radius = 0.29f - band * 0.012f;
@@ -411,6 +437,85 @@ internal static class StreetDetail
             });
         }
         Cylinder(node, 0.2f, 0.06f, new Vector3(0, 0.87f, 0), SafetyOrange, segments: 14);
+    }
+
+    // ------------------------------------------------------------------ 풍화
+
+    static ImageTexture? _splash, _streak;
+
+    /// <summary>
+    /// 벽 밑동 때: 빗물이 튀고 먼지가 앉아 바닥에서 위로 옅어지는 얼룩 (위 = v 0).
+    /// 가로로 고르지 않게 잡음을 섞는다.
+    /// </summary>
+    static ImageTexture SplashTexture()
+    {
+        if (_splash is not null) return _splash;
+        var noise = new FastNoiseLite { Seed = 7, Frequency = 0.06f };
+        var image = Image.CreateEmpty(128, 64, true, Image.Format.Rgba8);
+        for (var y = 0; y < 64; y++)
+        for (var x = 0; x < 128; x++)
+        {
+            var fromBottom = 1f - y / 63f;
+            var n = noise.GetNoise2D(x, y * 2) * 0.5f + 0.5f;
+            var reach = 0.35f + n * 0.45f;
+            var alpha = Mathf.Clamp((reach - fromBottom) / reach, 0f, 1f);
+            alpha = alpha * alpha * (0.6f + n * 0.3f);
+            image.SetPixel(x, y, new Color(0.17f, 0.15f, 0.12f, alpha));
+        }
+        image.GenerateMipmaps();
+        return _splash = ImageTexture.CreateFromImage(image);
+    }
+
+    /// <summary>창턱 아래 빗물 줄: 위에서 아래로 가늘어지며 옅어지는 세로 줄무늬</summary>
+    static ImageTexture StreakTexture()
+    {
+        if (_streak is not null) return _streak;
+        var noise = new FastNoiseLite { Seed = 11, Frequency = 0.18f };
+        var image = Image.CreateEmpty(64, 128, true, Image.Format.Rgba8);
+        for (var y = 0; y < 128; y++)
+        for (var x = 0; x < 64; x++)
+        {
+            var down = y / 127f;
+            var stripes = Mathf.Clamp(noise.GetNoise2D(x * 1f, y * 0.04f) * 1.6f, 0f, 1f);
+            var edge = Mathf.SmoothStep(0f, 0.15f, x / 63f) * Mathf.SmoothStep(1f, 0.85f, x / 63f);
+            var alpha = stripes * edge * (1f - down) * (1f - down) * 0.55f;
+            image.SetPixel(x, y, new Color(0.14f, 0.13f, 0.11f, alpha));
+        }
+        image.GenerateMipmaps();
+        return _streak = ImageTexture.CreateFromImage(image);
+    }
+
+    /// <summary>
+    /// 벽에 투영하는 무늬 (Decal). 건물 로컬에서 정면(+Z) 벽 위 at 을 중심으로, 폭 width·높이 height.
+    /// Decal 은 로컬 -Y 로 투영하므로 X 축으로 90° 돌려 벽 안쪽(-Z)을 향하게 한다.
+    /// </summary>
+    static void WallDecal(Node3D building, Vector3 at, float width, float height, Texture2D texture)
+    {
+        building.AddChild(new Decal
+        {
+            Position = at,
+            Rotation = new Vector3(Mathf.Pi / 2, 0, 0),
+            Size = new Vector3(width, 0.5f, height),
+            TextureAlbedo = texture,
+            UpperFade = 0.1f,
+            LowerFade = 0.1f,
+            CullMask = 1,
+        });
+    }
+
+    /// <summary>건물 밑동의 때 (정면 전체)</summary>
+    public static void Grime(Node3D building, float width, float height, float frontZ, int seed)
+    {
+        var tall = 0.55f + Hash(seed, 300) * 0.5f;
+        WallDecal(building, new Vector3(0, -height / 2f + tall / 2f, frontZ), width + 0.1f, tall, SplashTexture());
+    }
+
+    /// <summary>창턱 아래로 흘러내린 빗물 자국</summary>
+    public static void Streak(Node3D building, float x, float sillY, float frontZ, float windowWidth, int seed)
+    {
+        if (Hash(seed, 310) < 0.35f) return; // 모든 창에 있지는 않다
+        var length = 0.5f + Hash(seed, 311) * 1.1f;
+        WallDecal(building, new Vector3(x, sillY - length / 2f, frontZ), windowWidth * (0.6f + Hash(seed, 312) * 0.35f), length, StreakTexture());
     }
 
     // ------------------------------------------------------------------ 나라별
@@ -452,7 +557,7 @@ internal static class StreetDetail
     /// <summary>음료 자판기 (일본): 흰 몸체, 밝은 진열창 세 줄, 아래 꺼내는 곳</summary>
     public static void VendingMachine(Node3D root, World world, Vector2 at, Vector2 facing, int seed)
     {
-        var node = Place(root, world, at, facing, 0.18f);
+        var node = Place(root, world, at, facing, StreetEnvironment.SidewalkLift);
         var body = Flat(Hash(seed, 260) < 0.5f ? new Color(0.88f, 0.88f, 0.86f) : new Color(0.7f, 0.12f, 0.1f), 0.4f);
         Box(node, new Vector3(1.0f, 1.83f, 0.72f), new Vector3(0, 0.915f, 0), body);
         var lit = new StandardMaterial3D
@@ -471,7 +576,7 @@ internal static class StreetDetail
     /// <summary>소화전 (미국): 빨간 몸통, 양옆 노즐, 둥근 머리</summary>
     public static void Hydrant(Node3D root, World world, Vector2 at)
     {
-        var node = Place(root, world, at, Vector2.Down, 0.18f);
+        var node = Place(root, world, at, Vector2.Down, StreetEnvironment.SidewalkLift);
         var red = Flat(new Color(0.72f, 0.1f, 0.07f), 0.45f);
         Cylinder(node, 0.14f, 0.06f, new Vector3(0, 0.03f, 0), red, segments: 12);
         Cylinder(node, 0.11f, 0.55f, new Vector3(0, 0.33f, 0), red, segments: 12);
@@ -484,7 +589,7 @@ internal static class StreetDetail
     /// <summary>길가 우편함 (미국): 기둥 위 둥근 지붕의 금속 상자</summary>
     public static void Mailbox(Node3D root, World world, Vector2 at, Vector2 facing)
     {
-        var node = Place(root, world, at, facing, 0.18f);
+        var node = Place(root, world, at, facing, StreetEnvironment.SidewalkLift);
         Box(node, new Vector3(0.09f, 1.05f, 0.09f), new Vector3(0, 0.52f, 0), Flat(new Color(0.4f, 0.32f, 0.24f), 0.85f));
         Box(node, new Vector3(0.2f, 0.16f, 0.48f), new Vector3(0, 1.1f, 0), DarkSteel);
         Cylinder(node, 0.1f, 0.48f, new Vector3(0, 1.18f, 0), DarkSteel, new Vector3(Mathf.Pi / 2, 0, 0), 12);
@@ -496,7 +601,7 @@ internal static class StreetDetail
     /// </summary>
     public static void Bollard(Node3D root, World world, Vector2 at, Vector2 facing, BollardKind kind)
     {
-        var node = Place(root, world, at, facing, 0.18f);
+        var node = Place(root, world, at, facing, StreetEnvironment.SidewalkLift);
         if (kind == BollardKind.KoreaYellowFlex)
         {
             var yellow = Flat(new Color(0.93f, 0.74f, 0.1f), 0.45f);
@@ -515,7 +620,7 @@ internal static class StreetDetail
     /// <summary>카페 테라스 (프랑스): 보도 위 둥근 대리석 탁자 둘과 등나무 의자</summary>
     public static void CafeTerrace(Node3D root, World world, Vector2 at, Vector2 tangent, int seed)
     {
-        var node = Place(root, world, at, tangent, 0.18f);
+        var node = Place(root, world, at, tangent, StreetEnvironment.SidewalkLift);
         var marble = Flat(new Color(0.88f, 0.87f, 0.84f), 0.25f);
         var rattan = Flat(new Color(0.62f, 0.45f, 0.26f), 0.75f);
         for (var table = 0; table < 2; table++)
@@ -540,7 +645,7 @@ internal static class StreetDetail
     /// <summary>빨간 원통 우체통 (영국): 둥근 모자, 검은 밑동, 투입구</summary>
     public static void PostBox(Node3D root, World world, Vector2 at, Vector2 facing)
     {
-        var node = Place(root, world, at, facing, 0.18f);
+        var node = Place(root, world, at, facing, StreetEnvironment.SidewalkLift);
         var red = Flat(new Color(0.72f, 0.06f, 0.05f), 0.35f);
         Cylinder(node, 0.25f, 0.12f, new Vector3(0, 0.06f, 0), Flat(new Color(0.05f, 0.05f, 0.05f), 0.6f), segments: 18);
         Cylinder(node, 0.23f, 1.25f, new Vector3(0, 0.74f, 0), red, segments: 18);

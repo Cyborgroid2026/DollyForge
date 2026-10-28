@@ -282,6 +282,23 @@ public partial class SelfTest : Node
         var walk = await StandAt(line[2] + normal * 4.1f);
         Check(road == Surface.Asphalt && walk == Surface.Paver, $"발밑 촉각: 차로 {road?.Name ?? "없음"}, 보도 {walk?.Name ?? "없음"}");
 
+        // 연석: 차도에서 보도 쪽으로 걸으면 턱을 딛고 올라서야 한다 (연석 높이 + 보도블록)
+        await StandAt(line[2] + normal * 1.6f);
+        var startY = player.GlobalPosition.Y;
+        player.Rotation = new Vector3(0, Mathf.Atan2(-normal.X, -normal.Y), 0); // 보도 쪽을 본다
+        Input.ActionPress("move_forward");
+        for (var t = 0; t < 360; t++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            if (new Vector2(player.GlobalPosition.X, player.GlobalPosition.Z).DistanceTo(line[2]) > 4.0f) break;
+        }
+        Input.ActionRelease("move_forward");
+        await Wait(0.5);
+        var climbed = player.GlobalPosition.Y - startY;
+        var reach = new Vector2(player.GlobalPosition.X, player.GlobalPosition.Z).DistanceTo(line[2]);
+        Check(player.Senses.Underfoot == Surface.Paver && climbed > StreetEnvironment.SidewalkLift - StreetEnvironment.RoadLift - 0.08f,
+            $"연석 오르기: 차도 → 보도 {reach:0.0} m, {climbed * 100:0} cm 올라섬 (연석 {StreetEnvironment.Style.CurbHeight * 100:0} cm), 발밑 {player.Senses.Underfoot?.Name}");
+
         var asphaltBody = GetTree().Root.FindChild("Surface_asphalt", true, false) as StaticBody3D;
         Check(asphaltBody?.PhysicsMaterialOverride?.Friction is 0.75f, $"아스팔트 충돌면 마찰 {asphaltBody?.PhysicsMaterialOverride?.Friction:0.00} (고무–마른 아스팔트 운동 0.5–0.8)");
 
@@ -297,13 +314,20 @@ public partial class SelfTest : Node
         var capture = new AudioEffectCapture { BufferLength = 1f };
         AudioServer.AddBusEffect(0, capture);
         await StandAt(line[2] + normal * 1.2f);
+        float Peak()
+        {
+            var samples = capture.GetBuffer(capture.GetFramesAvailable());
+            return samples.Length == 0 ? 0 : samples.Max(v => Mathf.Abs(v.X));
+        }
         capture.ClearBuffer();
+        await Wait(0.6);
+        var ambient = Peak(); // 바람·먼 도시의 바탕 소리
         player.Senses.Step(1.6f);
         await Wait(0.6);
-        var samples = capture.GetBuffer(capture.GetFramesAvailable());
-        var peak = samples.Length == 0 ? 0 : samples.Max(v => Mathf.Abs(v.X));
+        var peak = Peak();
         AudioServer.RemoveBusEffect(0, AudioServer.GetBusEffectCount(0) - 1);
-        Check(peak > 0.01f && player.Senses.LastStep == Surface.Asphalt, $"청각: 아스팔트 발소리 최대 진폭 {peak:0.000} ({samples.Length} 표본)");
+        Check(ambient > 0.002f && peak > ambient * 1.5f && player.Senses.LastStep == Surface.Asphalt,
+            $"청각: 바탕 소리(바람·도시) 최대 {ambient:0.000}, 아스팔트 발소리 최대 {peak:0.000}");
         Check(Surface.TasteOf("steel_s235").Contains("쇠"), $"미각(접촉 화학): 강철 = {Surface.TasteOf("steel_s235")}");
     }
 

@@ -50,6 +50,12 @@ public sealed record StreetStyle(
     Color BinColor,
     float CarLength)
 {
+    /// <summary>
+    /// 차도에서 보도까지 연석 높이 (m). 미국: 주택가 6인치·도시 가로 8인치(LA 기준), 영국: 도심 100–120 mm.
+    /// 한국·일본·프랑스·브라질은 관찰 기준 15 cm 안팎.
+    /// </summary>
+    public float CurbHeight { get; init; } = 0.15f;
+
     public static readonly StreetStyle Korea = new(
         "kr", "한국 주택가 골목", false,
         new Color(0.86f, 0.68f, 0.16f), LinePattern.Solid, LinePattern.Solid,
@@ -77,7 +83,7 @@ public sealed record StreetStyle(
         "Rue des Fleurs", ["BOULANGERIE", "PHARMACIE", "CAFÉ", "TABAC", "COIFFURE", "FLEURISTE", "BOUCHERIE"], false,
         [("beige_wall_001", 2.6f, new Color(0.93f, 0.88f, 0.78f), 0.6f), ("concrete_wall_008", 2f, new Color(0.9f, 0.86f, 0.78f), 0.4f)],
         2, 4, true, new Color(0.36f, 0.38f, 0.4f), false, false, false, false, true, new Color(0.08f, 0.22f, 0.5f),
-        false, false, false, false, false, false, false, false, true, true, false, new Color(0.2f, 0.42f, 0.25f), 0.95f);
+        false, false, false, false, false, false, false, false, true, true, false, new Color(0.2f, 0.42f, 0.25f), 0.95f) { CurbHeight = 0.14f };
 
     public static readonly StreetStyle UnitedStates = new(
         "us", "미국 소도시 중심가", false,
@@ -86,7 +92,7 @@ public sealed record StreetStyle(
         "Wildflower St", ["DINER", "HARDWARE", "BARBER", "LAUNDROMAT", "PHARMACY", "BAKERY", "BOOKS"], false,
         [("red_brick_03", 1.5f, new Color(0.95f, 0.85f, 0.78f), 0.7f), ("beige_wall_001", 2.4f, new Color(0.9f, 0.87f, 0.8f), 0.3f)],
         2, 3, false, default, false, false, false, false, false, default,
-        false, false, false, false, false, false, true, true, false, false, false, new Color(0.2f, 0.24f, 0.26f), 1.12f);
+        false, false, false, false, false, false, true, true, false, false, false, new Color(0.2f, 0.24f, 0.26f), 1.12f) { CurbHeight = 0.2f };
 
     public static readonly StreetStyle UnitedKingdom = new(
         "uk", "영국 테라스 거리", true,
@@ -95,7 +101,7 @@ public sealed record StreetStyle(
         "Wildflower Lane", ["NEWSAGENT", "CHEMIST", "FISH & CHIPS", "BARBERS", "BAKERY", "OFF LICENCE"], false,
         [("red_brick_03", 1.4f, new Color(0.88f, 0.8f, 0.76f), 0.75f), ("beige_wall_001", 2.4f, new Color(0.93f, 0.92f, 0.88f), 0.25f)],
         2, 3, true, new Color(0.3f, 0.32f, 0.36f), false, false, false, false, false, new Color(0.95f, 0.95f, 0.93f),
-        false, false, false, false, false, false, false, false, false, false, true, new Color(0.12f, 0.13f, 0.13f), 0.95f);
+        false, false, false, false, false, false, false, false, false, false, true, new Color(0.12f, 0.13f, 0.13f), 0.95f) { CurbHeight = 0.11f };
 
     public static readonly StreetStyle Brazil = new(
         "br", "브라질 주택가", false,

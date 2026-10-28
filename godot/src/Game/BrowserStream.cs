@@ -13,6 +13,7 @@ namespace DollyForge.Game;
 /// 렌더링한 화면을 JPEG 로 브라우저에 보낸다. 브라우저의 키보드·마우스는 Godot 입력 이벤트로 되돌려 넣는다.
 ///   http://127.0.0.1:7780/    화면 페이지 (godot/web/stream.html)
 ///   ws://127.0.0.1:7780/ws    ← 화면(JPEG 바이너리)·소리('A' 머리 + 16비트 PCM 바이너리)·상태(JSON 텍스트) / → 입력(JSON 텍스트)
+///   ws://127.0.0.1:7780/ws?watch=1  같은 화면·소리를 받기만 하는 관찰 연결 (탭을 밀어내지 않는다, 점검용)
 ///   GET  /frame.jpg           지금 화면 한 장 (탭의 연결을 빼앗지 않고 같은 화면을 본다: 개발·점검용)
 ///   POST /input               입력 JSON 한 개 (ws 와 같은 형식, 점검 도구가 게임 안에서만 조작한다)
 /// 로컬 주소에서만 연다.
@@ -43,6 +44,8 @@ public partial class BrowserStream : Node
     byte[]? _lastJpg;
     /// <summary>주 버스에 건 소리 잡기: 게임이 내는 소리(발소리 등)를 브라우저로 보낸다</summary>
     AudioEffectCapture? _capture;
+    /// <summary>관찰 연결들: 화면·소리를 받기만 한다</summary>
+    readonly List<WebSocket> _watchers = [];
     /// <summary>/frame.jpg 요청이 있으면 탭이 없어도 잠시 화면을 굽는다</summary>
     long _observeUntil;
 
@@ -140,6 +143,12 @@ public partial class BrowserStream : Node
             HttpListenerContext ctx;
             try { ctx = await _http.GetContextAsync(); }
             catch { return; }
+            if (ctx.Request.IsWebSocketRequest && ctx.Request.Url?.AbsolutePath == "/ws" && ctx.Request.QueryString["watch"] == "1")
+            {
+                var watcher = (await ctx.AcceptWebSocketAsync(null)).WebSocket;
+                lock (_watchers) _watchers.Add(watcher);
+                continue;
+            }
             if (ctx.Request.IsWebSocketRequest && ctx.Request.Url?.AbsolutePath == "/ws")
             {
                 var ws = (await ctx.AcceptWebSocketAsync(null)).WebSocket;
@@ -159,8 +168,10 @@ public partial class BrowserStream : Node
             var path = ctx.Request.Url?.AbsolutePath;
             if (path == "/frame.jpg")
             {
+                // 탭이 없으면 화면을 굽지 않고 있었을 수 있다: 이 요청 뒤에 구운 새 화면을 기다린다
+                var since = Interlocked.Read(ref _lastSent);
                 Interlocked.Exchange(ref _observeUntil, System.Environment.TickCount64 + 3000);
-                for (var i = 0; i < 40 && Volatile.Read(ref _lastJpg) is null; i++) await Task.Delay(50);
+                for (var i = 0; i < 60 && (Volatile.Read(ref _lastJpg) is null || Interlocked.Read(ref _lastSent) <= since); i++) await Task.Delay(50);
                 var jpg = Volatile.Read(ref _lastJpg);
                 ctx.Response.StatusCode = jpg is null ? 503 : 200;
                 ctx.Response.ContentType = "image/jpeg";
@@ -217,15 +228,18 @@ public partial class BrowserStream : Node
     {
         while (_inbox.TryDequeue(out var msg)) HandleInput(msg);
         var ws = _ws is { State: WebSocketState.Open } open ? open : null;
-        if (ws is null)
+        WebSocket[] watchers;
+        lock (_watchers)
+        {
+            _watchers.RemoveAll(w => w.State != WebSocketState.Open);
+            watchers = _watchers.ToArray();
+        }
+        if (ws is null && watchers.Length == 0)
         {
             if (System.Environment.TickCount64 > Interlocked.Read(ref _observeUntil)) return;
         }
-        else
-        {
-            SendStatus(ws);
-            SendAudio(ws);
-        }
+        if (ws is not null) SendStatus(ws);
+        SendAudio(ws, watchers);
         Stats(delta);
 
         _frameTimer += delta;
@@ -240,9 +254,10 @@ public partial class BrowserStream : Node
     }
 
     /// <summary>잡힌 소리를 모노 16비트로 줄여 보낸다: 'A' 0 0 0 + 표본율(uint32) + 표본들</summary>
-    void SendAudio(WebSocket ws)
+    void SendAudio(WebSocket? ws, WebSocket[] watchers)
     {
         if (_capture is null) return;
+        if (ws is null && watchers.Length == 0) { _capture.ClearBuffer(); return; }
         var frames = _capture.GetFramesAvailable();
         if (frames < 256) return;
         var buffer = _capture.GetBuffer(frames);
@@ -254,7 +269,8 @@ public partial class BrowserStream : Node
             var mono = Mathf.Clamp((buffer[i].X + buffer[i].Y) * 0.5f, -1f, 1f);
             BitConverter.TryWriteBytes(packet.AsSpan(8 + i * 2), (short)(mono * 32767));
         }
-        _ = Send(ws, packet, WebSocketMessageType.Binary);
+        if (ws is not null) _ = Send(ws, packet, WebSocketMessageType.Binary);
+        foreach (var watcher in watchers) _ = Send(watcher, packet, WebSocketMessageType.Binary);
     }
 
     void SendStatus(WebSocket ws)
@@ -327,6 +343,9 @@ public partial class BrowserStream : Node
                 Interlocked.Exchange(ref _lastSent, seq);
                 Volatile.Write(ref _lastJpg, jpg);
                 if (ws is not null) await Send(ws, jpg, WebSocketMessageType.Binary);
+                WebSocket[] watchers;
+                lock (_watchers) watchers = _watchers.ToArray();
+                foreach (var watcher in watchers) await Send(watcher, jpg, WebSocketMessageType.Binary);
             }
             finally { Interlocked.Decrement(ref _inFlight); }
         });

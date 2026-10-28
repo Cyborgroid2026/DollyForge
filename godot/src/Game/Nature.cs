@@ -23,6 +23,7 @@ public partial class Nature : Node3D
 
     public override void _Ready()
     {
+        AddChild(new Ambience { Name = "Ambience" }); // 바람·먼 도시의 소리 바탕
         BuildGrass();
         BuildFlowers();
         BuildPond();

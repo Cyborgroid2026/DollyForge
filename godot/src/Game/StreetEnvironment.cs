@@ -82,11 +82,13 @@ internal static class StreetEnvironment
         }
         var concrete = Look.Painted("painted_concrete", 2f, new Color(0.55f, 0.54f, 0.51f));
         // 보이는 면마다 같은 모양의 충돌면을 깔고 표면 물성을 붙인다 (질감이 물리에 들어간다)
-        BuildSurface(root, world, path, -3.2f, 3.2f, 0.18f, asphalt, Surface.Asphalt);
-        BuildSurface(root, world, path, -4.9f, -3.2f, 0.18f, sidewalk, Surface.Paver);
-        BuildSurface(root, world, path, 3.2f, 4.9f, 0.18f, sidewalk, Surface.Paver);
-        BuildSurface(root, world, path, -3.38f, -3.18f, 0.25f, concrete, Surface.Concrete);
-        BuildSurface(root, world, path, 3.18f, 3.38f, 0.25f, concrete, Surface.Concrete);
+        BuildSurface(root, world, path, -RoadHalfWidth, RoadHalfWidth, RoadLift, asphalt, Surface.Asphalt);
+        // 보도: 연석 높이만큼 올라가 건물 벽까지 이어진다 (벽 앞 맨땅이 없다)
+        BuildSurface(root, world, path, -FrontageOffset, -KerbOuter, SidewalkLift, sidewalk, Surface.Paver);
+        BuildSurface(root, world, path, KerbOuter, FrontageOffset, SidewalkLift, sidewalk, Surface.Paver);
+        foreach (var (inner, outer) in new[] { (-FrontageOffset, -RoadHalfWidth), (RoadHalfWidth, FrontageOffset) })
+            EndCaps(root, world, path, inner, outer, SidewalkLift, concrete);
+        foreach (var side in new[] { -1f, 1f }) BuildKerb(root, world, path, side, concrete);
         AddSidewalkJoints(root, world, path);
         AddRoadMarkings(root, world, path);
         AddRoadFurniture(root, world, path);
@@ -184,7 +186,71 @@ internal static class StreetEnvironment
         root.AddChild(body);
     }
 
-    static ArrayMesh Strip(World world, IReadOnlyList<Vector2> path, float inner, float outer, float lift)
+    /// <summary>
+    /// 연석: 차도에서 세로로 선 면과 윗면 (보이는 모양), 충돌은 3.0 → 3.32 m 를 잇는 25° 안팎의 경사면.
+    /// 사람이 턱을 딛고 올라서듯 사이보그도 보도로 올라선다 (세로 턱은 캡슐이 벽으로 읽어 못 오른다).
+    /// </summary>
+    static void BuildKerb(Node3D root, World world, IReadOnlyList<Vector2> path, float side, Material concrete)
+    {
+        var material = concrete.Duplicate() as BaseMaterial3D ?? (BaseMaterial3D)concrete;
+        material.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
+        var face = new SurfaceTool();
+        face.Begin(Mesh.PrimitiveType.Triangles);
+        for (var i = 0; i < path.Count; i++)
+        {
+            var tangent = Tangent(path, i);
+            var normal = new Vector2(-tangent.Y, tangent.X);
+            var p = path[i] + normal * side * RoadHalfWidth;
+            var bottom = RoadY(world, path[i], normal, side * RoadHalfWidth) + RoadLift - 0.03f;
+            var top = world.HeightAt(p.X, p.Y) + SidewalkLift + 0.006f;
+            var facing = new Vector3(-normal.X * side, 0, -normal.Y * side);
+            face.SetNormal(facing); face.AddVertex(new Vector3(p.X, bottom, p.Y));
+            face.SetNormal(facing); face.AddVertex(new Vector3(p.X, top, p.Y));
+        }
+        for (var i = 0; i < path.Count - 1; i++)
+        {
+            var a = i * 2;
+            face.AddIndex(a); face.AddIndex(a + 2); face.AddIndex(a + 1);
+            face.AddIndex(a + 1); face.AddIndex(a + 2); face.AddIndex(a + 3);
+        }
+        root.AddChild(new MeshInstance3D { Mesh = face.Commit(), MaterialOverride = material, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+        var (inner, outer) = side < 0 ? (-KerbOuter, -RoadHalfWidth) : (RoadHalfWidth, KerbOuter);
+        root.AddChild(new MeshInstance3D { Mesh = Strip(world, path, inner, outer, SidewalkLift + 0.006f, SidewalkLift + 0.006f), MaterialOverride = material, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+
+        var ramp = side < 0 ? Strip(world, path, -3.32f, -3.0f, SidewalkLift, RoadLift + 0.001f) : Strip(world, path, 3.0f, 3.32f, RoadLift + 0.001f, SidewalkLift);
+        var body = Surface.Concrete.Apply(new StaticBody3D { Name = "Surface_kerb", CollisionLayer = PartBody.LayerWorld, CollisionMask = 0 });
+        body.AddChild(new CollisionShape3D { Shape = ramp.CreateTrimeshShape() });
+        root.AddChild(body);
+    }
+
+    static ArrayMesh Strip(World world, IReadOnlyList<Vector2> path, float inner, float outer, float lift) => Strip(world, path, inner, outer, lift, lift);
+
+    /// <summary>길 처음과 끝에서 보도 단면을 땅까지 막는 세로 면 (판이 떠 보이지 않게)</summary>
+    static void EndCaps(Node3D root, World world, IReadOnlyList<Vector2> path, float inner, float outer, float lift, Material material)
+    {
+        var capMaterial = material.Duplicate() as BaseMaterial3D ?? (BaseMaterial3D)material;
+        capMaterial.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+        foreach (var i in new[] { 0, path.Count - 1 })
+        {
+            var tangent = Tangent(path, i);
+            var normal = new Vector2(-tangent.Y, tangent.X);
+            var facing = new Vector3(tangent.X, 0, tangent.Y) * (i == 0 ? -1f : 1f);
+            var a = path[i] + normal * inner;
+            var b = path[i] + normal * outer;
+            Vector3 Top(Vector2 p) => new(p.X, world.HeightAt(p.X, p.Y) + lift + 0.004f, p.Y);
+            Vector3 Bottom(Vector2 p) => new(p.X, world.HeightAt(p.X, p.Y) - 0.05f, p.Y);
+            foreach (var v in new[] { Top(a), Bottom(a), Bottom(b), Top(a), Bottom(b), Top(b) })
+            {
+                st.SetNormal(facing);
+                st.AddVertex(v);
+            }
+        }
+        root.AddChild(new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = capMaterial, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+    }
+
+    static ArrayMesh Strip(World world, IReadOnlyList<Vector2> path, float inner, float outer, float liftInner, float liftOuter)
     {
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
@@ -199,7 +265,7 @@ internal static class StreetEnvironment
                 var p = path[i] + side * offset;
                 st.SetNormal(Vector3.Up);
                 st.SetUV(new Vector2(offset, distance));
-                st.AddVertex(new Vector3(p.X, RoadY(world, path[i], side, offset) + lift, p.Y));
+                st.AddVertex(new Vector3(p.X, RoadY(world, path[i], side, offset) + (offset == inner ? liftInner : liftOuter), p.Y));
             }
         }
         for (var i = 0; i < path.Count - 1; i++)
@@ -227,6 +293,12 @@ internal static class StreetEnvironment
     }
 
     const float RoadHalfWidth = 3.2f;
+    /// <summary>아스팔트 면은 지형보다 0.18 m 위 (포장 두께)</summary>
+    internal const float RoadLift = 0.18f;
+    /// <summary>보도 면 높이 = 차도 + 그 나라 연석 높이</summary>
+    internal static float SidewalkLift => RoadLift + Style.CurbHeight;
+    /// <summary>연석 윗면 바깥 끝 (보도는 여기서 건물 벽까지)</summary>
+    const float KerbOuter = 3.38f;
 
     static Vector2 Tangent(IReadOnlyList<Vector2> path, int i)
     {
@@ -342,12 +414,12 @@ internal static class StreetEnvironment
             var side = new Vector2(-tangent.Y, tangent.X);
             foreach (var direction in new[] { -1f, 1f })
             {
-                var p = position + side * direction * 4.05f;
+                var p = position + side * direction * (KerbOuter + FrontageOffset) / 2f;
                 root.AddChild(new MeshInstance3D
                 {
-                    Mesh = new BoxMesh { Size = new Vector3(1.58f, 0.008f, 0.022f) },
+                    Mesh = new BoxMesh { Size = new Vector3(FrontageOffset - KerbOuter - 0.08f, 0.008f, 0.022f) },
                     MaterialOverride = joint,
-                    Position = new Vector3(p.X, world.HeightAt(p.X, p.Y) + 0.185f, p.Y),
+                    Position = new Vector3(p.X, world.HeightAt(p.X, p.Y) + SidewalkLift + 0.005f, p.Y),
                     Rotation = new Vector3(0, Mathf.Atan2(tangent.X, tangent.Y), 0),
                     CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 });
@@ -411,10 +483,12 @@ internal static class StreetEnvironment
             var (position, tangent) = AtDistance(path, distance);
             var side = ((int)(distance / 12f) % 2 == 0) ? -1f : 1f;
             Count("빗물받이", distance, side);
-            var drainAt = position + new Vector2(-tangent.Y, tangent.X) * side * 3.83f;
+            // 빗물받이: 연석 바로 옆 차도 배수로 (격자 450 × 600 mm 안팎)
+            var drainNormal = new Vector2(-tangent.Y, tangent.X);
+            var drainAt = position + drainNormal * side * 2.95f;
             var drain = Surface.Steel.Apply(new StaticBody3D
             {
-                Position = new Vector3(drainAt.X, world.HeightAt(drainAt.X, drainAt.Y) + 0.185f, drainAt.Y),
+                Position = new Vector3(drainAt.X, RoadY(world, position, drainNormal, side * 2.95f) + RoadLift + 0.004f, drainAt.Y),
                 Rotation = new Vector3(0, Mathf.Atan2(tangent.X, tangent.Y), 0),
                 CollisionLayer = PartBody.LayerWorld,
                 CollisionMask = 0,
@@ -592,7 +666,7 @@ internal static class StreetEnvironment
             var radius = 0.13f + Hash(seed, 20 + i) * 0.12f;
             var height = radius * (1.3f + Hash(seed, 30 + i) * 0.6f);
             var p = center + tangent * (i * 0.42f + Hash(seed, 40 + i) * 0.1f);
-            var baseY = world.HeightAt(p.X, p.Y) + 0.18f;
+            var baseY = world.HeightAt(p.X, p.Y) + SidewalkLift;
             var pot = new Node3D { Position = new Vector3(p.X, baseY, p.Y) };
             root.AddChild(pot);
             pot.AddChild(new MeshInstance3D
@@ -618,7 +692,7 @@ internal static class StreetEnvironment
         var tileCenter = center + normal * side * 4.02f;
         var tile = Surface.Tactile.Apply(new StaticBody3D
         {
-            Position = new Vector3(tileCenter.X, world.HeightAt(tileCenter.X, tileCenter.Y) + 0.198f, tileCenter.Y),
+            Position = new Vector3(tileCenter.X, world.HeightAt(tileCenter.X, tileCenter.Y) + SidewalkLift + 0.018f, tileCenter.Y),
             Rotation = new Vector3(0, Mathf.Atan2(tangent.X, tangent.Y), 0),
             CollisionLayer = PartBody.LayerWorld,
             CollisionMask = 0,
@@ -646,7 +720,7 @@ internal static class StreetEnvironment
         var bin = Surface.Plastic.Apply(new StaticBody3D
         {
             Name = $"StreetBin{seed}",
-            Position = new Vector3(center.X, world.HeightAt(center.X, center.Y) + 0.18f, center.Y), // 보도 위
+            Position = new Vector3(center.X, world.HeightAt(center.X, center.Y) + SidewalkLift, center.Y), // 보도 위
             Rotation = new Vector3(0, Mathf.Atan2(tangent.X, tangent.Y), 0),
             CollisionLayer = PartBody.LayerWorld,
             CollisionMask = 0,
@@ -1040,6 +1114,7 @@ internal static class StreetEnvironment
                 foreach (var ex in new[] { -windowWidth / 2f, 0f, windowWidth / 2f })
                     AddBox(building, new Vector3(0.05f, windowHeight, 0.08f), new Vector3(x + ex, y, frontZ), aluminium);
                 AddBox(building, new Vector3(windowWidth + 0.24f, 0.07f, 0.16f), new Vector3(x, y - windowHeight / 2f - 0.06f, frontZ + 0.04f), trim);
+                StreetDetail.Streak(building, x, y - windowHeight / 2f - 0.1f, frontZ - 0.045f, windowWidth, seed * 17 + floor * 5 + col);
                 if (Hash(seed, 30 + floor * 4 + col) < 0.55f)
                     AddBox(building, new Vector3(windowWidth * (0.3f + Hash(seed, 40 + floor * 4 + col) * 0.4f), windowHeight - 0.1f, 0.02f),
                         new Vector3(x - windowWidth * 0.2f, y, frontZ - 0.06f), curtain);
@@ -1091,6 +1166,7 @@ internal static class StreetEnvironment
         }
 
         // 지붕 슬래브, 옥상, 빗물받이 홈통, 가스관, 번호판
+        if (!pilotis) StreetDetail.Grime(building, width, height, frontZ - 0.045f, seed);
         AddBox(building, new Vector3(width + 0.12f, 0.18f, depth + 0.12f), new Vector3(0, height / 2f + 0.08f, 0), trim);
         if (Style.PitchedRoofs)
             StreetDetail.PitchedRoof(building, width, depth, height, seed, Style.RoofColor);
@@ -1110,7 +1186,7 @@ internal static class StreetEnvironment
         var planter = Surface.Concrete.Apply(new StaticBody3D
         {
             Name = $"Planter{seed}",
-            Position = new Vector3(center.X, world.HeightAt(center.X, center.Y) + 0.28f, center.Y),
+            Position = new Vector3(center.X, world.HeightAt(center.X, center.Y) + SidewalkLift + 0.1f, center.Y),
             Rotation = new Vector3(0, Mathf.Atan2(tangent.X, tangent.Y), 0),
             CollisionLayer = PartBody.LayerWorld,
             CollisionMask = 0,
