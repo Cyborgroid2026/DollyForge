@@ -31,6 +31,9 @@ public partial class Main : Node3D
 
     string? _shotPath;
     int _shotFrames;
+    /// <summary>개발용 (--bodies --walk): 미리보기 몸이 옆으로 오가며 걸어 관절 변형을 확인한다</summary>
+    (Vector3 Base, Vector3 Right, float Yaw)? _walkDemo;
+    bool _walkDemoOn;
 
     bool Online => _session.Online;
 
@@ -442,6 +445,13 @@ public partial class Main : Node3D
             _session.Send(Packets.Pose(p.X, p.Y, p.Z, _player.Rotation.Y));
         }
 
+        if (_walkDemoOn && _walkDemo is var (demoBase, demoRight, demoYaw))
+        {
+            var sweep = Mathf.Sin((float)_time * 0.9f) * 1.2f; // 초속 약 1.1 m 로 좌우 왕복
+            _remotes.Upsert(9001, 0, demoBase - demoRight * (0.5f - sweep), demoYaw);
+            _remotes.Upsert(9002, 1, demoBase + demoRight * (0.5f + sweep), demoYaw);
+        }
+
         if (_shotPath is not null && --_shotFrames <= 0)
         {
             var img = GetViewport().GetTexture().GetImage();
@@ -506,7 +516,9 @@ public partial class Main : Node3D
                     var yaw = _player.Rotation.Y + Mathf.Pi; // 플레이어를 바라보게
                     _remotes.Upsert(9001, 0, f - right * 0.5f, yaw);
                     _remotes.Upsert(9002, 1, f + right * 0.5f, yaw);
+                    _walkDemo = (f, right, yaw);
                     break;
+                case "--walk": _walkDemoOn = true; break;
             }
         }
         if (_shotPath is not null && _shotFrames <= 0) _shotFrames = 120;
