@@ -132,8 +132,8 @@ public partial class CyborgBody : Node3D
             new(1.385f, 0.096f, 0.046f, 0.052f),
             new(1.4f, 0.048f, 0.040f, 0.040f),
         ],
-        1.0f, (1.36f, 1.5f, 0.042f), (1.425f, 0.86f),         (0.160f, 1.315f), (0.285f, 0.24f, 1.0f, 0.009f),
-        (0.092f, 0.84f), (0.40f, 0.38f, 1.04f, 0.045f), 0.228f, 1.05f, 1.16f, 0.94f);
+        1.0f, (1.36f, 1.5f, 0.042f), (1.425f, 0.86f),         (0.160f, 1.315f), (0.305f, 0.265f, 1.0f, 0.009f),
+        (0.092f, 0.84f), (0.46f, 0.44f, 1.04f, 0.045f), 0.228f, 1.05f, 1.16f, 0.94f);
 
     // 남성형: 성체 키 1.86m, 역삼각형 흉근과 다부진 실루엣
     static readonly Proportions Male = new(
@@ -155,8 +155,8 @@ public partial class CyborgBody : Node3D
             new(1.465f, 0.145f, 0.068f, 0.074f),
             new(1.49f, 0.068f, 0.058f, 0.058f),
         ],
-        1.18f, (1.44f, 1.6f, 0.055f), (1.525f, 0.94f), (0.214f, 1.395f), (0.31f, 0.27f, 1.22f, 0.012f),
-        (0.094f, 0.9f), (0.44f, 0.42f, 1.07f, 0.02f), 0.26f, 1.06f, 1.22f, 0.98f);
+        1.18f, (1.44f, 1.6f, 0.055f), (1.525f, 0.94f), (0.214f, 1.395f), (0.33f, 0.295f, 1.22f, 0.012f),
+        (0.094f, 0.9f), (0.50f, 0.48f, 1.07f, 0.02f), 0.26f, 1.06f, 1.22f, 0.98f);
 
     // ------------------------------------------------------------------ 재질
 
@@ -166,9 +166,9 @@ public partial class CyborgBody : Node3D
     /// <summary>전신 외장과 지체를 이루는 브러시드 티타늄 합금</summary>
     static StandardMaterial3D Shell => _shell ??= new StandardMaterial3D
     {
-        AlbedoColor = new Color(0.60f, 0.66f, 0.71f),
-        Metallic = 0.78f,
-        Roughness = 0.52f,
+        AlbedoColor = new Color(0.68f, 0.71f, 0.74f),
+        Metallic = 0.8f,
+        Roughness = 0.42f,
         NormalEnabled = ResourceLoader.Exists("res://assets/tex/metal_plate/nor_gl.jpg"),
         NormalTexture = ResourceLoader.Exists("res://assets/tex/metal_plate/nor_gl.jpg")
             ? GD.Load<Texture2D>("res://assets/tex/metal_plate/nor_gl.jpg")
@@ -207,6 +207,8 @@ public partial class CyborgBody : Node3D
     // ------------------------------------------------------------------ 조립
 
     public float Height { get; private set; }
+    /// <summary>다리를 늘린 길이 (m, 허벅지·정강이 각 6 cm)</summary>
+    const float LegLift = 0.12f;
     Node3D _head = null!;
     Node3D _legL = null!, _legR = null!, _kneeL = null!, _kneeR = null!, _ankleL = null!, _ankleR = null!;
     Node3D _armL = null!, _armR = null!, _elbowL = null!, _elbowR = null!, _handL = null!, _handR = null!, _thumbL = null!, _thumbR = null!;
@@ -219,20 +221,24 @@ public partial class CyborgBody : Node3D
     {
         var gender = body.Gender;
         var P = gender == 1 ? Male : Female;
-        var scale = gender == 1 ? 1.045f : 1.08f;
+        // 다리를 사람 비례로 늘린 만큼(LegLift) 위 몸통을 올리고, 전체 크기를 줄여 키는 그대로 둔다.
+        // 가랑이 높이: 키의 42 % → 약 47 % (실제 사람 46–47 %)
+        var headTop = P.Head.Base + 0.24f * P.Head.Scale;
+        var scale = (gender == 1 ? 1.045f : 1.08f) * headTop / (headTop + LegLift);
         var g = new CyborgBody
         {
             Height = gender == 1 ? 1.86f : 1.80f,
             Scale = Vector3.One * scale,
         };
+        var upper = new Node3D { Name = "Upper", Position = new Vector3(0, LegLift, 0) };
+        g.AddChild(upper);
         var torso = P.Torso
             .Append(new Sec(P.Neck.Y1, P.Neck.R * 0.92f, P.Neck.R * 0.92f, P.Neck.R * 0.92f, Cz: -0.008f))
             .Select(s => s with { Sq = P.Sq })
             .ToArray();
-        Add(g, Loft(torso, 64, 7), ModuleTitanium(body.VariantAt(BodySlot.Torso)));
-        AddTorsoPanelLines(g, torso, P);
+        Add(upper, Loft(torso, 64, 7), ModuleTitanium(body.VariantAt(BodySlot.Torso)));
 
-        g._head = BuildHead(P, g);
+        g._head = BuildHead(P, upper);
         (g._armL, g._elbowL, g._handL, g._fingersL, g._thumbL) = BuildArm(P, -1,
             body.VariantAt(BodySlot.UpperArmL), body.VariantAt(BodySlot.ForearmL), body.VariantAt(BodySlot.HandL));
         (g._armR, g._elbowR, g._handR, g._fingersR, g._thumbR) = BuildArm(P, 1,
@@ -241,7 +247,12 @@ public partial class CyborgBody : Node3D
             body.VariantAt(BodySlot.ThighL), body.VariantAt(BodySlot.ShinL), body.VariantAt(BodySlot.FootL));
         (g._legR, g._kneeR, g._ankleR) = BuildLeg(P, 1,
             body.VariantAt(BodySlot.ThighR), body.VariantAt(BodySlot.ShinR), body.VariantAt(BodySlot.FootR));
-        foreach (var n in new[] { g._armL, g._armR, g._legL, g._legR }) g.AddChild(n);
+        foreach (var n in new[] { g._armL, g._armR }) upper.AddChild(n);
+        foreach (var n in new[] { g._legL, g._legR })
+        {
+            n.Position += new Vector3(0, LegLift, 0);
+            g.AddChild(n);
+        }
         return g;
     }
 
@@ -252,7 +263,7 @@ public partial class CyborgBody : Node3D
         return m;
     }
 
-    static Node3D BuildHead(Proportions P, Node3D g)
+    static Node3D BuildHead(Proportions P, Node3D parent)
     {
         var (b, k) = P.Head;
         var head = new Node3D { Position = new Vector3(0, b, 0) };
@@ -272,7 +283,7 @@ public partial class CyborgBody : Node3D
         ];
         Add(head, Loft(s.Select(x => x with { Y = x.Y * k, Rx = x.Rx * k, F = x.F * k, B = x.B * k, Cz = x.Cz * k }).ToArray(), 56, 7), Shell);
 
-        g.AddChild(head);
+        parent.AddChild(head);
         return head;
     }
 
@@ -299,7 +310,6 @@ public partial class CyborgBody : Node3D
         // 삼각근: 몸통 어깨선보다 솟지 않게 낮고 둥글게 (견장처럼 각지지 않게)
         var deltoid = Add(upperModule, new SphereMesh { Radius = 0.048f * r, Height = 0.096f * r, RadialSegments = 32, Rings = 16 }, upperMat, new Vector3(-0.008f * r, -0.022f, 0));
         deltoid.Scale = new Vector3(0.98f, 1.08f, 0.95f);
-        LimbSeam(upperModule, -U * 0.42f, 0.0445f * r, 0.0445f * r);   // 위팔 마디 이음 (이두 위)
 
         var elbow = new Node3D { Position = new Vector3(0, -U, 0), Rotation = new Vector3(-0.10f, 0, 0) };
         upperModule.AddChild(elbow);
@@ -380,9 +390,6 @@ public partial class CyborgBody : Node3D
         var kneeSkin = Add(knee, new SphereMesh { Radius = 0.045f * r, Height = 0.092f * r, RadialSegments = 32, Rings = 16 }, thighMat);
         kneeSkin.Scale = new Vector3(0.96f, 1f, 0.95f);
         AddJointSeam(knee, 0.045f * r, 0.0012f * r, Vector3.Zero, alongY: true);
-        LimbSeam(leg, -T * 0.45f, 0.0665f * r, 0.065f * r);              // 허벅지 마디 이음 (무릎 갑옷이 겹치는 곳)
-        KneeBand(knee, 0.047f * r);
-        LimbSeam(knee, -N * 0.2f, 0.0445f * r, 0.047f * r);              // 정강이 마디 이음 (무릎 아래)
 
         // 하퇴: 발목(아래, 가늘어짐)에서 무릎(위)으로 넓어지며 종아리 볼륨.
         Sec[] shin = [
@@ -414,115 +421,6 @@ public partial class CyborgBody : Node3D
         f.Rotation = new Vector3(Mathf.Pi / 2, 0, 0);
         if (side < 0) leg.Scale = new Vector3(-1, 1, 1);
         return (leg, knee, ankle);
-    }
-
-    // ------------------------------------------------------------------ 분할선: 모듈 이음을 몸 곡선을 따라 가늘게
-
-    static StandardMaterial3D? _bandMat;
-    /// <summary>무릎 관절 띠: 외장보다 한 톤 어두운 가공 티타늄 링</summary>
-    static StandardMaterial3D BandMaterial => _bandMat ??= new StandardMaterial3D
-    {
-        AlbedoColor = new Color(0.40f, 0.45f, 0.49f), Metallic = 0.85f, Roughness = 0.38f,
-    };
-
-    /// <summary>몸통 곡면 위의 한 점 (단면 i–i+1 사이를 높이로 찾아 RingPoint)</summary>
-    static Vector3 TorsoPoint(Sec[] torso, float y, float th)
-    {
-        var i = 0;
-        while (i < torso.Length - 2 && torso[i + 1].Y < y) i++;
-        var t = Mathf.Clamp((y - torso[i].Y) / (torso[i + 1].Y - torso[i].Y), 0, 1);
-        return RingPoint(SectionAt(torso, i, t), th);
-    }
-
-    /// <summary>
-    /// 몸통 곡면을 따라 흐르는 가는 분할선. (높이, 각도) 경로를 곡면에 올려 얇은 관으로 그린다.
-    /// 각도 θ: 0 = 오른쪽(+X), π/2 = 정면(+Z), π = 왼쪽, −π/2 = 뒤.
-    /// </summary>
-    static void SurfaceSeam(Node3D parent, Sec[] torso, (float Y, float Th)[] path, float radius = 0.0017f)
-    {
-        var pts = new List<Vector3>();
-        for (var i = 0; i < path.Length - 1; i++)
-        for (var j = 0; j < 14; j++)
-        {
-            var t = j / 14f;
-            var y = Mathf.Lerp(path[i].Y, path[i + 1].Y, Mathf.SmoothStep(0, 1, t) * 0.25f + t * 0.75f);
-            var th = Mathf.Lerp(path[i].Th, path[i + 1].Th, t);
-            pts.Add(TorsoPoint(torso, y, th));
-        }
-        pts.Add(TorsoPoint(torso, path[^1].Y, path[^1].Th));
-        // 곡면에 반쯤 묻힌 관: 바깥 방향은 몸 중심축에서의 수평 방향
-        const int sides = 6;
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
-        for (var i = 0; i < pts.Count; i++)
-        {
-            var tangent = (pts[Math.Min(i + 1, pts.Count - 1)] - pts[Math.Max(i - 1, 0)]).Normalized();
-            var outward = new Vector3(pts[i].X, 0, pts[i].Z).Normalized();
-            var n = (outward - tangent * outward.Dot(tangent)).Normalized();
-            var b = tangent.Cross(n).Normalized();
-            var center = pts[i] + n * radius * 0.3f;
-            for (var k = 0; k < sides; k++)
-            {
-                var a = k * Mathf.Tau / sides;
-                st.AddVertex(center + (n * Mathf.Cos(a) + b * Mathf.Sin(a)) * radius);
-            }
-        }
-        for (var i = 0; i < pts.Count - 1; i++)
-        for (var k = 0; k < sides; k++)
-        {
-            int a = i * sides + k, c = i * sides + (k + 1) % sides, d = a + sides, e = c + sides;
-            st.AddIndex(a); st.AddIndex(d); st.AddIndex(c);
-            st.AddIndex(c); st.AddIndex(d); st.AddIndex(e);
-        }
-        st.GenerateNormals();
-        Add(parent, st.Commit(), JointSeamMaterial);
-    }
-
-    /// <summary>
-    /// 몸통 모듈의 이음선 (좌우 대칭): 목 칼라, 어깨에서 가슴 위 흉골로 모이는 V 선, 골반과 허벅지 모듈이 만나는
-    /// 사선(옆구리에서 가랑이로). 선은 몸 곡선을 따라 흐르고, 가슴 볼륨은 지나지 않는다.
-    /// </summary>
-    static void AddTorsoPanelLines(Node3D g, Sec[] torso, Proportions P)
-    {
-        var front = Mathf.Pi / 2;
-        var shoulderY = P.Shoulder.Y;
-        var sternumY = shoulderY - 0.07f;
-        foreach (var side in new[] { 1f, -1f })
-        {
-            // V: 어깨 앞 → 쇄골 아래 → 흉골
-            SurfaceSeam(g, torso, [(shoulderY + 0.005f, front - side * 1.15f), (shoulderY - 0.03f, front - side * 0.6f), (sternumY, front - side * 0.04f)]);
-            // 골반 이음: 옆구리(골반 위) → 가랑이 앞 / 뒤
-            var top = P.Hip.Y + 0.12f;
-            var crotch = torso[0].Y + 0.05f;
-            var sideTh = side > 0 ? 0f : Mathf.Pi;
-            SurfaceSeam(g, torso, [(top, sideTh), (P.Hip.Y + 0.03f, sideTh + side * 0.5f), (P.Hip.Y - 0.06f, sideTh + side * 1.0f), (crotch, sideTh + side * 1.4f)]);
-            SurfaceSeam(g, torso, [(top, sideTh), (P.Hip.Y + 0.03f, sideTh - side * 0.5f), (P.Hip.Y - 0.06f, sideTh - side * 1.0f), (crotch, sideTh - side * 1.4f)]);
-        }
-        // 목 칼라: 목 아래를 감싸는 고리
-        var collar = new MeshInstance3D
-        {
-            Mesh = new TorusMesh { InnerRadius = P.Neck.R * 1.02f, OuterRadius = P.Neck.R * 1.1f, Rings = 40, RingSegments = 8 },
-            MaterialOverride = JointSeamMaterial,
-            Position = new Vector3(0, P.Neck.Y0 + 0.035f, -0.006f),
-        };
-        g.AddChild(collar);
-    }
-
-    /// <summary>팔다리 마디의 이음: 단면을 따라 감는 가는 고리 (수평)</summary>
-    static void LimbSeam(Node3D parent, float y, float rx, float rz)
-    {
-        var ring = Add(parent, new TorusMesh { InnerRadius = 0.985f, OuterRadius = 1.02f, Rings = 40, RingSegments = 6 }, JointSeamMaterial, new Vector3(0, y, 0));
-        ring.Scale = new Vector3(rx, 0.06f, rz);
-    }
-
-    /// <summary>무릎 관절 띠: 촘촘한 가는 링 다섯 겹 (관절의 기계 구조가 드러나는 곳)</summary>
-    static void KneeBand(Node3D knee, float radius)
-    {
-        for (var i = -2; i <= 2; i++)
-        {
-            var ring = Add(knee, new TorusMesh { InnerRadius = 0.93f, OuterRadius = 1.0f, Rings = 40, RingSegments = 8 }, BandMaterial, new Vector3(0, i * 0.0085f, 0));
-            ring.Scale = new Vector3(radius * (1 - Mathf.Abs(i) * 0.035f), radius * 0.45f, radius * (1 - Mathf.Abs(i) * 0.035f));
-        }
     }
 
     static void AddJointSeam(Node3D parent, float radius, float width, Vector3 at, bool alongY)
