@@ -500,8 +500,8 @@ public partial class Main : Node3D
                 case "--login": CallDeferred(nameof(ShowLogin)); break;
                 case "--selftest": AddChild(new SelfTest { Devices = _devices }); break;
                 case "--onlinetest": AddChild(new OnlineTest { Main = this }); break;
-                case "--bodies": // 몸 미리보기: 플레이어 앞 3 m 에 여성형·남성형
-                    var f = _player.GlobalPosition - _player.GlobalBasis.Z * 3f;
+                case "--bodies": // 몸 미리보기: 플레이어 앞 (기본 3 m, --bodies=거리) 에 여성형·남성형
+                    var f = _player.GlobalPosition - _player.GlobalBasis.Z * (float.TryParse(v, out var dist) ? dist : 3f);
                     var right = _player.GlobalBasis.X;
                     var yaw = _player.Rotation.Y + Mathf.Pi; // 플레이어를 바라보게
                     _remotes.Upsert(9001, 0, f - right * 0.5f, yaw);

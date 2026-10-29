@@ -209,6 +209,8 @@ public partial class CyborgBody : Node3D
     public float Height { get; private set; }
     /// <summary>다리를 늘린 길이 (m, 허벅지·정강이 각 6 cm)</summary>
     const float LegLift = 0.12f;
+    /// <summary>팔이 몸에서 벌어진 각도 (rad): 골반에 닿지 않는 편안한 선 자세</summary>
+    const float ArmSplay = 0.11f;
     Node3D _head = null!;
     Node3D _legL = null!, _legR = null!, _kneeL = null!, _kneeR = null!, _ankleL = null!, _ankleR = null!;
     Node3D _armL = null!, _armR = null!, _elbowL = null!, _elbowR = null!, _handL = null!, _handR = null!, _thumbL = null!, _thumbR = null!;
@@ -291,7 +293,7 @@ public partial class CyborgBody : Node3D
         Proportions P, int side, ModuleVariant upperVariant, ModuleVariant forearmVariant, ModuleVariant handVariant)
     {
         var (U, F, r, bicep) = P.Arm;
-        var arm = new Node3D { Position = new Vector3(side * P.Shoulder.X, P.Shoulder.Y, 0), Rotation = new Vector3(0, 0, side * 0.05f) };
+        var arm = new Node3D { Position = new Vector3(side * P.Shoulder.X, P.Shoulder.Y, 0), Rotation = new Vector3(0, 0, side * ArmSplay) };
 
         // 위팔: 둥근 단면(초타원 아님)이 어깨에서 팔꿈치로 서서히 가늘어진다. 위쪽 끝은 몸통 안으로 들어가 숨고,
         // 어깨 바깥은 삼각근 곡면(납작한 구)이 몸통 어깨선과 위팔을 한 덩어리로 감싼다.
@@ -340,28 +342,46 @@ public partial class CyborgBody : Node3D
     }
 
     // 오른손 기준. 손바닥은 몸 안쪽(-X), 엄지는 정면(+Z).
+    // 사람 손처럼: 도톰한 손바닥, 서로 붙은 손가락, 손가락마다 두 마디로 손바닥 쪽으로 자연스럽게 굽는다.
     static (Node3D Hand, Node3D[] Fingers, Node3D Thumb) BuildHand(float r, ModuleVariant variant)
     {
         var hand = new Node3D();
         var k = Mathf.Sqrt(r);
         var material = ModuleTitanium(variant);
         var fingers = new List<Node3D>();
-        Sec[] palm = [new(-0.095f, 0.011f, 0.034f, 0.036f), new(-0.07f, 0.014f, 0.039f, 0.04f), new(-0.03f, 0.015f, 0.038f, 0.037f), new(0, 0.013f, 0.026f, 0.026f)];
+        // 손바닥: Rx = 두께의 절반, F·B = 폭의 절반 (손목에서 손가락 뿌리로 넓어진다)
+        Sec[] palm = [
+            new(-0.094f, 0.012f, 0.040f, 0.040f), new(-0.065f, 0.0155f, 0.041f, 0.041f),
+            new(-0.03f, 0.016f, 0.036f, 0.036f), new(0, 0.012f, 0.025f, 0.025f),
+        ];
         Add(hand, Loft(palm.Select(x => x.Scale(k)).ToArray(), 28, 4), material);
-        foreach (var (z, len) in new[] { (0.026f, 0.072f), (0.009f, 0.082f), (-0.009f, 0.077f), (-0.026f, 0.062f) })
-        {
-            var L = len * k;
-            var f = new Node3D { Position = new Vector3(0, -0.093f * k, z * k), Rotation = new Vector3(0, 0, -0.22f) };
-            fingers.Add(f);
-            Add(f, new SphereMesh { Radius = 0.009f * k, Height = 0.018f * k, RadialSegments = 12, Rings = 8 }, material);
-            Add(f, Loft([new(0, 0.0055f, 0.006f, 0.006f), new(L * 0.5f, 0.0075f, 0.0078f, 0.0078f), new(L, 0.0085f, 0.009f, 0.009f)], 12, 3), material, new Vector3(0, -L, 0));
-            hand.AddChild(f);
-        }
-        var thumb = new Node3D { Position = new Vector3(-0.004f, -0.028f * k, 0.034f * k) };
+        foreach (var (z, len) in new[] { (0.029f, 0.075f), (0.0095f, 0.083f), (-0.0095f, 0.078f), (-0.028f, 0.062f) })
+            fingers.Add(BuildDigit(hand, new Vector3(0, -0.094f * k, z * k), len * k, 0.0095f * k, material, -0.18f, -0.35f));
+        var thumb = BuildDigit(hand, new Vector3(-0.006f * k, -0.03f * k, 0.036f * k), 0.062f * k, 0.0105f * k, material, 0, -0.3f);
         thumb.Rotation = new Vector3(-0.7f, 0, -0.35f);
-        Add(thumb, Loft([new(0, 0.0065f, 0.0068f, 0.0068f), new(0.03f * k, 0.009f, 0.0095f, 0.0095f), new(0.058f * k, 0.011f, 0.012f, 0.012f)], 12, 3), material, new Vector3(0, -0.058f * k, 0));
-        hand.AddChild(thumb);
         return (hand, fingers.ToArray(), thumb);
+    }
+
+    /// <summary>
+    /// 손가락 하나: 뿌리 마디(관절 구) → 첫 마디 → 가운데 관절 → 둥근 끝 마디. 끝 마디는 손바닥 쪽으로 늘 조금 굽어 있다.
+    /// 돌려주는 노드의 회전(Z)이 손가락 전체의 굽힘이다.
+    /// </summary>
+    static Node3D BuildDigit(Node3D hand, Vector3 at, float length, float radius, Material material, float baseCurl, float tipCurl)
+    {
+        var digit = new Node3D { Position = at, Rotation = new Vector3(0, 0, baseCurl) };
+        hand.AddChild(digit);
+        var l1 = length * 0.55f;
+        var l2 = length - l1;
+        Add(digit, new SphereMesh { Radius = radius * 1.03f, Height = radius * 2.06f, RadialSegments = 12, Rings = 8 }, material);
+        Add(digit, Loft([new(0, radius * 0.92f, radius * 0.9f, radius * 0.9f), new(l1, radius, radius * 0.97f, radius * 0.97f)], 14, 3), material, new Vector3(0, -l1, 0));
+        var tip = new Node3D { Position = new Vector3(0, -l1, 0), Rotation = new Vector3(0, 0, tipCurl) };
+        digit.AddChild(tip);
+        Add(tip, new SphereMesh { Radius = radius * 0.93f, Height = radius * 1.86f, RadialSegments = 12, Rings = 8 }, material);
+        Add(tip, Loft([
+            new(0, radius * 0.35f, radius * 0.33f, radius * 0.33f), new(radius * 0.6f, radius * 0.75f, radius * 0.72f, radius * 0.72f),
+            new(l2 * 0.55f, radius * 0.86f, radius * 0.84f, radius * 0.84f), new(l2, radius * 0.9f, radius * 0.88f, radius * 0.88f),
+        ], 14, 4), material, new Vector3(0, -l2, 0));
+        return digit;
     }
 
     static (Node3D Leg, Node3D Knee, Node3D Ankle) BuildLeg(
@@ -404,13 +424,16 @@ public partial class CyborgBody : Node3D
         Add(knee, Loft(shin.Select(x => x.Scale(r)).ToArray(), 40, 5), ModuleTitanium(shinVariant), new Vector3(0, -N - 0.032f, 0));
         // 발: 로컬 Y(발끝 방향) → +Z 로 눕힌다, F(앞)=발바닥
         var FL = P.Foot;
+        // 발: 둥근 뒤꿈치, 도톰한 발등, 둥글게 닫히는 발끝 (뾰족한 슬리퍼처럼 보이지 않게). F = 발바닥 쪽, B = 발등 쪽
         Sec[] foot = [
-            new(0, 0.022f, 0.028f, 0.022f),
-            new(FL * 0.12f, 0.03f, 0.033f, 0.04f),
-            new(FL * 0.4f, 0.036f, 0.03f, 0.03f),
-            new(FL * 0.72f, 0.042f, 0.024f, 0.02f),
-            new(FL * 0.92f, 0.036f, 0.016f, 0.014f),
-            new(FL, 0.012f, 0.006f, 0.005f)
+            new(-0.012f, 0.014f, 0.016f, 0.014f),
+            new(0, 0.026f, 0.030f, 0.026f),
+            new(FL * 0.12f, 0.033f, 0.034f, 0.042f),
+            new(FL * 0.4f, 0.039f, 0.031f, 0.034f),
+            new(FL * 0.72f, 0.045f, 0.026f, 0.024f),
+            new(FL * 0.9f, 0.040f, 0.020f, 0.018f),
+            new(FL * 0.98f, 0.026f, 0.013f, 0.012f),
+            new(FL, 0.012f, 0.006f, 0.006f)
         ];
         var ankle = new Node3D { Position = new Vector3(0, -N - 0.032f - 0.032f, -0.05f) };
         knee.AddChild(ankle);
@@ -452,8 +475,8 @@ public partial class CyborgBody : Node3D
         _ankleL.Rotation = new Vector3(-s * 0.12f * _amp, 0, 0);
         _ankleR.Rotation = new Vector3(s * 0.12f * _amp, 0, 0);
 
-        _armL.Rotation = new Vector3(-s * 0.35f * _amp, 0, 0.03f * _amp);
-        _armR.Rotation = new Vector3(s * 0.35f * _amp, 0, -0.03f * _amp);
+        _armL.Rotation = new Vector3(-s * 0.35f * _amp, 0, -ArmSplay + 0.03f * _amp);
+        _armR.Rotation = new Vector3(s * 0.35f * _amp, 0, ArmSplay - 0.03f * _amp);
         _elbowL.Rotation = new Vector3(-0.14f - Mathf.Max(0, s) * 0.22f * _amp, 0, 0);
         _elbowR.Rotation = new Vector3(-0.14f - Mathf.Max(0, -s) * 0.22f * _amp, 0, 0);
         _handL.Rotation = new Vector3(0.025f * s * _amp, 0, 0);
@@ -461,8 +484,8 @@ public partial class CyborgBody : Node3D
         var fingerCurl = 0.08f + 0.08f * _amp;
         _thumbL.Rotation = new Vector3(-0.7f + s * 0.025f * _amp, 0, -0.35f + fingerCurl * 0.14f);
         _thumbR.Rotation = new Vector3(-0.7f - s * 0.025f * _amp, 0, -0.35f - fingerCurl * 0.14f);
-        foreach (var finger in _fingersL) finger.Rotation = new Vector3(0, 0, -0.22f - fingerCurl);
-        foreach (var finger in _fingersR) finger.Rotation = new Vector3(0, 0, -0.22f - fingerCurl);
+        foreach (var finger in _fingersL) finger.Rotation = new Vector3(0, 0, -0.18f - fingerCurl);
+        foreach (var finger in _fingersR) finger.Rotation = new Vector3(0, 0, -0.18f - fingerCurl);
         var idle = 1 - _amp;
         _head.Rotation = new Vector3(Mathf.Sin(_phase * 0.37f) * 0.018f * idle,
             Mathf.Sin(_phase * 0.23f) * 0.065f * idle, 0);
