@@ -26,6 +26,8 @@ var            lastStatus = "";
 var skinBuf  = new Matrix4x4[BodyMesh.BoneCount];
 var last     = DateTime.UtcNow;
 var assetDir = Path.Combine(AppContext.BaseDirectory, "assets", "panoramas");
+// 측정용 (개발): DOLLY_MASK=1 이면 배경·바닥·후처리 없이 몸만 흰색으로 그린다 → 레퍼런스와 실루엣 비교
+var maskMode = Environment.GetEnvironmentVariable("DOLLY_MASK") == "1";
 bool nWas    = false;
 
 ctx.Window.Load += () =>
@@ -83,7 +85,7 @@ ctx.Window.Run(() =>
     var up    = Vector3.Cross(right, fwd);
 
     // 1. 배경
-    env.Draw(world.CamPos, fwd, right, up, fovTan, aspect, ctx.Height);
+    if (!maskMode) env.Draw(world.CamPos, fwd, right, up, fovTan, aspect, ctx.Height);
 
     var vp       = world.View() * world.Proj(aspect);
     var mirror   = Matrix4x4.CreateScale(1, -1, 1);
@@ -100,6 +102,7 @@ ctx.Window.Run(() =>
         bodyShader.Set("u_cam_back",  -fwd);
         bodyShader.Set("u_ambient",   new Vector3(0.50f, 0.52f, 0.58f));
         bodyShader.Set("u_roughness", 0.20f);   // 새틴 크롬: 하이라이트가 점이 아니라 넓게 번진다
+        bodyShader.Set("u_mask", maskMode ? 1 : 0);
         bodyShader.Set("u_l0_dir", lights[0].Dir); bodyShader.Set("u_l0_col", lights[0].Color);
         bodyShader.Set("u_l1_dir", lights[1].Dir); bodyShader.Set("u_l1_col", lights[1].Color);
         bodyShader.Set("u_l2_dir", lights[2].Dir); bodyShader.Set("u_l2_col", lights[2].Color);
@@ -118,7 +121,7 @@ ctx.Window.Run(() =>
     }
 
     // 2. 광택 바닥: 반사층 → 뒤집힌 인형 → 바닥 표면
-    if (studio)
+    if (studio && !maskMode)
     {
         floor.DrawReflection(env, vp, world.CamPos);
         DrawBodies(mirror, mirCam, true);
@@ -130,7 +133,7 @@ ctx.Window.Run(() =>
 
     // 4. 후처리 (블룸·색보정·비네트): 레퍼런스 일러스트의 공기감
     uint? shown = null;
-    if (post is not null) { post.Apply(ctx.ColorTex, ctx.Width, ctx.Height); shown = post.OutputFbo; }
+    if (post is not null && !maskMode) { post.Apply(ctx.ColorTex, ctx.Width, ctx.Height); shown = post.OutputFbo; }
 
     stream.PushFrame(ctx.ReadPixels(shown), ctx.Width, ctx.Height);
 });

@@ -106,6 +106,7 @@ sealed class Shader : IDisposable
         uniform vec3 u_ambient;
         uniform float u_roughness;
         uniform vec3 u_cam_back;
+        uniform int u_mask;
         """ + EnvRenderer.EnvGlsl + """
 
         float D_GGX(float NdH, float rough) {
@@ -166,7 +167,7 @@ sealed class Shader : IDisposable
             float sw = min(fwidth(v_seam) * 1.5, 0.003);
             float seam = 1.0 - smoothstep(0.0007, 0.0007 + sw, abs(v_seam));
             col *= 1.0 - 0.75 * seam;
-            frag_color = vec4(tonemap(col), 1.0);
+            frag_color = u_mask == 1 ? vec4(1.0) : vec4(tonemap(col), 1.0);
         }
         """;
 

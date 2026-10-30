@@ -249,9 +249,33 @@ public sealed partial class CyborgBody
 
     static float GetP(BodyShape s, string k, float def) => s.Values.TryGetValue(k, out var v) ? v : def;
 
+    /// <summary>
+    /// 디자인 보정: 실루엣 피팅값 위에 더하는 모프 값. 피팅의 다리 목표 치수는 레퍼런스 그림보다 가늘게 잡혀 있어서
+    /// (허벅지·종아리가 키 대비 20~30 % 가늘었다) 렌더링 화면에서 직접 잰 너비(키 대비)에 맞춰 둔다.
+    /// 여: 허벅지 0.105·종아리 0.063·어깨 0.221 / 남: 허벅지 0.097·종아리 0.065·어깨 0.287 (tools/bodyfit/ref 정면).
+    /// </summary>
+    static float StyleOffset(bool male, string k) => (male ? MaleStyle : FemaleStyle).TryGetValue(k, out var o) ? o : 0;
+    static readonly Dictionary<string, float> FemaleStyle = new()
+    {
+        ["measure/measure-thigh-circ"] = 1.2f, ["armslegs/upperleg-scale-horiz"] = 0.45f,
+        ["measure/measure-calf-circ"] = 0.6f, ["armslegs/lowerleg-scale-horiz"] = 0.45f,
+        ["measure/measure-waist-circ"] = 0.7f,
+        ["armslegs/upperarm-shoulder-muscle"] = 0.1f,
+    };
+    static readonly Dictionary<string, float> MaleStyle = new()
+    {
+        // 피팅은 허벅지를 짧게·정강이를 길게 잡아 무릎이 키의 63 % 높이 → 레퍼런스처럼 긴 허벅지(무릎 ~70 %)로
+        ["armslegs/upperlegs-height"] = 1.0f, ["armslegs/lowerlegs-height"] = -1.0f,
+        ["measure/measure-upperleg-height"] = 0.6f, ["measure/measure-lowerleg-height"] = -0.6f,
+        ["measure/measure-thigh-circ"] = 0.3f, ["armslegs/upperleg-muscle"] = 0.3f,
+        ["measure/measure-knee-circ"] = -0.4f,
+        ["measure/measure-waist-circ"] = 1.0f,
+        ["armslegs/upperarm-shoulder-muscle"] = 0.4f,
+    };
+
     static MhBody MhBuild(MhAssets A, bool male, BodyShape shape, bool normals)
     {
-        float P(string k, float d) => GetP(shape, k, d);
+        float P(string k, float d) => GetP(shape, k, d) + StyleOffset(male, k);
         var v = A.Compose(male, P);
         var B = BodyMesh.BoneCount;
 
@@ -312,6 +336,9 @@ public sealed partial class CyborgBody
             j[sn] = Vector3.Transform(j[sn] - Hj, q) + Hj;
             j[ft] = Vector3.Transform(j[ft] - Hj, q) + Hj;
         }
+
+        // 남성 다리: 허벅지 중간·종아리가 굵은 근육 윤곽 (모프는 사타구니 쪽만 키워서 축 기준 단면을 직접 키운다)
+        if (male) ThickenLegs(A, v, j, thigh: 1.6f, knee: 0.9f, calf: 1.02f);
 
         // 주된 뼈
         var owner = new Bone[v.Length];
@@ -454,6 +481,42 @@ public sealed partial class CyborgBody
                 if (row < top - navel.Y) groove = MathF.Max(groove, G(y - row - 0.12f * ax * ax) * (1 - Smooth(0.7f, 0.95f, ax)));
             groove = MathF.Max(groove, G(ax - 0.95f) * 0.8f * Smooth(-0.3f, 0.2f, y));      // 반달선
             v[i].Z -= depth * groove * region;
+        }
+    }
+
+    /// <summary>
+    /// 다리 단면을 뼈 축(엉덩이 → 무릎 → 발목)에서 바깥으로 키운다. 축 위치 u: 0 엉덩이, 1 무릎, 2 발목.
+    /// 배율 윤곽: 엉덩이 쪽은 70 %, 허벅지 위쪽(u 0.3)에서 thigh(레퍼런스는 위가 가장 굵은 역삼각형), 무릎(u 0.9~1.05)에서 knee, 종아리(u 1.35)에서 calf, 발목에서 1.
+    /// 다리 안쪽(몸 가운데 쪽)은 20 %만 키워 두 허벅지가 붙지 않게 한다. 다리 뼈 가중치만큼만.
+    /// </summary>
+    static void ThickenLegs(MhAssets A, Vector3[] v, Vector3[] j, float thigh, float knee, float calf)
+    {
+        var B = BodyMesh.BoneCount;
+        (float u, float f)[] prof = [(0f, 1 + (thigh - 1) * 0.7f), (0.3f, thigh), (0.9f, knee), (1.05f, knee), (1.35f, calf), (1.8f, 1 + (calf - 1) * 0.3f), (2f, 1f)];
+        float F(float u)
+        {
+            for (var k = 1; k < prof.Length; k++)
+                if (u <= prof[k].u) return prof[k - 1].f + (prof[k].f - prof[k - 1].f) * Smooth(prof[k - 1].u, prof[k].u, u);
+            return 1;
+        }
+        foreach (var (L, sd) in new[] { (true, 1f), (false, -1f) })
+        {
+            int t = (int)(L ? Bone.ThighL : Bone.ThighR), sn = (int)(L ? Bone.ShinL : Bone.ShinR), ft = (int)(L ? Bone.FootL : Bone.FootR);
+            Vector3 hip = j[t], kn = j[sn], an = j[ft];
+            foreach (var i in A.Used)
+            {
+                var w = MathF.Min(1, A.W14[i * B + t] + A.W14[i * B + sn]);
+                if (w <= 0 || v[i].X * sd < 0) continue;
+                var p = v[i];
+                float Seg(Vector3 a, Vector3 b, out Vector3 c) { var ab = b - a; var x = M.Clamp(Vector3.Dot(p - a, ab) / ab.LengthSquared(), 0, 1); c = a + ab * x; return x; }
+                var a1 = Seg(hip, kn, out var c1); var a2 = Seg(kn, an, out var c2);
+                var upper = Vector3.DistanceSquared(p, c1) <= Vector3.DistanceSquared(p, c2);
+                var u = upper ? a1 : 1 + a2; var c = upper ? c1 : c2;
+                var d = p - c;
+                var f = F(u);
+                if (d.X * sd < 0) f = 1 + (f - 1) * 0.2f;      // 안쪽: 레퍼런스처럼 허벅지 사이 틈이 남게
+                v[i] = c + d * (1 + (f - 1) * w);
+            }
         }
     }
 
