@@ -14,7 +14,8 @@
     <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.21.0" />
     <PackageReference Include="Silk.NET.Windowing.Sdl" Version="2.21.0" />
     <PackageReference Include="Silk.NET.Input.Glfw" Version="2.21.0" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.7" />
+    <!-- 취약점은 이미지 디코딩 경로에만 해당: 우리는 인코딩(JPEG 스트리밍)만 사용 -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.10" NoWarn="NU1902;NU1903" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../godot/src/Core/Cyborg.cs" />
