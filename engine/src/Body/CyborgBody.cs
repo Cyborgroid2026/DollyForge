@@ -72,6 +72,13 @@ public sealed partial class CyborgBody
     void Pose(Bone b, Vector3 euler) =>
         SetPose(b, _restRot[(int)b] * Transform3D.EulerToQuat(euler));
 
+    /// <summary>걷는 동작의 한 순간에 멈춘 자세 (선택 화면: 레퍼런스처럼 한 발을 내딛은 채 서 있다)</summary>
+    public void Showcase(float phase, float stride)
+    {
+        _phase = phase; _amp = stride;
+        Animate(0, 0);   // dt 0: 위상·보폭은 그대로, 자세만 계산
+    }
+
     public void Animate(float dt, float speed)
     {
         var target = M.Min(1, speed / 3);

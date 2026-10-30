@@ -46,7 +46,7 @@ sealed class World
 
     public World(CyborgBody female, CyborgBody male)
     {
-        Actors = [new Actor("여성형", female, new Vector3(-0.45f, 0, 0)), new Actor("남성형", male, new Vector3(0.45f, 0, 0))];
+        Actors = [new Actor("여성형", female, Home[0]), new Actor("남성형", male, Home[1])];
         UpdateStatus();
     }
 
@@ -63,7 +63,10 @@ sealed class World
     /// <summary>선택 화면에서는 둘 다, 조종 중에는 고른 인형만 씬에 있다</summary>
     public bool IsVisible(Actor a) => Selected < 0 || a == Player;
 
-    static readonly Vector3[] Home = [new(-0.45f, 0, 0), new(0.45f, 0, 0)];
+    // 레퍼런스 구도: 둘이 어깨가 닿을 만큼 붙어 서고, 여성형이 반걸음 앞
+    static readonly Vector3[] Home = [new(-0.24f, 0, 0.14f), new(0.26f, 0, -0.14f)];
+    // 걷는 동작의 한 순간 (위상, 보폭): 둘 다 한 발을 내딛은 자세
+    static readonly (float Phase, float Stride)[] ShowcaseStep = [(MathF.PI / 2, 0.33f), (MathF.PI / 2, 0.38f)];
 
     public void Select(int i)
     {
@@ -147,7 +150,7 @@ sealed class World
         if (player is null)
         {
             // 선택 화면: 두 인형을 마우스 좌우로 돌려 보고(턴테이블), 휠로 거리 조절
-            foreach (var a in Actors) { a.Speed = 0; a.Body.Animate(dt, 0); }
+            for (var k = 0; k < Actors.Length; k++) { Actors[k].Speed = 0; Actors[k].Body.Showcase(ShowcaseStep[k].Phase, ShowcaseStep[k].Stride); }
             var mid = (Actors[0].Pos + Actors[1].Pos) * 0.5f;
             var dist = 3.2f * CamDist / 2.6f;
             var target = mid + new Vector3(MathF.Sin(CamYaw) * dist, 1.15f, MathF.Cos(CamYaw) * dist);

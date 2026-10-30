@@ -19,8 +19,8 @@ sealed class EnvRenderer : IDisposable
     readonly uint _prog;
     readonly uint _vao, _vbo;
     readonly uint _tex;
-    readonly uint _cityTex, _wallTex;
-    readonly bool _cityOn, _wallOn;
+    readonly uint _cityTex, _wallTex, _matcapTex;
+    readonly bool _cityOn, _wallOn, _matcapOn;
 
     // 풀스크린 쿼드 (NDC −1..1)
     static readonly float[] Quad = [-1f,-1f, 1f,-1f, -1f,1f, 1f,1f];
@@ -37,6 +37,8 @@ sealed class EnvRenderer : IDisposable
         uniform int u_city_on;
         uniform sampler2D u_wall;
         uniform int u_wall_on;
+        uniform sampler2D u_matcap;
+        uniform int u_matcap_on;
 
         const float PI_E = 3.14159265;
         const vec3 ROOM_MIN = vec3(-7.0, 0.0, -5.0);
@@ -296,6 +298,8 @@ sealed class EnvRenderer : IDisposable
         _cityOn  = LoadStudioTexture(_cityTex, Path.Combine(studioDir, "city_window.jpg"));
         _wallTex = gl.GenTexture();
         _wallOn  = LoadStudioTexture(_wallTex, Path.Combine(studioDir, "walls.jpg"));
+        _matcapTex = gl.GenTexture();
+        _matcapOn  = LoadStudioTexture(_matcapTex, Path.Combine(studioDir, "matcap.png"));
 
         if (Directory.Exists(assetDir))
         {
@@ -304,7 +308,7 @@ sealed class EnvRenderer : IDisposable
                                .OrderBy(f => f)
                                .ToArray();
         }
-        Console.WriteLine($"[env] 스튜디오{(_cityOn ? "(창밖 사진)" : "")}{(_wallOn ? "(벽 그림)" : "")} + 파노라마 {_files.Length}개 (N 키 순환)");
+        Console.WriteLine($"[env] 스튜디오{(_cityOn ? "(창밖 사진)" : "")}{(_wallOn ? "(벽 그림)" : "")}{(_matcapOn ? "(매트캡)" : "")} + 파노라마 {_files.Length}개 (N 키 순환)");
     }
 
     // 스튜디오용 사진 (가장자리 고정, 밉맵). 없으면 false → 셰이더가 절차적 그림을 쓴다
@@ -349,6 +353,10 @@ sealed class EnvRenderer : IDisposable
         _gl.BindTexture(TextureTarget.Texture2D, _wallTex);
         s.Set("u_wall", unit + 2);
         s.Set("u_wall_on", _wallOn ? 1 : 0);
+        _gl.ActiveTexture(TextureUnit.Texture0 + unit + 3);
+        _gl.BindTexture(TextureTarget.Texture2D, _matcapTex);
+        s.Set("u_matcap", unit + 3);
+        s.Set("u_matcap_on", _matcapOn ? 1 : 0);
         s.Set("u_env_mode", Mode);
     }
 
@@ -434,5 +442,6 @@ sealed class EnvRenderer : IDisposable
         _gl.DeleteTexture(_tex);
         _gl.DeleteTexture(_cityTex);
         _gl.DeleteTexture(_wallTex);
+        _gl.DeleteTexture(_matcapTex);
     }
 }

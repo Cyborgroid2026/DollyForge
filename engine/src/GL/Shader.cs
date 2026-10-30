@@ -107,6 +107,9 @@ sealed class Shader : IDisposable
         uniform float u_roughness;
         uniform vec3 u_cam_back;
         uniform int u_mask;
+        uniform float u_matcap_gain;
+        uniform float u_matcap_mix;
+        uniform float u_curv_gain;
         """ + EnvRenderer.EnvGlsl + """
 
         float D_GGX(float NdH, float rough) {
@@ -154,7 +157,21 @@ sealed class Shader : IDisposable
                 vec3 nv = vec3(dot(N, right), dot(N, up), dot(N, u_cam_back));
                 // v_color carries module tint x baked cavity; 0.65 = standard chrome luminance
                 float albedo = dot(v_color, vec3(1.0 / 3.0)) / 0.65;
-                col = illusChrome(nv) * albedo * 0.72;
+                if (u_matcap_on == 1) {
+                    // matcap: the AI-made silver sphere (assets/studio/matcap.png, ZBrush-style material capture).
+                    // view-space normal -> point on the sphere photo; outer 4 % skipped (sphere rim / background)
+                    vec2 muv = vec2(nv.x, -nv.y) * 0.48 + 0.5;
+                    vec3 mc = pow(textureLod(u_matcap, muv, 2.0).rgb, vec3(2.2));          // slightly soft: satin streaks, not mirror
+                    mc = mix(vec3(dot(mc, vec3(0.2126, 0.7152, 0.0722))), mc, 0.55);         // less blue than the photo
+                    // blend with the soft illustrated studio: its tone spread matches the art, the matcap adds the liquid streaks
+                    col = mix(illusChrome(nv) * 0.62, mc * u_matcap_gain, u_matcap_mix) * albedo;
+                } else {
+                    col = illusChrome(nv) * albedo * 0.72;
+                }
+                // curvature shading: convex muscle ridges catch light, grooves fall dark (1/m from screen derivatives)
+                vec3 dPx = dFdx(v_pos), dPy = dFdy(v_pos);
+                float curv = 0.5 * (dot(dFdx(N), dPx) / max(dot(dPx, dPx), 1e-10) + dot(dFdy(N), dPy) / max(dot(dPy, dPy), 1e-10));
+                col *= 1.0 + u_curv_gain * clamp(curv * 0.04, -1.0, 1.0);
                 col += envGlossy(v_pos + N * 0.003, R, u_cam_back, 0.0) * F * 0.10;    // a hint of the room
             } else {
                 col = envGlossy(v_pos + N * 0.003, R, u_cam_back, 0.08) * F;
@@ -166,7 +183,7 @@ sealed class Shader : IDisposable
             // panel seam: thin anti-aliased groove where the baked plane distance crosses zero
             float sw = min(fwidth(v_seam) * 1.5, 0.003);
             float seam = 1.0 - smoothstep(0.0007, 0.0007 + sw, abs(v_seam));
-            col *= 1.0 - 0.75 * seam;
+            col *= 1.0 - 0.5 * seam;   // the art draws seams as faint hairlines
             frag_color = u_mask == 1 ? vec4(1.0) : vec4(tonemap(col), 1.0);
         }
         """;

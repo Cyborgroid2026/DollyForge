@@ -103,6 +103,9 @@ ctx.Window.Run(() =>
         bodyShader.Set("u_ambient",   new Vector3(0.50f, 0.52f, 0.58f));
         bodyShader.Set("u_roughness", 0.20f);   // 새틴 크롬: 하이라이트가 점이 아니라 넓게 번진다
         bodyShader.Set("u_mask", maskMode ? 1 : 0);
+        bodyShader.Set("u_matcap_gain", 0.42f);
+        bodyShader.Set("u_matcap_mix", 0.5f);   // 일러스트 스튜디오 톤 50 % + AI 크롬 구 매트캡 50 %
+        bodyShader.Set("u_curv_gain", 0.1f);
         bodyShader.Set("u_l0_dir", lights[0].Dir); bodyShader.Set("u_l0_col", lights[0].Color);
         bodyShader.Set("u_l1_dir", lights[1].Dir); bodyShader.Set("u_l1_col", lights[1].Color);
         bodyShader.Set("u_l2_dir", lights[2].Dir); bodyShader.Set("u_l2_col", lights[2].Color);

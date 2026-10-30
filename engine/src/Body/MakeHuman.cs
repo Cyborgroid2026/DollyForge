@@ -461,11 +461,11 @@ public sealed partial class CyborgBody
     /// <summary>
     /// 식스팩: 배 앞면(정면 +Z)을 안쪽으로 눌러 홈을 판다 (dm 단위).
     /// 세로 백선(가운데), 가로 건획 3줄(배꼽 위 0.3·0.78·1.22 dm, 위로 갈수록 바깥이 살짝 올라감), 바깥 반달선(|x| 0.95 dm).
-    /// 홈 단면은 가우스(σ 1.6 cm), 깊이 ~15 mm. 배꼽 아래와 가슴 아래 경계에서 부드럽게 사라진다.
+    /// 홈 단면은 가우스(σ 1.6 cm), 깊이 ~10 mm. 배꼽 아래와 가슴 아래 경계에서 부드럽게 사라진다.
     /// </summary>
     static void CarveAbs(MhAssets A, Vector3[] v, Vector3 navel, float nippleY)
     {
-        const float depth = 0.15f, w = 0.16f;          // 홈 폭은 기본 메시 간격(~1.5 cm)보다 넓어야 표현된다
+        const float depth = 0.10f, w = 0.16f;          // 홈 폭은 기본 메시 간격(~1.5 cm)보다 넓어야 표현된다
         var top = nippleY - 0.75f;                     // 흉근 아래
         float G(float d) => MathF.Exp(-d * d / (2 * w * w));
         foreach (var i in A.Used)
