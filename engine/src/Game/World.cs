@@ -83,10 +83,7 @@ sealed class World
         {
             case "Digit1": Select(0); break;
             case "Digit2": Select(1); break;
-            case "KeyC":
-                Selected = -1; CamYaw = 0; CamPitch = -0.12f;
-                for (var k = 0; k < Actors.Length; k++) { Actors[k].Pos = Home[k]; Actors[k].Yaw = 0; }
-                UpdateStatus(); break;
+            case "KeyC": ShowSelection(); break;
             case "KeyV" when Selected >= 0:
                 CamView = CamView switch
                 {
@@ -96,6 +93,15 @@ sealed class World
                 };
                 UpdateStatus(); break;
         }
+    }
+
+    /// <summary>선택 화면으로: 두 인형을 원위치에 세우고 정면에서 본다</summary>
+    public void ShowSelection()
+    {
+        Selected = -1; CamYaw = 0; CamPitch = -0.12f;
+        for (var k = 0; k < Actors.Length; k++) { Actors[k].Pos = Home[k]; Actors[k].Yaw = 0; }
+        _keys.Clear();
+        UpdateStatus();
     }
 
     void UpdateStatus()
@@ -125,6 +131,7 @@ sealed class World
                         break;
                     case "keyup":     _keys.Remove(ev.Key); break;
                     case "select":    Select(ev.Button); break;
+                    case "hello":     ShowSelection(); break;
                     case "wheel":     CamDist = M.Clamp(CamDist * MathF.Exp(ev.Dy * 0.001f), 1.0f, 6.0f); break;
                     case "mousemove":
                         CamYaw += ev.Dx * 0.003f;

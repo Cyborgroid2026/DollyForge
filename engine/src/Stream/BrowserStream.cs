@@ -31,7 +31,6 @@ sealed class BrowserStream : IDisposable
 
     // 입력 큐 (게임 루프가 드레인)
     public readonly Queue<InputEvent> InputQueue = new();
-    readonly object _inputLock = new();
 
     volatile byte[]? _lastFrame;
     volatile string  _status = "{}";
@@ -117,10 +116,12 @@ sealed class BrowserStream : IDisposable
         if (ctx.Request.IsWebSocketRequest && path == "/ws")
         {
             var wsc = await ctx.AcceptWebSocketAsync(null);
+            // 접속할 때마다 캐릭터 선택부터 (게임 루프가 받아 선택 화면으로 되돌린다)
+            lock (InputQueue) InputQueue.Enqueue(new InputEvent { Type = "hello", Key = "" });
             lock (_wsLock) _ws.Add(wsc.WebSocket);
             lock (_wsLock)
             {
-                wsc.WebSocket.SendAsync(Encoding.UTF8.GetBytes(_status), WebSocketMessageType.Text, true, default).GetAwaiter().GetResult();
+                wsc.WebSocket.SendAsync(Encoding.UTF8.GetBytes(_status = """{"state":"select"}"""), WebSocketMessageType.Text, true, default).GetAwaiter().GetResult();
                 if (_lastFrame is { } f) wsc.WebSocket.SendAsync(f, WebSocketMessageType.Binary, true, default).GetAwaiter().GetResult();
             }
             await ReadInputLoop(wsc.WebSocket);
@@ -211,7 +212,7 @@ sealed class BrowserStream : IDisposable
             if (r.TryGetProperty("dy",     out var dy)) ev.Dy    = dy.GetSingle();
             if (r.TryGetProperty("button", out var bt)) ev.Button = bt.GetInt32();
             if (r.TryGetProperty("down",   out var dn)) ev.Down  = dn.GetBoolean();
-            lock (_inputLock) InputQueue.Enqueue(ev);
+            lock (InputQueue) InputQueue.Enqueue(ev);
         }
         catch { }
     }
