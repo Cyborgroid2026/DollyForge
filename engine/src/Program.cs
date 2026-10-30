@@ -12,6 +12,7 @@ var female = CyborgBody.Build(0);
 var male   = CyborgBody.Build(1);
 Console.WriteLine($"[engine] 여성형 {female.Mesh.Vertices.Length:N0}  남성형 {male.Mesh.Vertices.Length:N0}");
 // 레퍼런스 그림의 근육 조각(Marigold 법선 디테일)을 두 인형 법선에 입힌다
+for (var pass = 0; pass < CyborgBody.SilPasses; pass++) CyborgBody.FitReferenceSilhouette(female, male);   // 윤곽을 그림 윤곽에 (정점 이동)
 CyborgBody.ApplyReferenceDetail(female, male);
 
 // ── GL 컨텍스트 + 스트리밍 ────────────────────────────────────────────────
@@ -132,6 +133,8 @@ ctx.Window.Run(() =>
     // 2. 광택 바닥: 반사층 → 뒤집힌 인형 → 바닥 표면
     if (studio && !maskMode)
     {
+        // 선택 화면: 레퍼런스 그림처럼 두 인형 발밑에 빛나는 별
+        floor.Stars = world.Selected < 0 ? world.Actors.Select(a => a.Pos).ToArray() : [];
         floor.DrawReflection(env, vp, world.CamPos);
         DrawBodies(mirror, mirCam, true);
         floor.DrawSurface(env, vp, world.CamPos);

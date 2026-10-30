@@ -46,10 +46,16 @@ sealed class FloorRenderer : IDisposable
         _gl.Disable(EnableCap.Blend);
     }
 
+    /// <summary>바닥에 빛나는 네 갈래 별을 그릴 자리 (최대 2개, 선택 화면의 인형 발밑)</summary>
+    public Vector3[] Stars = [];
+
     void Draw(EnvRenderer env, Matrix4x4 vp, Vector3 camPos, int pass)
     {
         _shader.Use();
         env.Bind(_shader);
+        _shader.Set("u_star_n", Math.Min(Stars.Length, 2));
+        if (Stars.Length > 0) _shader.Set("u_star0", Stars[0]);
+        if (Stars.Length > 1) _shader.Set("u_star1", Stars[1]);
         _shader.Set("u_vp", vp);
         _shader.Set("u_cam_pos", camPos);
         _shader.Set("u_pass", pass);

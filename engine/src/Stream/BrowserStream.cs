@@ -236,6 +236,9 @@ sealed class BrowserStream : IDisposable
             #pick button:hover{background:rgba(70,80,100,.85);border-color:#dfe6f2}
             #title{position:fixed;top:5vh;left:0;right:0;text-align:center;color:#dfe6f2;font:600 22px sans-serif;
               letter-spacing:.06em;display:none;text-shadow:0 0 8px #000}
+            .spark{position:fixed;bottom:13vh;width:4.2vh;height:4.2vh;display:none;pointer-events:none;
+              filter:drop-shadow(0 0 6px rgba(220,230,255,.9))}
+            #sparkL{left:9vw} #sparkR{right:9vw}
           </style>
         </head>
         <body>
@@ -245,6 +248,8 @@ sealed class BrowserStream : IDisposable
         <div id="view"></div>
         <div id="title">조종할 사이보그를 고르세요</div>
         <div id="pick"><button data-i="0">여성형 [1]</button><button data-i="1">남성형 [2]</button></div>
+        <svg class="spark" id="sparkL" viewBox="-1 -1 2 2"><path d="M0-1Q.12-.12 1 0Q.12 .12 0 1Q-.12 .12-1 0Q-.12-.12 0-1Z" fill="#eef2ff"/></svg>
+        <svg class="spark" id="sparkR" viewBox="-1 -1 2 2"><path d="M0-1Q.12-.12 1 0Q.12 .12 0 1Q-.12 .12-1 0Q-.12-.12 0-1Z" fill="#eef2ff"/></svg>
         <script>
         'use strict';
         const c   = document.getElementById('c');
@@ -259,6 +264,7 @@ sealed class BrowserStream : IDisposable
         function status(st){
           const sel=st.state==='select'; selecting=sel;
           pick.style.display=sel?'flex':'none'; title.style.display=sel?'block':'none';
+          document.querySelectorAll('.spark').forEach(s=>s.style.display=sel?'block':'none');
           view.textContent=sel?'':st.who+' · '+st.view;
           hint.textContent=sel?'1·2 또는 카드로 선택 | 휠 거리 | N 스튜디오/파노라마'
             :'클릭→마우스 캡처 | WASD 이동 · Shift 달리기 | 마우스 시점 | V 1인칭/3인칭 뒤/3인칭 앞 | 휠 거리 | C 캐릭터 선택 | N 배경 | Esc 해제';

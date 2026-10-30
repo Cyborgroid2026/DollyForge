@@ -212,6 +212,20 @@ sealed class Shader : IDisposable
         out vec4 frag_color;
         uniform vec3 u_cam_pos;
         uniform int u_pass;
+        uniform int u_star_n;
+        uniform vec3 u_star0;
+        uniform vec3 u_star1;
+
+        // four-pointed sparkle lying on the floor under each doll (select screen, as in the reference art):
+        // |x|^(1/2) + |z|^(1/2) < 1: four thin arms (long sideways), bright core and soft halo
+        float sparkle(vec2 p, vec3 c) {
+            vec2 q = (p - c.xz) / vec2(0.42, 0.11);
+            float a = sqrt(abs(q.x)) + sqrt(abs(q.y));              // sharper than an astroid: thin lens-flare arms
+            float body = 1.0 - smoothstep(0.8, 1.0, a);
+            float core = exp(-dot(q, q) * 40.0);
+            float halo = exp(-length(q) * 5.0) * 0.12;
+            return body * 0.75 + core * 1.0 + halo;
+        }
         """ + EnvRenderer.EnvGlsl + """
 
         void main() {
@@ -227,7 +241,11 @@ sealed class Shader : IDisposable
             float aa = fwidth(v_pos.x) + fwidth(v_pos.z);
             float seam = band(0.75 - max(g.x, g.y), 0.003, aa);
             vec3 base = vec3(0.004, 0.0045, 0.006) + vec3(0.03) * seam;
-            frag_color = vec4(tonemap(base), 1.0 - refl * (1.0 - seam));
+            float st = 0.0;
+            if (u_star_n > 0) st += sparkle(v_pos.xz, u_star0);
+            if (u_star_n > 1) st += sparkle(v_pos.xz, u_star1);
+            base += st * vec3(1.6, 1.7, 1.9);
+            frag_color = vec4(tonemap(base), max(1.0 - refl * (1.0 - seam), clamp(st, 0.0, 1.0)));
         }
         """;
 }

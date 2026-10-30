@@ -140,6 +140,7 @@ public sealed partial class CyborgBody
         var outDir = args.Length > 1 ? args[1] : ".";
         Directory.CreateDirectory(outDir);
         var female = Build(0); var male = Build(1);
+        if (!args.Contains("--nosil")) for (var pass = 0; pass < SilPasses; pass++) FitReferenceSilhouette(female, male);
         if (!args.Contains("--nodetail")) ApplyReferenceDetail(female, male);
         var bodies = new[] { female.Mesh, male.Mesh };
         const int W = 992, H = 1072;
@@ -148,6 +149,7 @@ public sealed partial class CyborgBody
             var flip = view == 0 ? 1f : -1f;
             var depth = new float[W * H]; Array.Fill(depth, float.NegativeInfinity);
             var normal = new Vector3[W * H];
+            var who = new sbyte[W * H];
             for (var f = 0; f < 2; f++)
             {
                 var b = bodies[f];
@@ -170,23 +172,185 @@ public sealed partial class CyborgBody
                             if (w0 < 0 || w1 < 0 || w2 < 0) continue;
                             var z = w0 * a.Z + w1 * bb.Z + w2 * c.Z;
                             var k = y * W + x;
-                            if (z > depth[k]) { depth[k] = z; normal[k] = Vector3.Normalize(w0 * n[i0] + w1 * n[i1] + w2 * n[i2]); }
+                            if (z > depth[k]) { depth[k] = z; who[k] = (sbyte)f; normal[k] = Vector3.Normalize(w0 * n[i0] + w1 * n[i1] + w2 * n[i2]); }
                         }
                 }
             }
             using var img = new Image<Rgb24>(W, H);
+            using var ids = new Image<Rgb24>(W, H);   // 인형별 영역: R = 여성형, G = 남성형
             for (var y = 0; y < H; y++)
                 for (var x = 0; x < W; x++)
                 {
                     var k = y * W + x;
                     if (float.IsNegativeInfinity(depth[k])) continue;
+                    ids[x, y] = who[k] == 0 ? new Rgb24(255, 0, 0) : new Rgb24(0, 255, 0);
                     var c = (normal[k] * 0.5f + new Vector3(0.5f)) * 255f;
                     img[x, y] = new Rgb24((byte)Math.Clamp(c.X, 1, 255), (byte)Math.Clamp(c.Y, 1, 255), (byte)Math.Clamp(c.Z, 1, 255));
                 }
             var file = Path.Combine(outDir, view == 0 ? "ours-front.png" : "ours-back.png");
             img.SaveAsPng(file);
+            ids.SaveAsPng(Path.Combine(outDir, view == 0 ? "ours-id-front.png" : "ours-id-back.png"));
             Console.WriteLine($"[refnormals] {file}");
         }
+    }
+
+    // ─── 실루엣 맞춤 (정점 이동) ───────────────────────────────────────────
+
+    const float SilMaxShift = 0.03f;   // 최대 이동 (m)
+    const int SilSearch = 30;          // 윤곽을 찾아 걷는 최대 거리 (px)
+    const int SilSpread = 40;          // 이동량을 메시로 퍼뜨리는 횟수
+    public const int SilPasses = 2;
+    const int SilSmooth = 15;          // 이동량 필드 전체 평활 횟수 (옆구리 줄무늬 방지)    // 맞춘 뒤 다시 재서 남은 차이를 한 번 더
+
+    /// <summary>
+    /// 두 인형의 윤곽을 레퍼런스 그림 속 윤곽(assets/body/ref-silhouette-*.png, SAM 인형별 영역)에 맞춘다.
+    /// 앞·뒤 그림 각각에서 메시 윤곽 정점(시선과 거의 수직인 보이는 정점)이 그림 윤곽까지 바깥·안쪽으로 몇 px 인지 재고,
+    /// 2D 정렬의 역변환으로 쉼 자세 이동량(m)으로 되돌려 메시를 따라 퍼뜨린다. 다른 인형에 가려 그림 윤곽을 알 수 없는 곳은 건너뛴다.
+    /// 머리·손·발은 맞추지 않는다. 정점을 옮긴 만큼 법선도 고친다 (근육 디테일 이식보다 먼저).
+    /// </summary>
+    public static void FitReferenceSilhouette(CyborgBody female, CyborgBody male)
+    {
+        var dir = Path.Combine(AppContext.BaseDirectory, "assets", "body");
+        var sil = new bool[2][][];
+        int W = 0, H = 0;
+        for (var view = 0; view < 2; view++)
+        {
+            var path = Path.Combine(dir, view == 0 ? "ref-silhouette-front.png" : "ref-silhouette-back.png");
+            if (!File.Exists(path)) return;
+            using var img = Image.Load<Rgb24>(path);
+            W = img.Width; H = img.Height;
+            var fm = new bool[W * H]; var mm = new bool[W * H];
+            img.ProcessPixelRows(rows =>
+            {
+                for (var y = 0; y < rows.Height; y++)
+                {
+                    var row = rows.GetRowSpan(y);
+                    for (var x = 0; x < row.Length; x++) { fm[y * W + x] = row[x].R > 127; mm[y * W + x] = row[x].G > 127; }
+                }
+            });
+            sil[view] = [fm, mm];
+        }
+        var bodies = new[] { female.Mesh, male.Mesh };
+        for (var f = 0; f < 2; f++)
+        {
+            var b = bodies[f];
+            var shift = new Vector3[b.Vertices.Length]; var count = new float[b.Vertices.Length];
+            for (var view = 0; view < 2; view++)
+            {
+                var flip = view == 0 ? 1f : -1f;
+                var p = Place(b, view, f, out var lin);
+                var own = sil[view][f]; var other = sil[view][1 - f];
+                var (top, bottom, _) = RefPlace[view, f];
+                var s = (bottom - top) / b.Vertices.Max(v => v.Y);
+                // 이 인형만 래스터화: 윤곽 정점이 다른 몸 부위에 가리지 않았는지 (같은 인형 안 자기 가림)
+                var depth = new float[W * H]; Array.Fill(depth, float.NegativeInfinity);
+                var owner = new sbyte[W * H]; Array.Fill(owner, (sbyte)-1);
+                Rasterize(p, b.Indices, depth, owner, W, H, 0);
+                bool Own(int x, int y) => x >= 0 && y >= 0 && x < W && y < H && own[y * W + x];
+                bool Other(int x, int y) => x >= 0 && y >= 0 && x < W && y < H && other[y * W + x];
+                for (var i = 0; i < p.Length; i++)
+                {
+                    // 머리(매끈한 달걀)·손가락·발가락은 그림 윤곽과 맞추면 오히려 흐트러진다
+                    var ext = 0f;
+                    for (var k = 0; k < 4; k++)
+                        if (b.Bones[i * 4 + k] is (int)Bone.Head or (int)Bone.HandL or (int)Bone.HandR or (int)Bone.FootL or (int)Bone.FootR)
+                            ext += b.Weights[i * 4 + k];
+                    if (ext > 0.3f) continue;
+                    var n = b.Normals[i];
+                    var nc = new Vector2(flip * n.X, -n.Y);                 // 화면 방향 (y 아래)
+                    if (MathF.Abs(flip * n.Z) > 0.3f || nc.Length() < 0.5f) continue;   // 윤곽 정점만
+                    nc = Vector2.Normalize(nc);
+                    int px = (int)MathF.Round(p[i].X), py = (int)MathF.Round(p[i].Y);
+                    if (px < 1 || py < 1 || px >= W - 1 || py >= H - 1) continue;
+                    // 실제로 보이는 윤곽인가: 바깥쪽 2 px 은 우리 몸이 아니어야
+                    var ox = (int)MathF.Round(p[i].X + nc.X * 2); var oy = (int)MathF.Round(p[i].Y + nc.Y * 2);
+                    if (ox >= 0 && oy >= 0 && ox < W && oy < H && !float.IsNegativeInfinity(depth[oy * W + ox])) continue;
+                    // 그림 윤곽까지 걷기: 안이면 바깥으로(+), 밖이면 안으로(−)
+                    var inside = Own(px, py);
+                    float d = float.NaN;
+                    for (var step = 1; step <= SilSearch; step++)
+                    {
+                        var q = p[i].AsVector2() + nc * (inside ? step : -step);
+                        int qx = (int)MathF.Round(q.X), qy = (int)MathF.Round(q.Y);
+                        if (Other(qx, qy)) break;                                   // 다른 인형에 닿음: 윤곽 모름
+                        if (Own(qx, qy) != inside) { d = inside ? step - 0.5f : -(step - 0.5f); break; }
+                    }
+                    if (float.IsNaN(d)) continue;
+                    // 그림 윤곽 너머가 다른 인형이면(가려진 경계) 믿지 않는다
+                    var bx = (int)MathF.Round(p[i].X + nc.X * (d + 2)); var by = (int)MathF.Round(p[i].Y + nc.Y * (d + 2));
+                    if (Other(bx, by)) continue;
+                    // 픽셀 이동 → 쉼 자세 이동: 2D 변환 선형부의 역 → 크기 s → 3D (후면은 x 뒤집힘, 화면 y 는 아래)
+                    var L = lin[i]; var det = L.X * L.W - L.Y * L.Z;
+                    if (MathF.Abs(det) < 1e-4f) continue;
+                    var dv = nc * d;
+                    var bx2 = (L.W * dv.X - L.Y * dv.Y) / det; var by2 = (-L.Z * dv.X + L.X * dv.Y) / det;
+                    var move = new Vector3(flip * bx2 / s, -by2 / s, 0);
+                    if (move.Length() > SilMaxShift) move = Vector3.Normalize(move) * SilMaxShift;
+                    shift[i] += move; count[i] += 1;
+                }
+            }
+            // 퍼뜨리기: 정한 정점은 그 값으로 두고, 나머지는 이웃 평균 (단면이 통째로 자연스럽게)
+            var adj = Adjacency(b);
+            var fixedV = count.Select(c => c > 0).ToArray();
+            for (var i = 0; i < shift.Length; i++) if (fixedV[i]) shift[i] /= count[i];
+            var tmp = new Vector3[shift.Length];
+            for (var it = 0; it < SilSpread; it++)
+            {
+                for (var i = 0; i < shift.Length; i++)
+                {
+                    if (fixedV[i] || adj[i].Length == 0) { tmp[i] = shift[i]; continue; }
+                    var a = Vector3.Zero; foreach (var j in adj[i]) a += shift[j];
+                    tmp[i] = a / adj[i].Length;
+                }
+                (shift, tmp) = (tmp, shift);
+            }
+            // 윤곽 값 자체도 이웃과 고르게: 앞·뒤 그림 윤곽이 만나는 옆구리에서 정점마다 들쭉날쭉하면 줄무늬가 된다
+            for (var it = 0; it < SilSmooth; it++)
+            {
+                for (var i = 0; i < shift.Length; i++)
+                {
+                    if (adj[i].Length == 0) { tmp[i] = shift[i]; continue; }
+                    var a = shift[i]; foreach (var j in adj[i]) a += shift[j];
+                    tmp[i] = a / (adj[i].Length + 1);
+                }
+                (shift, tmp) = (tmp, shift);
+            }
+            tmp = shift;
+            var maxMove = 0f;
+            var before = GeometricNormals(b);
+            for (var i = 0; i < b.Vertices.Length; i++) { b.Vertices[i] += tmp[i]; maxMove = MathF.Max(maxMove, tmp[i].Length()); }
+            // 법선: 다시 계산하지 않고 이동 전후 기하 법선의 차이만 더한다 (달걀 머리 같은 해석적 법선 보존)
+            var after = GeometricNormals(b);
+            for (var i = 0; i < b.Normals.Length; i++)
+                b.Normals[i] = Vector3.Normalize(b.Normals[i] + (after[i] - before[i]));
+            Console.WriteLine($"[silhouette] {(f == 0 ? "여성형" : "남성형")}: 윤곽 정점 {fixedV.Count(x => x):N0}개 기준, 최대 이동 {maxMove * 100:0.0} cm");
+        }
+    }
+
+    static int[][] Adjacency(BodyMesh b)
+    {
+        var sets = new HashSet<int>[b.Vertices.Length];
+        for (var i = 0; i < sets.Length; i++) sets[i] = [];
+        for (var t = 0; t < b.Indices.Length; t += 3)
+            for (var e = 0; e < 3; e++)
+            {
+                int a = b.Indices[t + e], c = b.Indices[t + (e + 1) % 3];
+                sets[a].Add(c); sets[c].Add(a);
+            }
+        return sets.Select(x => x.ToArray()).ToArray();
+    }
+
+    static Vector3[] GeometricNormals(BodyMesh b)
+    {
+        var n = new Vector3[b.Vertices.Length];
+        for (var t = 0; t < b.Indices.Length; t += 3)
+        {
+            int a = b.Indices[t], c = b.Indices[t + 1], d = b.Indices[t + 2];
+            var fn = Vector3.Cross(b.Vertices[c] - b.Vertices[a], b.Vertices[d] - b.Vertices[a]);
+            n[a] += fn; n[c] += fn; n[d] += fn;
+        }
+        for (var i = 0; i < n.Length; i++) n[i] = n[i].LengthSquared() > 1e-20f ? Vector3.Normalize(n[i]) : Vector3.Zero;
+        return n;
     }
 
     // ─── 그림 자세에 겹치기 ────────────────────────────────────────────────
@@ -248,7 +412,10 @@ public sealed partial class CyborgBody
     /// 먼저 정수리·발끝·중심선으로 크기·자리를 맞추고, 그림의 관절(RTMPose)이 있으면
     /// 뼈마다 2D 변환(몸통: 어깨·골반 4점 아핀, 팔·다리: 마디 방향·길이)을 스키닝 가중치로 섞어 그림 자세에 겹친다.
     /// </summary>
-    static Vector3[] Place(BodyMesh b, int view, int f)
+    static Vector3[] Place(BodyMesh b, int view, int f) => Place(b, view, f, out _);
+
+    /// <param name="lin">정점별 2D 변환의 선형부 (a b c d) — 픽셀 이동을 쉼 자세 공간으로 되돌릴 때</param>
+    static Vector3[] Place(BodyMesh b, int view, int f, out Vector4[] lin)
     {
         var flip = view == 0 ? 1f : -1f;
         var (top, bottom, cx) = RefPlace[view, f];
@@ -258,6 +425,7 @@ public sealed partial class CyborgBody
         Vector2 P(Vector3 v) => new(cx + flip * v.X * s, bottom - v.Y * s);
         var basePos = b.Vertices.Select(P).ToArray();
         var pose = RefPose()?[view][f];
+        lin = Enumerable.Repeat(new Vector4(1, 0, 0, 1), b.Vertices.Length).ToArray();
         if (pose is null) return b.Vertices.Select((v, i) => new Vector3(basePos[i], flip * v.Z + lift)).ToArray();
 
         Vector2 J(Bone bone) => P(b.Global[(int)bone].Origin);
@@ -280,12 +448,16 @@ public sealed partial class CyborgBody
         var res = new Vector3[b.Vertices.Length];
         for (var i = 0; i < res.Length; i++)
         {
-            var q = Vector2.Zero;
+            var q = Vector2.Zero; var l = Vector4.Zero;
             for (var k = 0; k < 4; k++)
             {
                 var w = b.Weights[i * 4 + k];
-                if (w > 0) q += t[b.Bones[i * 4 + k]].Apply(basePos[i]) * w;
+                if (w <= 0) continue;
+                var tk = t[b.Bones[i * 4 + k]];
+                q += tk.Apply(basePos[i]) * w;
+                l += new Vector4(tk.A, tk.B, tk.C, tk.D) * w;
             }
+            lin[i] = l;
             res[i] = new Vector3(q, flip * b.Vertices[i].Z + lift);
         }
         return res;
