@@ -12,7 +12,7 @@ public partial class CyborgBody : Node3D
 {
     // ------------------------------------------------------------------ 로프트
 
-    record struct Sec(float Y, float Rx, float F, float B, float Cx = 0, float Cz = 0, float Sq = 1, float Bust = 0, float Glute = 0, float Pec = 0)
+    record struct Sec(float Y, float Rx, float F, float B, float Cx = 0, float Cz = 0, float Sq = 1, float Bust = 0, float Glute = 0, float Pec = 0, float Abs = 0)
     {
         public Sec Scale(float k) => this with { Rx = Rx * k, F = F * k, B = B * k };
     }
@@ -30,7 +30,7 @@ public partial class CyborgBody : Node3D
         // 구간마다 잘라 내면(clamp) 단면 경계에서 기울기가 끊겨 띠 모양 굴곡이 생긴다. 그대로 이어 C1 연속을 지킨다.
         float C(Func<Sec, float> f) => Catmull(f(a), f(b), f(c), f(d), t);
         return new Sec(C(x => x.Y), Mathf.Max(C(x => x.Rx), 0.001f), Mathf.Max(C(x => x.F), 0.001f), Mathf.Max(C(x => x.B), 0.001f),
-            C(x => x.Cx), C(x => x.Cz), C(x => x.Sq), Mathf.Max(C(x => x.Bust), 0), Mathf.Max(C(x => x.Glute), 0), Mathf.Max(C(x => x.Pec), 0));
+            C(x => x.Cx), C(x => x.Cz), C(x => x.Sq), Mathf.Max(C(x => x.Bust), 0), Mathf.Max(C(x => x.Glute), 0), Mathf.Max(C(x => x.Pec), 0), Mathf.Max(C(x => x.Abs), 0));
     }
 
     static float AngDiff(float a, float b) => Mathf.Atan2(Mathf.Sin(a - b), Mathf.Cos(a - b));
@@ -58,6 +58,7 @@ public partial class CyborgBody : Node3D
                 z -= s.Glute * g;
                 x += s.Glute * g * c * 0.22f;
             }
+            if (s.Abs > 0) z += s.Abs * Bump(th, Mathf.Pi / 2 + side * 0.26f, 0.16f);
         }
         return new Vector3(x, s.Y, z);
     }
@@ -111,51 +112,51 @@ public partial class CyborgBody : Node3D
         (float X, float Y) Hip, (float Thigh, float Shin, float R, float Q) Leg, float Foot, float WaistY,
         float UnderbustY, float LowHipY);
 
-    // 여성형: 성체 키 1.80 m. 극적인 모래시계 — 넓은 골반·극세 허리·풍성한 가슴·둥근 둔부·가는 팔다리.
+    // 여성형: 성체 키 1.80 m. 캐릭터 디자인 확정본 — 극적 모래시계·풍성한 가슴·둥근 둔부·가는 팔다리.
     static readonly Proportions Female = new(
         [
-            new(0.70f,  0.0297f, 0.030f, 0.035f, Cz: -0.004f),   // 가랑이
+            new(0.70f,  0.0297f, 0.030f, 0.035f, Cz: -0.004f),
             new(0.725f, 0.0839f, 0.052f, 0.058f, Cz: -0.004f),
-            new(0.76f,  0.1440f, 0.073f, 0.079f, Glute: 0.010f),
-            new(0.80f,  0.1780f, 0.089f, 0.097f, Glute: 0.024f),
-            new(0.83f,  0.2000f, 0.097f, 0.112f, Glute: 0.038f),  // 골반 최대
-            new(0.88f,  0.1960f, 0.101f, 0.118f, Glute: 0.038f),
-            new(0.945f, 0.1720f, 0.095f, 0.108f, Glute: 0.020f),
-            new(0.99f,  0.1360f, 0.080f, 0.088f, Glute: 0.008f),
-            new(1.05f,  0.0880f, 0.062f, 0.060f),                  // 극세 허리
-            new(1.11f,  0.1080f, 0.071f, 0.069f),
-            new(1.16f,  0.1300f, 0.079f, 0.077f, Bust: 0.022f),
-            new(1.22f,  0.1530f, 0.085f, 0.083f, Bust: 0.050f),
-            new(1.265f, 0.1570f, 0.084f, 0.083f, Bust: 0.048f),
-            new(1.31f,  0.1550f, 0.073f, 0.077f, Bust: 0.018f),
-            new(1.35f,  0.1480f, 0.056f, 0.066f),                  // 쇄골 라인
-            new(1.385f, 0.0930f, 0.043f, 0.049f),
-            new(1.4f,   0.0481f, 0.037f, 0.037f),
+            new(0.76f,  0.1460f, 0.074f, 0.080f, Glute: 0.012f),
+            new(0.80f,  0.1840f, 0.090f, 0.100f, Glute: 0.030f),
+            new(0.83f,  0.2140f, 0.098f, 0.116f, Glute: 0.052f),  // 골반 최대
+            new(0.88f,  0.2100f, 0.102f, 0.122f, Glute: 0.052f),
+            new(0.945f, 0.1800f, 0.096f, 0.112f, Glute: 0.026f),
+            new(0.99f,  0.1340f, 0.078f, 0.086f, Glute: 0.008f),
+            new(1.05f,  0.0800f, 0.056f, 0.054f),                  // 극세 허리
+            new(1.11f,  0.1040f, 0.068f, 0.066f),
+            new(1.16f,  0.1280f, 0.077f, 0.075f, Bust: 0.026f),
+            new(1.22f,  0.1510f, 0.083f, 0.081f, Bust: 0.064f),
+            new(1.265f, 0.1550f, 0.082f, 0.081f, Bust: 0.062f),
+            new(1.31f,  0.1530f, 0.071f, 0.075f, Bust: 0.022f),
+            new(1.35f,  0.1460f, 0.054f, 0.064f),
+            new(1.385f, 0.0910f, 0.042f, 0.048f),
+            new(1.4f,   0.0481f, 0.036f, 0.036f),
         ],
-        1.0f, (1.36f, 1.5f, 0.040f), (1.425f, 0.86f), (0.155f, 1.315f), (0.300f, 0.260f, 0.94f, 0.008f),
+        1.0f, (1.36f, 1.5f, 0.040f), (1.425f, 0.86f), (0.152f, 1.315f), (0.295f, 0.255f, 0.86f, 0.007f),
         (0.086f, 0.84f), (0.46f, 0.44f, 1.06f, 0.045f), 0.228f, 1.05f, 1.16f, 0.94f);
 
-    // 남성형: 성체 키 1.86 m. 역삼각 실루엣 — 넓은 어깨·강한 가슴근육·V-테이퍼 허리·두꺼운 팔다리·탄탄한 둔부.
+    // 남성형: 성체 키 1.86 m. 캐릭터 디자인 확정본 — 역삼각·복근·강한 팔다리·탄탄한 둔부.
     static readonly Proportions Male = new(
         [
             new(0.70f,  0.036f,  0.036f, 0.042f),
             new(0.735f, 0.112f,  0.068f, 0.076f),
             new(0.775f, 0.150f,  0.082f, 0.092f, Glute: 0.008f),
             new(0.82f,  0.168f,  0.092f, 0.106f, Glute: 0.016f),
-            new(0.86f,  0.182f,  0.104f, 0.118f, Glute: 0.026f),
-            new(0.945f, 0.196f,  0.110f, 0.124f, Glute: 0.034f),  // 둔부 최대
-            new(0.99f,  0.178f,  0.100f, 0.110f, Glute: 0.022f),
-            new(1.06f,  0.140f,  0.090f, 0.088f),                   // V-테이퍼 허리
-            new(1.14f,  0.162f,  0.106f, 0.102f),
-            new(1.22f,  0.188f,  0.116f, 0.112f),
-            new(1.30f,  0.214f,  0.126f, 0.120f, Pec: 0.042f),     // 가슴근육 최대
-            new(1.37f,  0.224f,  0.120f, 0.114f, Pec: 0.032f),     // 어깨 최대
-            new(1.425f, 0.214f,  0.092f, 0.096f),
-            new(1.465f, 0.148f,  0.070f, 0.076f),
-            new(1.49f,  0.070f,  0.060f, 0.060f),
+            new(0.86f,  0.182f,  0.104f, 0.120f, Glute: 0.028f),
+            new(0.945f, 0.196f,  0.110f, 0.126f, Glute: 0.038f),  // 둔부 최대
+            new(0.99f,  0.178f,  0.100f, 0.112f, Glute: 0.022f),
+            new(1.06f,  0.132f,  0.086f, 0.084f, Abs: 0.008f),    // 허리·하복근
+            new(1.14f,  0.158f,  0.104f, 0.100f, Abs: 0.010f),    // 중복근
+            new(1.22f,  0.184f,  0.114f, 0.110f, Abs: 0.010f),    // 상복근
+            new(1.30f,  0.218f,  0.128f, 0.122f, Pec: 0.054f),    // 가슴근육 최대
+            new(1.37f,  0.236f,  0.122f, 0.116f, Pec: 0.038f),    // 어깨 최대
+            new(1.425f, 0.218f,  0.094f, 0.098f),
+            new(1.465f, 0.150f,  0.072f, 0.078f),
+            new(1.49f,  0.072f,  0.062f, 0.062f),
         ],
-        1.20f, (1.44f, 1.6f, 0.056f), (1.525f, 0.94f), (0.232f, 1.395f), (0.34f, 0.300f, 1.34f, 0.022f),
-        (0.094f, 0.9f), (0.50f, 0.48f, 1.18f, 0.02f), 0.26f, 1.06f, 1.22f, 0.98f);
+        1.22f, (1.44f, 1.6f, 0.058f), (1.525f, 0.94f), (0.248f, 1.395f), (0.36f, 0.310f, 1.44f, 0.030f),
+        (0.094f, 0.9f), (0.50f, 0.48f, 1.28f, 0.02f), 0.26f, 1.06f, 1.22f, 0.98f);
 
     static readonly Sec[] HeadShell =
     [
