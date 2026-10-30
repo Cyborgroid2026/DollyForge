@@ -7,7 +7,8 @@ namespace DollyForge;
 
 /// <summary>
 /// 배경 + 반사 환경.
-/// 모드 0 = 절차적 사이버 스튜디오(회로 패턴 벽·도시 야경 창·천장 조명·뒤쪽 소프트박스),
+/// 모드 0 = 절차적 사이버 스튜디오(회로 패턴 벽·도시 야경 창·천장 조명·뒤쪽 소프트박스).
+///   창밖은 assets/studio/city_window.jpg (로컬 FLUX.1-schnell 로 생성한 저녁 도시, tools/imagegen.py) 가 있으면 그 사진, 없으면 절차적 야경.
 /// 모드 1 = 등장방형 파노라마 사진(CC0 Poly Haven). N 키로 순환한다.
 /// 같은 GLSL(EnvGlsl)을 몸·바닥 셰이더가 공유해서 크롬 반사가 배경과 일치한다.
 /// </summary>
@@ -17,6 +18,8 @@ sealed class EnvRenderer : IDisposable
     readonly uint _prog;
     readonly uint _vao, _vbo;
     readonly uint _tex;
+    readonly uint _cityTex;
+    readonly bool _cityOn;
 
     // 풀스크린 쿼드 (NDC −1..1)
     static readonly float[] Quad = [-1f,-1f, 1f,-1f, -1f,1f, 1f,1f];
@@ -29,6 +32,8 @@ sealed class EnvRenderer : IDisposable
     public const string EnvGlsl = """
         uniform sampler2D u_pano;
         uniform int u_env_mode;
+        uniform sampler2D u_city;
+        uniform int u_city_on;
 
         const float PI_E = 3.14159265;
         const vec3 ROOM_MIN = vec3(-7.0, 0.0, -5.0);
@@ -92,6 +97,23 @@ sealed class EnvRenderer : IDisposable
             return col;
         }
 
+        // window view photo, treated as infinitely far: sampled by ray direction (pinhole aimed CITY_YAW right of -Z,
+        // toward the window from mid-room), so it does not slide like a poster when the camera walks.
+        // eye level maps to CITY_EYE of the image height, which keeps the ridge line and the lit blocks in the window.
+        const float CITY_YAW = 0.5;
+        const float CITY_TAN_X = 1.0;
+        const float CITY_TAN_Y = 0.619;
+        const float CITY_EYE = 0.57;
+        vec3 cityPhoto(vec3 rd, float aa) {
+            vec3 f = vec3(sin(CITY_YAW), 0.0, -cos(CITY_YAW));
+            vec3 r = vec3(cos(CITY_YAW), 0.0, sin(CITY_YAW));
+            float d = max(dot(rd, f), 0.05);
+            vec2 q = vec2(dot(rd, r), rd.y) / d;
+            vec2 uv = vec2(0.5 + q.x / (2.0 * CITY_TAN_X), CITY_EYE - q.y / (2.0 * CITY_TAN_Y));
+            float lod = clamp(log2(aa * 672.0 / CITY_TAN_X + 1e-6), 0.0, 6.0);
+            return pow(textureLod(u_city, uv, lod).rgb, vec3(2.2)) * 0.6;
+        }
+
         vec3 studio(vec3 ro, vec3 rd, float aa) {
             ro = clamp(ro, ROOM_MIN + 0.02, ROOM_MAX - 0.02);
             rd = normalize(rd + vec3(1e-5));
@@ -124,7 +146,7 @@ sealed class EnvRenderer : IDisposable
                 float w = rect(uv, lo, hi, aw);
                 float fr = rect(uv, lo - 0.06, hi + 0.06, aw) * (1.0 - w);
                 col = mix(col, vec3(0.05, 0.055, 0.06), fr);
-                col = mix(col, cityWindow((uv - lo) / (hi - lo)), w);
+                col = mix(col, u_city_on == 1 ? cityPhoto(rd, aa) : cityWindow((uv - lo) / (hi - lo)), w);
                 float gl = band(p.x + 3.2, 0.02, aw) * step(1.1, p.y)
                          + band(p.y - 3.4, 0.02, aw) * step(-3.2, p.x) * step(p.x, 0.9)
                          + band(p.x - 0.9, 0.02, aw) * step(0.6, p.y) * step(p.y, 3.4);
@@ -250,6 +272,26 @@ sealed class EnvRenderer : IDisposable
         gl.BindTexture(TextureTarget.Texture2D, 0);
         LoadFallbackGradient();
 
+        _cityTex = gl.GenTexture();
+        var city = Path.Combine(assetDir, "..", "studio", "city_window.jpg");
+        if (File.Exists(city))
+        {
+            using var img = Image.Load<Rgb24>(city);
+            var buf = new byte[img.Width * img.Height * 3];
+            img.CopyPixelDataTo(buf);
+            gl.BindTexture(TextureTarget.Texture2D, _cityTex);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS,     (int)GLEnum.ClampToEdge);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT,     (int)GLEnum.ClampToEdge);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)GLEnum.LinearMipmapLinear);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)GLEnum.Linear);
+            fixed (byte* p = buf)
+                gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgb8,
+                    (uint)img.Width, (uint)img.Height, 0, PixelFormat.Rgb, PixelType.UnsignedByte, p);
+            gl.GenerateMipmap(TextureTarget.Texture2D);
+            gl.BindTexture(TextureTarget.Texture2D, 0);
+            _cityOn = true;
+        }
+
         if (Directory.Exists(assetDir))
         {
             _files = Directory.GetFiles(assetDir, "*.jpg")
@@ -257,7 +299,7 @@ sealed class EnvRenderer : IDisposable
                                .OrderBy(f => f)
                                .ToArray();
         }
-        Console.WriteLine($"[env] 스튜디오 + 파노라마 {_files.Length}개 (N 키 순환)");
+        Console.WriteLine($"[env] 스튜디오{(_cityOn ? "(창밖 사진)" : "")} + 파노라마 {_files.Length}개 (N 키 순환)");
     }
 
     // 스튜디오 → 파노라마 1 → … → 스튜디오 (N 키)
@@ -268,12 +310,16 @@ sealed class EnvRenderer : IDisposable
         else Console.WriteLine("[env] 사이버 스튜디오");
     }
 
-    // 다른 셰이더가 EnvGlsl 을 쓸 때 텍스처·모드를 묶는다
+    // 다른 셰이더가 EnvGlsl 을 쓸 때 텍스처·모드를 묶는다 (파노라마 unit, 창밖 사진 unit+1)
     public void Bind(Shader s, int unit = 1)
     {
         _gl.ActiveTexture(TextureUnit.Texture0 + unit);
         _gl.BindTexture(TextureTarget.Texture2D, _tex);
+        _gl.ActiveTexture(TextureUnit.Texture0 + unit + 1);
+        _gl.BindTexture(TextureTarget.Texture2D, _cityTex);
         s.Set("u_pano", unit);
+        s.Set("u_city", unit + 1);
+        s.Set("u_city_on", _cityOn ? 1 : 0);
         s.Set("u_env_mode", Mode);
     }
 
@@ -325,6 +371,10 @@ sealed class EnvRenderer : IDisposable
         _gl.ActiveTexture(TextureUnit.Texture0);
         _gl.BindTexture(TextureTarget.Texture2D, _tex);
         _gl.Uniform1(_gl.GetUniformLocation(_prog, "u_pano"), 0);
+        _gl.ActiveTexture(TextureUnit.Texture1);
+        _gl.BindTexture(TextureTarget.Texture2D, _cityTex);
+        _gl.Uniform1(_gl.GetUniformLocation(_prog, "u_city"), 1);
+        _gl.Uniform1(_gl.GetUniformLocation(_prog, "u_city_on"), _cityOn ? 1 : 0);
         _gl.Uniform1(_gl.GetUniformLocation(_prog, "u_env_mode"), Mode);
         _gl.Uniform3(_gl.GetUniformLocation(_prog, "u_cam_pos"), camPos.X, camPos.Y, camPos.Z);
         _gl.Uniform3(_gl.GetUniformLocation(_prog, "u_fwd"),   fwd.X,   fwd.Y,   fwd.Z);
@@ -348,5 +398,6 @@ sealed class EnvRenderer : IDisposable
         _gl.DeleteVertexArray(_vao);
         _gl.DeleteBuffer(_vbo);
         _gl.DeleteTexture(_tex);
+        _gl.DeleteTexture(_cityTex);
     }
 }
