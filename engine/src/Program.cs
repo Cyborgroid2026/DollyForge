@@ -18,6 +18,7 @@ var world  = new World(female, male);
 Shader?        bodyShader = null;
 EnvRenderer?   env        = null;
 FloorRenderer? floor      = null;
+PostFx?        post       = null;
 GpuMesh?       femaleGpu  = null;
 GpuMesh?       maleGpu    = null;
 var            lastStatus = "";
@@ -38,6 +39,7 @@ ctx.Window.Load += () =>
         maleGpu    = new GpuMesh(gl, male.Mesh);
         env        = new EnvRenderer(gl, assetDir);
         floor      = new FloorRenderer(gl);
+        post       = new PostFx(gl, ctx.Width, ctx.Height);
         Console.WriteLine("[engine] GL 로드 완료. N 키: 스튜디오/파노라마 전환");
     }
     catch (Exception ex) { Console.Error.WriteLine($"[engine] GL 로드 실패: {ex.Message}"); }
@@ -126,11 +128,16 @@ ctx.Window.Run(() =>
     // 3. 인형
     DrawBodies(Matrix4x4.Identity, world.CamPos, false);
 
-    stream.PushFrame(ctx.ReadPixels(), ctx.Width, ctx.Height);
+    // 4. 후처리 (블룸·색보정·비네트): 레퍼런스 일러스트의 공기감
+    uint? shown = null;
+    if (post is not null) { post.Apply(ctx.ColorTex, ctx.Width, ctx.Height); shown = post.OutputFbo; }
+
+    stream.PushFrame(ctx.ReadPixels(shown), ctx.Width, ctx.Height);
 });
 
 ctx.Dispose();
 floor?.Dispose();
+post?.Dispose();
 env?.Dispose();
 maleGpu?.Dispose();
 femaleGpu?.Dispose();

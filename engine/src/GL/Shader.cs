@@ -122,17 +122,46 @@ sealed class Shader : IDisposable
             return D_GGX(max(dot(N, H), 0.0), u_roughness) * 0.25 * F * lcol * NdL;
         }
 
+        // illustrated chrome of the reference art (matcap-style, view space: x right, y up, z toward viewer).
+        // the look does not depend on what is around the body: soft grey front, dark core band at ~50 deg,
+        // bright rim strips near the silhouette, lit shoulders/tops, dark undersides, cool blue shadows.
+        vec3 illusChrome(vec3 n) {
+            float side = abs(n.x);
+            float lum = mix(0.012, 0.11, smoothstep(-0.75, 0.85, n.y));             // sky above, floor below
+            lum += 0.11 * pow(max(n.z, 0.0), 2.5);                                     // soft front fill
+            lum *= mix(1.0, 0.38, smoothstep(0.35, 0.65, side) * (1.0 - smoothstep(0.78, 0.9, side)));   // deep core shadow band
+            float rim = smoothstep(0.72, 0.88, side) * (1.0 - smoothstep(0.95, 1.0, side));
+            lum += rim * mix(0.14, 0.60, smoothstep(-0.5, 0.6, n.y));                 // side strip lights
+            lum += 0.60 * smoothstep(0.66, 0.94, n.y) * smoothstep(0.0, 0.5, n.z + 0.4); // top softbox on shoulders
+            float k = max(dot(n, normalize(vec3(-0.30, 0.50, 0.81))), 0.0);
+            lum += 0.22 * pow(k, 9.0) + 1.6 * pow(k, 70.0);                            // key highlight (upper left), crisp
+            vec3 shadowTint = vec3(0.62, 0.70, 0.88), lightTint = vec3(1.00, 1.00, 1.02);
+            return lum * mix(shadowTint, lightTint, smoothstep(0.03, 0.35, lum));
+        }
+
         void main() {
             vec3 N = normalize(v_norm);
             vec3 V = normalize(u_cam_pos - v_pos);
             float NdV = max(dot(N, V), 0.001);
             vec3 R = reflect(-V, N);
             vec3 F = v_color + (1.0 - v_color) * pow(1.0 - NdV, 5.0);
-            vec3 col = envGlossy(v_pos + N * 0.003, R, u_cam_back, 0.08) * F;
-            col += keyLight(N, V, u_l0_dir, u_l0_col, F);
-            col += keyLight(N, V, u_l1_dir, u_l1_col, F);
-            col += keyLight(N, V, u_l2_dir, u_l2_col, F);
-            col += v_color * u_ambient * (0.55 + 0.45 * N.y) * 0.07;
+            vec3 col;
+            if (u_env_mode == 0) {
+                vec3 fwd = -u_cam_back;
+                vec3 right = normalize(cross(fwd, vec3(0.0, 1.0, 0.0)));
+                vec3 up = cross(right, fwd);
+                vec3 nv = vec3(dot(N, right), dot(N, up), dot(N, u_cam_back));
+                // v_color carries module tint x baked cavity; 0.65 = standard chrome luminance
+                float albedo = dot(v_color, vec3(1.0 / 3.0)) / 0.65;
+                col = illusChrome(nv) * albedo * 0.72;
+                col += envGlossy(v_pos + N * 0.003, R, u_cam_back, 0.0) * F * 0.10;    // a hint of the room
+            } else {
+                col = envGlossy(v_pos + N * 0.003, R, u_cam_back, 0.08) * F;
+                col += keyLight(N, V, u_l0_dir, u_l0_col, F);
+                col += keyLight(N, V, u_l1_dir, u_l1_col, F);
+                col += keyLight(N, V, u_l2_dir, u_l2_col, F);
+                col += v_color * u_ambient * (0.55 + 0.45 * N.y) * 0.07;
+            }
             // panel seam: thin anti-aliased groove where the baked plane distance crosses zero
             float sw = min(fwidth(v_seam) * 1.5, 0.003);
             float seam = 1.0 - smoothstep(0.0007, 0.0007 + sw, abs(v_seam));

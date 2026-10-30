@@ -8,6 +8,7 @@ namespace DollyForge;
 /// <summary>
 /// 배경 + 반사 환경.
 /// 모드 0 = 절차적 사이버 스튜디오(회로 패턴 벽·도시 야경 창·천장 조명·뒤쪽 소프트박스).
+///   벽은 assets/studio/walls.jpg (로컬 FLUX.1-schnell 로 생성한 회로 패널, tools/gen-studio-walls.sh) 가 있으면 그 그림.
 ///   창밖은 assets/studio/city_window.jpg (로컬 FLUX.1-schnell 로 생성한 저녁 도시, tools/imagegen.py) 가 있으면 그 사진, 없으면 절차적 야경.
 /// 모드 1 = 등장방형 파노라마 사진(CC0 Poly Haven). N 키로 순환한다.
 /// 같은 GLSL(EnvGlsl)을 몸·바닥 셰이더가 공유해서 크롬 반사가 배경과 일치한다.
@@ -18,8 +19,8 @@ sealed class EnvRenderer : IDisposable
     readonly uint _prog;
     readonly uint _vao, _vbo;
     readonly uint _tex;
-    readonly uint _cityTex;
-    readonly bool _cityOn;
+    readonly uint _cityTex, _wallTex;
+    readonly bool _cityOn, _wallOn;
 
     // 풀스크린 쿼드 (NDC −1..1)
     static readonly float[] Quad = [-1f,-1f, 1f,-1f, -1f,1f, 1f,1f];
@@ -34,6 +35,8 @@ sealed class EnvRenderer : IDisposable
         uniform int u_env_mode;
         uniform sampler2D u_city;
         uniform int u_city_on;
+        uniform sampler2D u_wall;
+        uniform int u_wall_on;
 
         const float PI_E = 3.14159265;
         const vec3 ROOM_MIN = vec3(-7.0, 0.0, -5.0);
@@ -114,6 +117,15 @@ sealed class EnvRenderer : IDisposable
             return pow(textureLod(u_city, uv, lod).rgb, vec3(2.2)) * 0.6;
         }
 
+        // AI-generated wall panels (assets/studio/walls.jpg): top half = back wall (14 m), bottom half = side/front walls (12-14 m).
+        // u spans the whole wall, v spans floor..ceiling, so each wall shows one painting without tiling.
+        vec3 wallPhoto(float u, float y, bool back, float aa, float width) {
+            float v = (1.0 - clamp(y / ROOM_MAX.y, 0.0, 1.0)) * 0.5 + (back ? 0.0 : 0.5);
+            v = clamp(v, back ? 0.002 : 0.502, back ? 0.498 : 0.998);
+            float lod = clamp(log2(aa * 1792.0 / width + 1e-6), 0.0, 6.0);
+            return pow(textureLod(u_wall, vec2(clamp(u, 0.0, 1.0), v), lod).rgb, vec3(2.2)) * 1.8;
+        }
+
         vec3 studio(vec3 ro, vec3 rd, float aa) {
             ro = clamp(ro, ROOM_MIN + 0.02, ROOM_MAX - 0.02);
             rd = normalize(rd + vec3(1e-5));
@@ -136,12 +148,17 @@ sealed class EnvRenderer : IDisposable
                 }
             } else if (t == tMax.x) {
                 vec2 uv = vec2(p.z * sign(p.x), p.y);
-                col = circuitWall(uv, aw);
-                float s = max(band(p.z + 1.0, 0.05, aw), band(p.z - 3.0, 0.05, aw)) * step(0.3, p.y);
-                col += s * vec3(2.6, 2.7, 3.0);
+                if (u_wall_on == 1) {
+                    col = wallPhoto((p.z - ROOM_MIN.z) / (ROOM_MAX.z - ROOM_MIN.z), p.y, false, aw / t, ROOM_MAX.z - ROOM_MIN.z);
+                } else {
+                    col = circuitWall(uv, aw);
+                    float s = max(band(p.z + 1.0, 0.05, aw), band(p.z - 3.0, 0.05, aw)) * step(0.3, p.y);
+                    col += s * vec3(2.6, 2.7, 3.0);
+                }
             } else if (rd.z < 0.0) {
                 vec2 uv = p.xy;
-                col = circuitWall(uv, aw);
+                col = u_wall_on == 1 ? wallPhoto((p.x - ROOM_MIN.x) / (ROOM_MAX.x - ROOM_MIN.x), p.y, true, aw / t, ROOM_MAX.x - ROOM_MIN.x)
+                                     : circuitWall(uv, aw);
                 vec2 lo = vec2(1.6, 0.35), hi = vec2(5.8, 2.9);
                 float w = rect(uv, lo, hi, aw);
                 float fr = rect(uv, lo - 0.06, hi + 0.06, aw) * (1.0 - w);
@@ -150,11 +167,12 @@ sealed class EnvRenderer : IDisposable
                 float gl = band(p.x + 3.2, 0.02, aw) * step(1.1, p.y)
                          + band(p.y - 3.4, 0.02, aw) * step(-3.2, p.x) * step(p.x, 0.9)
                          + band(p.x - 0.9, 0.02, aw) * step(0.6, p.y) * step(p.y, 3.4);
-                col += min(gl, 1.0) * vec3(1.6, 1.8, 2.3);
+                if (u_wall_on == 0) col += min(gl, 1.0) * vec3(1.6, 1.8, 2.3);
             } else {
                 vec2 uv = p.xy;
-                col = circuitWall(uv, aw) * 0.6;
-                col += rect(uv, vec2(-1.4, 1.2), vec2(1.4, 3.2), 0.25) * vec3(0.30, 0.32, 0.36);
+                col = u_wall_on == 1 ? wallPhoto(1.0 - (p.x - ROOM_MIN.x) / (ROOM_MAX.x - ROOM_MIN.x), p.y, false, aw / t, ROOM_MAX.x - ROOM_MIN.x) * 0.7
+                                     : circuitWall(uv, aw) * 0.6;
+                if (u_wall_on == 0) col += rect(uv, vec2(-1.4, 1.2), vec2(1.4, 3.2), 0.25) * vec3(0.30, 0.32, 0.36);   // softbox (mirror chrome only)
             }
             return col;
         }
@@ -273,25 +291,11 @@ sealed class EnvRenderer : IDisposable
         gl.BindTexture(TextureTarget.Texture2D, 0);
         LoadFallbackGradient();
 
+        var studioDir = Path.Combine(assetDir, "..", "studio");
         _cityTex = gl.GenTexture();
-        var city = Path.Combine(assetDir, "..", "studio", "city_window.jpg");
-        if (File.Exists(city))
-        {
-            using var img = Image.Load<Rgb24>(city);
-            var buf = new byte[img.Width * img.Height * 3];
-            img.CopyPixelDataTo(buf);
-            gl.BindTexture(TextureTarget.Texture2D, _cityTex);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS,     (int)GLEnum.ClampToEdge);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT,     (int)GLEnum.ClampToEdge);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)GLEnum.LinearMipmapLinear);
-            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)GLEnum.Linear);
-            fixed (byte* p = buf)
-                gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgb8,
-                    (uint)img.Width, (uint)img.Height, 0, PixelFormat.Rgb, PixelType.UnsignedByte, p);
-            gl.GenerateMipmap(TextureTarget.Texture2D);
-            gl.BindTexture(TextureTarget.Texture2D, 0);
-            _cityOn = true;
-        }
+        _cityOn  = LoadStudioTexture(_cityTex, Path.Combine(studioDir, "city_window.jpg"));
+        _wallTex = gl.GenTexture();
+        _wallOn  = LoadStudioTexture(_wallTex, Path.Combine(studioDir, "walls.jpg"));
 
         if (Directory.Exists(assetDir))
         {
@@ -300,7 +304,27 @@ sealed class EnvRenderer : IDisposable
                                .OrderBy(f => f)
                                .ToArray();
         }
-        Console.WriteLine($"[env] 스튜디오{(_cityOn ? "(창밖 사진)" : "")} + 파노라마 {_files.Length}개 (N 키 순환)");
+        Console.WriteLine($"[env] 스튜디오{(_cityOn ? "(창밖 사진)" : "")}{(_wallOn ? "(벽 그림)" : "")} + 파노라마 {_files.Length}개 (N 키 순환)");
+    }
+
+    // 스튜디오용 사진 (가장자리 고정, 밉맵). 없으면 false → 셰이더가 절차적 그림을 쓴다
+    unsafe bool LoadStudioTexture(uint tex, string path)
+    {
+        if (!File.Exists(path)) return false;
+        using var img = Image.Load<Rgb24>(path);
+        var buf = new byte[img.Width * img.Height * 3];
+        img.CopyPixelDataTo(buf);
+        _gl.BindTexture(TextureTarget.Texture2D, tex);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS,     (int)GLEnum.ClampToEdge);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT,     (int)GLEnum.ClampToEdge);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)GLEnum.LinearMipmapLinear);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)GLEnum.Linear);
+        fixed (byte* p = buf)
+            _gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgb8,
+                (uint)img.Width, (uint)img.Height, 0, PixelFormat.Rgb, PixelType.UnsignedByte, p);
+        _gl.GenerateMipmap(TextureTarget.Texture2D);
+        _gl.BindTexture(TextureTarget.Texture2D, 0);
+        return true;
     }
 
     // 스튜디오 → 파노라마 1 → … → 스튜디오 (N 키)
@@ -321,6 +345,10 @@ sealed class EnvRenderer : IDisposable
         s.Set("u_pano", unit);
         s.Set("u_city", unit + 1);
         s.Set("u_city_on", _cityOn ? 1 : 0);
+        _gl.ActiveTexture(TextureUnit.Texture0 + unit + 2);
+        _gl.BindTexture(TextureTarget.Texture2D, _wallTex);
+        s.Set("u_wall", unit + 2);
+        s.Set("u_wall_on", _wallOn ? 1 : 0);
         s.Set("u_env_mode", Mode);
     }
 
@@ -376,6 +404,11 @@ sealed class EnvRenderer : IDisposable
         _gl.BindTexture(TextureTarget.Texture2D, _cityTex);
         _gl.Uniform1(_gl.GetUniformLocation(_prog, "u_city"), 1);
         _gl.Uniform1(_gl.GetUniformLocation(_prog, "u_city_on"), _cityOn ? 1 : 0);
+        _gl.ActiveTexture(TextureUnit.Texture2);
+        _gl.BindTexture(TextureTarget.Texture2D, _wallTex);
+        _gl.Uniform1(_gl.GetUniformLocation(_prog, "u_wall"), 2);
+        _gl.Uniform1(_gl.GetUniformLocation(_prog, "u_wall_on"), _wallOn ? 1 : 0);
+        _gl.ActiveTexture(TextureUnit.Texture0);
         _gl.Uniform1(_gl.GetUniformLocation(_prog, "u_env_mode"), Mode);
         _gl.Uniform3(_gl.GetUniformLocation(_prog, "u_cam_pos"), camPos.X, camPos.Y, camPos.Z);
         _gl.Uniform3(_gl.GetUniformLocation(_prog, "u_fwd"),   fwd.X,   fwd.Y,   fwd.Z);
@@ -400,5 +433,6 @@ sealed class EnvRenderer : IDisposable
         _gl.DeleteBuffer(_vbo);
         _gl.DeleteTexture(_tex);
         _gl.DeleteTexture(_cityTex);
+        _gl.DeleteTexture(_wallTex);
     }
 }

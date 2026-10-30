@@ -94,9 +94,13 @@ sealed class GlContext : IDisposable
         Gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
     }
 
-    public unsafe byte[] ReadPixels()
+    /// <summary>장면이 그려진 색 텍스처 (후처리 입력)</summary>
+    public uint ColorTex => _colorTex;
+
+    /// <summary>fbo 를 주면 그 대상(후처리 결과)에서, 없으면 장면 FBO 에서 읽는다</summary>
+    public unsafe byte[] ReadPixels(uint? fbo = null)
     {
-        Gl.BindFramebuffer(FramebufferTarget.Framebuffer, _fbo);
+        Gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo ?? _fbo);
         var buf = new byte[Width * Height * 4];
         fixed (byte* p = buf)
             Gl.ReadPixels(0, 0, (uint)Width, (uint)Height, PixelFormat.Rgba, PixelType.UnsignedByte, p);

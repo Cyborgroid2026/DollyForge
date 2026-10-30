@@ -218,9 +218,13 @@ public sealed partial class CyborgBody
             Add(v, $"macrodetails/caucasian-{g}-young", rc / sum);
             if (!male)
             {
+                // 레퍼런스 그림처럼 높고 둥근 가슴: 크기(cup)는 피팅값 그대로, 탄력은 최대 타깃으로
                 var cup = P("breast/cup", 0);
-                Add(v, "breast/female-young-averagemuscle-averageweight-maxcup-averagefirmness", MathF.Max(0, cup));
-                Add(v, "breast/female-young-averagemuscle-averageweight-mincup-averagefirmness", MathF.Max(0, -cup));
+                Add(v, "breast/female-young-averagemuscle-averageweight-maxcup-maxfirmness", MathF.Max(0, cup));
+                Add(v, "breast/female-young-averagemuscle-averageweight-mincup-maxfirmness", MathF.Max(0, -cup));
+                // 가슴 위치: 레퍼런스처럼 겨드랑이 쪽으로 높게 (피팅 대상이 아닌 디자인 값, trans 는 슬라이더에서 빠져 있다)
+                var lift = P("breast/lift", 0.7f);
+                Add(v, lift >= 0 ? "breast/breast-trans-up" : "breast/breast-trans-down", MathF.Abs(lift));
             }
             foreach (var (key, neg, pos) in Sliders)
             {
@@ -381,6 +385,15 @@ public sealed partial class CyborgBody
         foreach (var c in nipples)
             Dome(A, v, c, 0.45f);
 
+        // 샅: 해부학적 굴곡 대신 마네킹처럼 매끈한 면 (레퍼런스, 선정적이지 않게)
+        var crotchY = A.Used.Where(i => MathF.Abs(v[i].X) < 0.2f && A.W14[i * B + (int)Bone.Root] > 0.5f).Min(i => v[i].Y);
+        var pubis = v[A.Used.Where(i => MathF.Abs(v[i].X) < 0.15f && v[i].Y > crotchY && v[i].Y < crotchY + 0.6f).MaxBy(i => v[i].Z)];
+        Dome(A, v, pubis, 0.55f);
+
+        // 남성 복근: 기본 메시에 없는 식스팩 홈을 조각한다 (배꼽 ~ 가슴 아래, 가운데 세로선·가로 3줄·바깥 경계)
+        if (male && nipples.Length == 2 && A.Target("stomach/stomach-navel-in") is { } navT)
+            CarveAbs(A, v, navT.I.Where(i => i < v.Length).Aggregate(Vector3.Zero, (acc, i) => acc + v[i]) / navT.I.Length, nipples[0].Y);
+
         // 미터로, 발바닥 y = 0
         var minY = A.Used.Min(i => v[i].Y);
         var height = A.Used.Max(i => v[i].Y) - minY;
@@ -418,6 +431,32 @@ public sealed partial class CyborgBody
         return body;
     }
 
+    /// <summary>
+    /// 식스팩: 배 앞면(정면 +Z)을 안쪽으로 눌러 홈을 판다 (dm 단위).
+    /// 세로 백선(가운데), 가로 건획 3줄(배꼽 위 0.3·0.78·1.22 dm, 위로 갈수록 바깥이 살짝 올라감), 바깥 반달선(|x| 0.95 dm).
+    /// 홈 단면은 가우스(σ 1.6 cm), 깊이 ~15 mm. 배꼽 아래와 가슴 아래 경계에서 부드럽게 사라진다.
+    /// </summary>
+    static void CarveAbs(MhAssets A, Vector3[] v, Vector3 navel, float nippleY)
+    {
+        const float depth = 0.15f, w = 0.16f;          // 홈 폭은 기본 메시 간격(~1.5 cm)보다 넓어야 표현된다
+        var top = nippleY - 0.75f;                     // 흉근 아래
+        float G(float d) => MathF.Exp(-d * d / (2 * w * w));
+        foreach (var i in A.Used)
+        {
+            var p = v[i];
+            var x = p.X - navel.X; var y = p.Y - navel.Y;
+            if (p.Z < navel.Z - 0.6f || y < -0.6f || y > top - navel.Y + 0.3f || MathF.Abs(x) > 1.3f) continue;
+            var region = Smooth(-0.6f, -0.1f, y) * (1 - Smooth(top - navel.Y - 0.1f, top - navel.Y + 0.3f, y)) * (1 - Smooth(1.0f, 1.3f, MathF.Abs(x)));
+            if (region <= 0) continue;
+            var ax = MathF.Abs(x);
+            var groove = G(x) * 0.9f;                                                     // 백선
+            foreach (var row in new[] { 0.3f, 0.78f, 1.22f })
+                if (row < top - navel.Y) groove = MathF.Max(groove, G(y - row - 0.12f * ax * ax) * (1 - Smooth(0.7f, 0.95f, ax)));
+            groove = MathF.Max(groove, G(ax - 0.95f) * 0.8f * Smooth(-0.3f, 0.2f, y));      // 반달선
+            v[i].Z -= depth * groove * region;
+        }
+    }
+
     static float Smooth(float a, float b, float x)
     {
         var t = M.Clamp((x - a) / (b - a), 0, 1);
@@ -425,33 +464,41 @@ public sealed partial class CyborgBody
     }
 
     /// <summary>
-    /// 근육 굴곡 강조 (기하 언샤프 마스크): Taubin 평활 12쌍(근육 한 덩이 폭, 약 5 cm 아래를 걸러 냄)과
-    /// 원본의 차이에서 법선 성분만 gain 배 더한다. Taubin 은 팔·다리 같은 가는 원통을 수축시키지 않아서
-    /// 차이에 굵기가 섞이지 않는다 → 큰 실루엣은 그대로, 체형 피팅이 흔들리지 않는다.
+    /// 근육 굴곡 강조 (기하 대역 통과): 레퍼런스 그림처럼 근육 덩어리만 또렷하고 표면은 매끈하게.
+    ///   fine   = Taubin 평활 3쌍: 피부 수준 잔 굴곡(갈비뼈 자국, 힘줄, 요철)을 지운 면
+    ///   coarse = Taubin 평활 24쌍: 근육 한 덩이 폭(약 5 cm) 아래를 걸러 낸 큰 형태
+    /// 정점을 fine 으로 옮기고 (fine − coarse) 의 법선 성분을 gain 배 더한다.
+    /// Taubin 은 팔·다리 같은 가는 원통을 수축시키지 않아서 큰 실루엣(체형 피팅)이 흔들리지 않는다.
     /// </summary>
     static void Define(MhAssets A, Vector3[] v, float gain, Func<int, float> weight)
     {
         var ids = A.Used;
-        var smooth = (Vector3[])v.Clone();
-        var tmp = new Vector3[v.Length];
-        for (var it = 0; it < 24; it++)
+        Vector3[] Taubin(Vector3[] src, int pairs)
         {
-            var step = it % 2 == 0 ? 0.5f : -0.53f;
-            foreach (var i in ids)
+            var s = (Vector3[])src.Clone();
+            var tmp = new Vector3[s.Length];
+            for (var it = 0; it < pairs * 2; it++)
             {
-                var nb = A.Adj[i];
-                if (nb.Length == 0) { tmp[i] = smooth[i]; continue; }
-                var avg = Vector3.Zero;
-                foreach (var x in nb) avg += smooth[x];
-                tmp[i] = smooth[i] + (avg / nb.Length - smooth[i]) * step;
+                var step = it % 2 == 0 ? 0.5f : -0.53f;
+                foreach (var i in ids)
+                {
+                    var nb = A.Adj[i];
+                    if (nb.Length == 0) { tmp[i] = s[i]; continue; }
+                    var avg = Vector3.Zero;
+                    foreach (var x in nb) avg += s[x];
+                    tmp[i] = s[i] + (avg / nb.Length - s[i]) * step;
+                }
+                foreach (var i in ids) s[i] = tmp[i];
             }
-            foreach (var i in ids) smooth[i] = tmp[i];
+            return s;
         }
+        var fine = Taubin(v, 3);
+        var coarse = Taubin(v, 24);
         var n = new Vector3[v.Length];
         for (var t = 0; t < A.Tris.Length; t += 3)
         {
             int a = A.Tris[t], b = A.Tris[t + 1], c = A.Tris[t + 2];
-            var fn = Vector3.Cross(smooth[b] - smooth[a], smooth[c] - smooth[a]);
+            var fn = Vector3.Cross(coarse[b] - coarse[a], coarse[c] - coarse[a]);
             n[a] += fn; n[b] += fn; n[c] += fn;
         }
         foreach (var i in ids)
@@ -459,7 +506,8 @@ public sealed partial class CyborgBody
             var w = M.Clamp(weight(i), 0, 1);
             if (w <= 0 || n[i].LengthSquared() < 1e-20f) continue;
             var nn = Vector3.Normalize(n[i]);
-            v[i] += nn * (Vector3.Dot(v[i] - smooth[i], nn) * gain * w);
+            var target = fine[i] + nn * (Vector3.Dot(fine[i] - coarse[i], nn) * gain);
+            v[i] = Vector3.Lerp(v[i], target, w);
         }
     }
 
