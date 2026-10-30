@@ -112,90 +112,110 @@ public partial class CyborgBody : Node3D
         (float X, float Y) Hip, (float Thigh, float Shin, float R, float Q) Leg, float Foot, float WaistY,
         float UnderbustY, float LowHipY);
 
-    // ── 여성형 1.80 m ─────────────────────────────────────────────────────────
-    // 모래시계: 골반 0.218·허리 0.076·가슴(Bust) 0.068·둔부(Glute) 0.056
-    // 좁은 어깨(0.154)·가는 팔(r=0.86)·제어점 조밀화로 허리 급전이 보장
+    // ── 여성형 1.80 m (재설계: 크롬 실버 사이보그) ──────────────────────────────
+    // 극단적 모래시계: 골반 0.232·허리 0.062·가슴(Bust) 0.085·둔부(Glute) 0.072
+    // 좁은 어깨(0.148)·가는 팔(r=0.84)·긴 다리 비율
     static readonly Proportions Female = new(
         [
             new(0.70f,  0.030f, 0.030f, 0.034f, Cz: -0.004f),
-            new(0.73f,  0.084f, 0.052f, 0.058f, Cz: -0.004f),
-            new(0.77f,  0.150f, 0.076f, 0.082f, Glute: 0.014f),
-            new(0.81f,  0.196f, 0.092f, 0.104f, Glute: 0.040f),
-            new(0.85f,  0.218f, 0.098f, 0.120f, Glute: 0.056f),  // 골반·둔부 최대
-            new(0.91f,  0.212f, 0.102f, 0.124f, Glute: 0.056f),
-            new(0.97f,  0.178f, 0.092f, 0.112f, Glute: 0.026f),
-            new(1.02f,  0.126f, 0.072f, 0.080f, Glute: 0.006f),
-            new(1.07f,  0.076f, 0.052f, 0.050f),                  // 극세 허리
-            new(1.12f,  0.108f, 0.068f, 0.066f),
-            new(1.18f,  0.140f, 0.078f, 0.076f, Bust: 0.026f),
-            new(1.24f,  0.158f, 0.084f, 0.082f, Bust: 0.068f),   // 가슴 최대
-            new(1.29f,  0.156f, 0.083f, 0.081f, Bust: 0.064f),
-            new(1.34f,  0.152f, 0.072f, 0.076f, Bust: 0.018f),
-            new(1.37f,  0.146f, 0.054f, 0.064f),
-            new(1.39f,  0.088f, 0.041f, 0.047f),
-            new(1.40f,  0.048f, 0.036f, 0.036f),
+            new(0.73f,  0.090f, 0.055f, 0.062f, Cz: -0.004f),
+            new(0.77f,  0.162f, 0.082f, 0.092f, Glute: 0.018f),
+            new(0.82f,  0.210f, 0.099f, 0.115f, Glute: 0.052f),
+            new(0.86f,  0.232f, 0.106f, 0.132f, Glute: 0.072f),  // 골반·둔부 최대
+            new(0.92f,  0.224f, 0.109f, 0.136f, Glute: 0.072f),
+            new(0.99f,  0.186f, 0.096f, 0.118f, Glute: 0.030f),
+            new(1.04f,  0.118f, 0.068f, 0.074f, Glute: 0.006f),
+            new(1.08f,  0.062f, 0.048f, 0.046f),                  // 극세 허리
+            new(1.13f,  0.098f, 0.064f, 0.062f),
+            new(1.19f,  0.136f, 0.074f, 0.072f, Bust: 0.032f),
+            new(1.25f,  0.155f, 0.082f, 0.080f, Bust: 0.085f),   // 가슴 최대
+            new(1.30f,  0.152f, 0.080f, 0.078f, Bust: 0.078f),
+            new(1.35f,  0.148f, 0.068f, 0.073f, Bust: 0.022f),
+            new(1.37f,  0.142f, 0.052f, 0.062f),
+            new(1.39f,  0.084f, 0.039f, 0.045f),
+            new(1.40f,  0.046f, 0.034f, 0.034f),
         ],
-        1.0f, (1.36f, 1.5f, 0.040f), (1.425f, 0.86f), (0.154f, 1.315f), (0.300f, 0.260f, 0.86f, 0.007f),
-        (0.086f, 0.84f), (0.46f, 0.44f, 1.06f, 0.045f), 0.228f, 1.07f, 1.18f, 0.97f);
+        1.0f, (1.36f, 1.50f, 0.038f), (1.425f, 0.84f), (0.148f, 1.310f), (0.295f, 0.255f, 0.84f, 0.006f),
+        (0.082f, 0.84f), (0.46f, 0.44f, 1.08f, 0.048f), 0.224f, 1.08f, 1.19f, 0.99f);
 
-    // ── 남성형 1.86 m ─────────────────────────────────────────────────────────
-    // 역삼각: 어깨 0.252·가슴(Pec) 0.058·복근(Abs) 3단·두꺼운 팔(r=1.46)·다리(lr=1.30)
+    // ── 남성형 1.86 m (재설계: 크롬 실버 사이보그) ──────────────────────────────
+    // 강한 역삼각: 어깨 0.268·가슴(Pec) 0.072·복근(Abs) 3단·두꺼운 팔(r=1.50)
     static readonly Proportions Male = new(
         [
-            new(0.70f,  0.036f, 0.036f, 0.042f),
-            new(0.74f,  0.112f, 0.068f, 0.076f),
-            new(0.78f,  0.152f, 0.082f, 0.094f, Glute: 0.008f),
-            new(0.83f,  0.170f, 0.093f, 0.108f, Glute: 0.020f),
-            new(0.87f,  0.184f, 0.106f, 0.122f, Glute: 0.030f),
-            new(0.95f,  0.198f, 0.112f, 0.130f, Glute: 0.040f),  // 둔부 최대
-            new(1.01f,  0.178f, 0.100f, 0.116f, Glute: 0.020f),
-            new(1.07f,  0.138f, 0.088f, 0.086f, Abs: 0.010f),    // 하복근
-            new(1.15f,  0.166f, 0.110f, 0.106f, Abs: 0.014f),    // 중복근
-            new(1.23f,  0.192f, 0.118f, 0.114f, Abs: 0.014f),    // 상복근
-            new(1.31f,  0.222f, 0.130f, 0.124f, Pec: 0.058f),    // 가슴 최대
-            new(1.38f,  0.240f, 0.124f, 0.118f, Pec: 0.042f),    // 어깨 최대
-            new(1.43f,  0.222f, 0.096f, 0.100f),
-            new(1.47f,  0.154f, 0.074f, 0.080f),
-            new(1.49f,  0.074f, 0.064f, 0.064f),
+            new(0.70f,  0.038f, 0.038f, 0.044f),
+            new(0.74f,  0.118f, 0.072f, 0.082f),
+            new(0.78f,  0.156f, 0.086f, 0.100f, Glute: 0.010f),
+            new(0.83f,  0.174f, 0.097f, 0.114f, Glute: 0.024f),
+            new(0.88f,  0.188f, 0.110f, 0.128f, Glute: 0.036f),
+            new(0.96f,  0.202f, 0.116f, 0.136f, Glute: 0.048f),  // 둔부 최대
+            new(1.02f,  0.180f, 0.102f, 0.120f, Glute: 0.022f),
+            new(1.08f,  0.132f, 0.086f, 0.084f, Abs: 0.012f),
+            new(1.16f,  0.162f, 0.112f, 0.108f, Abs: 0.018f),
+            new(1.24f,  0.196f, 0.122f, 0.118f, Abs: 0.018f),
+            new(1.33f,  0.232f, 0.136f, 0.130f, Pec: 0.072f),    // 가슴 최대
+            new(1.40f,  0.268f, 0.130f, 0.124f, Pec: 0.052f),    // 어깨 최대
+            new(1.44f,  0.244f, 0.100f, 0.104f),
+            new(1.48f,  0.158f, 0.076f, 0.082f),
+            new(1.49f,  0.076f, 0.066f, 0.066f),
         ],
-        1.22f, (1.44f, 1.6f, 0.058f), (1.525f, 0.94f), (0.252f, 1.395f), (0.36f, 0.310f, 1.46f, 0.032f),
-        (0.094f, 0.9f), (0.50f, 0.48f, 1.30f, 0.02f), 0.26f, 1.07f, 1.23f, 1.01f);
+        1.22f, (1.44f, 1.62f, 0.060f), (1.530f, 0.96f), (0.268f, 1.400f), (0.37f, 0.318f, 1.50f, 0.034f),
+        (0.096f, 0.90f), (0.52f, 0.50f, 1.32f, 0.022f), 0.268f, 1.08f, 1.24f, 1.02f);
 
+    // 매끈한 달걀형 머리: 얼굴 특징 없음, 전면이 약간 납작한 타원
     static readonly Sec[] HeadShell =
     [
-        new(0, 0.045f, 0.048f, 0.048f), new(0.018f, 0.065f, 0.068f, 0.068f), new(0.052f, 0.084f, 0.088f, 0.088f),
-        new(0.092f, 0.094f, 0.098f, 0.098f), new(0.132f, 0.095f, 0.100f, 0.100f), new(0.170f, 0.087f, 0.092f, 0.092f),
-        new(0.204f, 0.068f, 0.074f, 0.074f), new(0.228f, 0.040f, 0.044f, 0.044f), new(0.240f, 0.006f, 0.007f, 0.007f),
+        new(0,      0.040f, 0.042f, 0.042f),
+        new(0.016f, 0.062f, 0.064f, 0.062f),
+        new(0.048f, 0.082f, 0.086f, 0.082f),
+        new(0.090f, 0.096f, 0.100f, 0.096f, Cz: 0.004f),
+        new(0.136f, 0.098f, 0.103f, 0.098f, Cz: 0.006f),
+        new(0.176f, 0.090f, 0.095f, 0.088f, Cz: 0.003f),
+        new(0.210f, 0.070f, 0.075f, 0.070f),
+        new(0.234f, 0.038f, 0.042f, 0.038f),
+        new(0.246f, 0.005f, 0.006f, 0.005f),
     ];
 
-    // ------------------------------------------------------------------ 재질
+    // ------------------------------------------------------------------ 재질 (크롬 실버)
 
-    static readonly Color StandardTitanium = new(0.68f, 0.71f, 0.74f);
-    static readonly Color HeavyTitaniumColor = new(0.52f, 0.59f, 0.63f);
-    static readonly Color LightTitaniumColor = new(0.64f, 0.68f, 0.71f);
+    // 참조 이미지: 거울 수준 고광택 크롬. 청회색 베이스, 환경맵 반사 선명.
+    static readonly Color ChromeBase      = new(0.72f, 0.74f, 0.78f);  // 청회색 은빛
+    static readonly Color ChromeHeavy     = new(0.56f, 0.60f, 0.66f);  // 짙은 청은
+    static readonly Color ChromeLight     = new(0.80f, 0.82f, 0.85f);  // 밝은 은빛
 
     static Color VariantColor(ModuleVariant variant) => variant switch
     {
-        ModuleVariant.HeavyDuty => HeavyTitaniumColor,
-        ModuleVariant.Lite => LightTitaniumColor,
-        _ => StandardTitanium,
+        ModuleVariant.HeavyDuty => ChromeHeavy,
+        ModuleVariant.Lite      => ChromeLight,
+        _ => ChromeBase,
     };
 
     static StandardMaterial3D? _skinMat;
-    /// <summary>
-    /// 몸 곡면: 모듈 종류의 색이 정점 색으로 부드럽게 섞인 새틴 티타늄 (색 경계 없음).
-    /// 반사가 넓게 퍼지는 무광에 가까운 새틴이라, 지평선이 곡면 위에 날카로운 선으로 맺히지 않는다.
-    /// </summary>
+    // 몸 곡면: 고광택 크롬 실버. 환경맵이 선명하게 맺히는 거울 수준 금속면.
     static StandardMaterial3D SkinMaterial => _skinMat ??= new StandardMaterial3D
     {
-        VertexColorUseAsAlbedo = true, Metallic = 0.68f, Roughness = 0.58f,
+        VertexColorUseAsAlbedo = true,
+        Metallic                = 1.0f,
+        Roughness               = 0.07f,
+        ClearcoatEnabled        = true,
+        Clearcoat               = 0.6f,
+        ClearcoatRoughness      = 0.04f,
+        MetallicSpecular        = 0.9f,
     };
 
     static readonly Dictionary<ModuleVariant, StandardMaterial3D> HandMats = new();
     static StandardMaterial3D ModuleTitanium(ModuleVariant variant)
     {
         if (HandMats.TryGetValue(variant, out var m)) return m;
-        return HandMats[variant] = new StandardMaterial3D { AlbedoColor = VariantColor(variant), Metallic = 0.68f, Roughness = 0.58f };
+        return HandMats[variant] = new StandardMaterial3D
+        {
+            AlbedoColor        = VariantColor(variant),
+            Metallic           = 1.0f,
+            Roughness          = 0.07f,
+            ClearcoatEnabled   = true,
+            Clearcoat          = 0.6f,
+            ClearcoatRoughness = 0.04f,
+            MetallicSpecular   = 0.9f,
+        };
     }
 
     // ------------------------------------------------------------------ 거리장
