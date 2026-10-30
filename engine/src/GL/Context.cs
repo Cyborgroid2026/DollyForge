@@ -91,7 +91,7 @@ sealed class GlContext : IDisposable
     {
         Gl.BindFramebuffer(FramebufferTarget.Framebuffer, _fbo);
         Gl.Viewport(0, 0, (uint)Width, (uint)Height);
-        Gl.ClearColor(0.08f, 0.08f, 0.10f, 1f);
+        Gl.ClearColor(0f, 0f, 0f, 1f);
         Gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
     }
 
