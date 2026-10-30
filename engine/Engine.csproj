@@ -18,6 +18,10 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.10" NoWarn="NU1902;NU1903" />
   </ItemGroup>
   <ItemGroup>
+    <!-- 파노라마 배경 (N 키): 실행 폴더의 assets/panoramas 에서 읽는다 -->
+    <Content Include="assets/panoramas/*.jpg;assets/panoramas/*.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="../godot/src/Core/Cyborg.cs" />
     <Compile Include="../godot/src/Core/Blueprints.cs" />
     <Compile Include="../godot/src/Core/Catalog.cs" />

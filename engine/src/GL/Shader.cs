@@ -83,6 +83,8 @@ sealed class Shader : IDisposable
         }
         """;
 
+    // 크롬: 환경 반사(EnvGlsl) x 슐릭 프레넬 + GGX 하이라이트 3개.
+    // 바닥 반사 패스에서는 u_cam_pos 에 바닥 아래로 뒤집은 카메라를 넣는다.
     public static readonly string BodyFrag = """
         #version 450 core
         in vec3 v_pos;
@@ -98,52 +100,73 @@ sealed class Shader : IDisposable
         uniform vec3 u_l2_dir;
         uniform vec3 u_l2_col;
         uniform vec3 u_ambient;
-        uniform float u_metallic;
         uniform float u_roughness;
-
-        const float PI = 3.14159265;
+        uniform vec3 u_cam_back;
+        """ + EnvRenderer.EnvGlsl + """
 
         float D_GGX(float NdH, float rough) {
             float a = rough * rough;
             float a2 = a * a;
-            float d = (NdH*NdH*(a2-1.0)+1.0);
-            return a2 / (PI * d * d);
-        }
-        float G_Smith(float NdV, float NdL, float rough) {
-            float r = rough + 1.0;
-            float k = (r*r)/8.0;
-            float g1 = NdV / (NdV*(1.0-k)+k);
-            float g2 = NdL / (NdL*(1.0-k)+k);
-            return g1 * g2;
-        }
-        vec3 F_Schlick(float cosT, vec3 F0) {
-            return F0 + (1.0-F0)*pow(clamp(1.0-cosT,0.0,1.0),5.0);
+            float d = NdH * NdH * (a2 - 1.0) + 1.0;
+            return a2 / (PI_E * d * d);
         }
 
-        vec3 PBR(vec3 N, vec3 V, vec3 L, vec3 lcolor, vec3 F0) {
-            vec3 H    = normalize(V + L);
+        vec3 keyLight(vec3 N, vec3 V, vec3 L, vec3 lcol, vec3 F) {
+            L = normalize(L);
+            vec3 H = normalize(V + L);
             float NdL = max(dot(N, L), 0.0);
-            float NdV = max(dot(N, V), 0.001);
-            float NdH = max(dot(N, H), 0.0);
-            float HdV = max(dot(H, V), 0.0);
-            vec3  F   = F_Schlick(HdV, F0);
-            float D   = D_GGX(NdH, u_roughness);
-            float G   = G_Smith(NdV, NdL, u_roughness);
-            vec3 spec = (D * G * F) / max(4.0 * NdV * NdL, 0.001);
-            vec3 kD   = (1.0 - F) * (1.0 - u_metallic);
-            return (kD * v_color / PI + spec) * lcolor * NdL;
+            return D_GGX(max(dot(N, H), 0.0), u_roughness) * 0.25 * F * lcol * NdL;
         }
 
         void main() {
-            vec3 N   = normalize(v_norm);
-            vec3 L0  = normalize(u_l0_dir);
-            float d0 = max(dot(N, L0), 0.0);
-            float d1 = max(dot(N, normalize(u_l1_dir)), 0.0);
-            float d2 = max(dot(N, normalize(u_l2_dir)), 0.0);
-            vec3 lit = v_color * (u_ambient + u_l0_col * d0 + u_l1_col * d1 + u_l2_col * d2);
-            lit = lit / (lit + 1.0);
-            lit = pow(lit, vec3(1.0/2.2));
-            frag_color = vec4(lit, 1.0);
+            vec3 N = normalize(v_norm);
+            vec3 V = normalize(u_cam_pos - v_pos);
+            float NdV = max(dot(N, V), 0.001);
+            vec3 R = reflect(-V, N);
+            vec3 F = v_color + (1.0 - v_color) * pow(1.0 - NdV, 5.0);
+            vec3 col = envGlossy(v_pos + N * 0.003, R, u_cam_back, 0.30) * F;
+            col += keyLight(N, V, u_l0_dir, u_l0_col, F);
+            col += keyLight(N, V, u_l1_dir, u_l1_col, F);
+            col += keyLight(N, V, u_l2_dir, u_l2_col, F);
+            col += v_color * u_ambient * (0.55 + 0.45 * N.y) * 0.07;
+            frag_color = vec4(tonemap(col), 1.0);
+        }
+        """;
+
+    // 광택 검정 바닥. 패스 0 = 반사층(환경), 패스 1 = 바닥 자체(알파 = 1 - 반사율).
+    public static readonly string FloorVert = """
+        #version 450 core
+        layout(location=0) in vec2 a_xz;
+        uniform mat4 u_vp;
+        out vec3 v_pos;
+        void main() {
+            v_pos = vec3(a_xz.x, 0.0, a_xz.y);
+            gl_Position = u_vp * vec4(v_pos, 1.0);
+        }
+        """;
+
+    public static readonly string FloorFrag = """
+        #version 450 core
+        in vec3 v_pos;
+        out vec4 frag_color;
+        uniform vec3 u_cam_pos;
+        uniform int u_pass;
+        """ + EnvRenderer.EnvGlsl + """
+
+        void main() {
+            vec3 V = normalize(u_cam_pos - v_pos);
+            if (u_pass == 0) {
+                vec3 R = reflect(-V, vec3(0.0, 1.0, 0.0));
+                frag_color = vec4(tonemap(envColor(v_pos + vec3(0.0, 0.001, 0.0), R, 0.03) * 0.55), 1.0);
+                return;
+            }
+            float F = 0.04 + 0.96 * pow(1.0 - max(V.y, 0.0), 5.0);
+            float refl = mix(0.40, 0.92, F);
+            vec2 g = abs(fract(v_pos.xz / 1.5) - 0.5) * 1.5;
+            float aa = fwidth(v_pos.x) + fwidth(v_pos.z);
+            float seam = band(0.75 - max(g.x, g.y), 0.003, aa);
+            vec3 base = vec3(0.004, 0.0045, 0.006) + vec3(0.03) * seam;
+            frag_color = vec4(tonemap(base), 1.0 - refl * (1.0 - seam));
         }
         """;
 }

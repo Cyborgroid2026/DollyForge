@@ -85,10 +85,11 @@ sealed class GpuMesh : IDisposable
         IndexCount = mesh.Indices.Length;
     }
 
-    public void Draw()
+    public unsafe void Draw()
     {
         _gl.BindVertexArray(_vao);
-        _gl.DrawElements(PrimitiveType.Triangles, (uint)IndexCount, DrawElementsType.UnsignedInt, 0);
+        // (void*)0 = EBO byte offset; a bare 0 binds Silk's `in T` overload and passes a stack address
+        _gl.DrawElements(PrimitiveType.Triangles, (uint)IndexCount, DrawElementsType.UnsignedInt, (void*)0);
         _gl.BindVertexArray(0);
     }
 

@@ -10,13 +10,13 @@ Console.WriteLine($"[engine] 여성형 {female.Mesh.Vertices.Length:N0}  남성�
 // ── GL 컨텍스트 + 스트리밍 ────────────────────────────────────────────────
 var ctx    = new GlContext(1600, 900);
 var stream = new BrowserStream();
-var world  = new World();
-world.Body = female;
+var world  = new World { Body = female, Partner = male };
 
-Shader?      bodyShader = null;
-EnvRenderer? env        = null;
-GpuMesh?     femaleGpu  = null;
-GpuMesh?     maleGpu    = null;
+Shader?        bodyShader = null;
+EnvRenderer?   env        = null;
+FloorRenderer? floor      = null;
+GpuMesh?       femaleGpu  = null;
+GpuMesh?       maleGpu    = null;
 
 var skinBuf  = new Matrix4x4[BodyMesh.BoneCount];
 var last     = DateTime.UtcNow;
@@ -33,7 +33,8 @@ ctx.Window.Load += () =>
         femaleGpu  = new GpuMesh(gl, female.Mesh);
         maleGpu    = new GpuMesh(gl, male.Mesh);
         env        = new EnvRenderer(gl, assetDir);
-        Console.WriteLine("[engine] GL 로드 완료. N 키: 파노라마 전환");
+        floor      = new FloorRenderer(gl);
+        Console.WriteLine("[engine] GL 로드 완료. N 키: 스튜디오/파노라마 전환");
     }
     catch (Exception ex) { Console.Error.WriteLine($"[engine] GL 로드 실패: {ex.Message}"); }
 };
@@ -41,12 +42,12 @@ ctx.Window.Load += () =>
 ctx.Window.Initialize();
 stream.Start();
 
-// 키 조명 방향 3개 (크롬 반사용 다방향 조명)
+// 하이라이트용 키 조명 3개 (크롬의 반짝임은 주로 환경 반사가 만든다)
 var lights = new (Vector3 Dir, Vector3 Color)[]
 {
-    (Vector3.Normalize(new(0.5f,  1.0f,  0.6f)), new(2.8f, 2.5f, 2.2f)),  // 메인 (따뜻한 흰빛)
-    (Vector3.Normalize(new(-0.8f, 0.4f,  0.5f)), new(0.6f, 0.7f, 1.0f)),  // 보조 (차가운 파랑)
-    (Vector3.Normalize(new( 0.0f, 0.2f, -1.0f)), new(0.5f, 0.5f, 0.6f)),  // 림 (역광)
+    (Vector3.Normalize(new(0.4f,  1.0f,  0.8f)), new(1.6f, 1.6f, 1.7f)),  // 앞 위 (소프트박스 쪽)
+    (Vector3.Normalize(new(-0.9f, 0.5f,  0.2f)), new(0.7f, 0.8f, 1.0f)),  // 왼쪽 (차가운 파랑)
+    (Vector3.Normalize(new( 0.6f, 0.3f, -1.0f)), new(0.9f, 0.9f, 1.0f)),  // 뒤 림
 };
 
 ctx.Window.Run(() =>
@@ -58,61 +59,69 @@ ctx.Window.Run(() =>
 
     world.Update(dt, stream);
 
-    // N 키 엣지 감지 → 파노라마 전환
+    // N 키 엣지 감지 → 환경 전환
     bool nNow = world.IsDown("KeyN");
     if (nNow && !nWas) env?.NextPanorama();
     nWas = nNow;
 
-    if (bodyShader is null || femaleGpu is null || maleGpu is null || env is null) return;
+    if (bodyShader is null || femaleGpu is null || maleGpu is null || env is null || floor is null) return;
 
     ctx.BeginFrame();
 
     var aspect = (float)ctx.Width / ctx.Height;
-    const float fovY = MathF.PI / 4f;
-    var fovTan = MathF.Tan(fovY * 0.5f);
+    var fovTan = MathF.Tan(World.FovY * 0.5f);
 
     var fwd   = world.CamFwd();
     var right = Vector3.Normalize(Vector3.Cross(fwd, Vector3.UnitY));
     var up    = Vector3.Cross(right, fwd);
 
-    // 1. 스카이박스
-    env.Draw(fwd, right, up, fovTan, aspect);
+    // 1. 배경
+    env.Draw(world.CamPos, fwd, right, up, fovTan, aspect, ctx.Height);
 
-    // 2. 공통 셰이더 파라미터
-    var view = world.View();
-    var proj = world.Proj(aspect);
+    var vp       = world.View() * world.Proj(aspect);
+    var mirror   = Matrix4x4.CreateScale(1, -1, 1);
+    var mirCam   = world.CamPos with { Y = -world.CamPos.Y };
+    var studio   = env.Mode == 0;
+    var fModel   = Matrix4x4.CreateRotationY(world.BodyYaw) * Matrix4x4.CreateTranslation(world.BodyPos + world.Side(-0.45f));
+    var mModel   = Matrix4x4.CreateRotationY(world.BodyYaw) * Matrix4x4.CreateTranslation(world.BodyPos + world.Side(0.45f));
 
-    bodyShader.Use();
-    bodyShader.Set("u_cam_pos",   world.CamPos);
-    bodyShader.Set("u_ambient",   new Vector3(0.50f, 0.48f, 0.55f));
-    bodyShader.Set("u_metallic",  1.0f);
-    bodyShader.Set("u_roughness", 0.07f);
-    bodyShader.Set("u_l0_dir",    lights[0].Dir);   bodyShader.Set("u_l0_col", lights[0].Color);
-    bodyShader.Set("u_l1_dir",    lights[1].Dir);   bodyShader.Set("u_l1_col", lights[1].Color);
-    bodyShader.Set("u_l2_dir",    lights[2].Dir);   bodyShader.Set("u_l2_col", lights[2].Color);
+    void DrawBodies(Matrix4x4 extra, Vector3 cam)
+    {
+        bodyShader.Use();
+        env.Bind(bodyShader);
+        bodyShader.Set("u_cam_pos",   cam);
+        bodyShader.Set("u_cam_back",  -fwd);
+        bodyShader.Set("u_ambient",   new Vector3(0.50f, 0.52f, 0.58f));
+        bodyShader.Set("u_roughness", 0.10f);
+        bodyShader.Set("u_l0_dir", lights[0].Dir); bodyShader.Set("u_l0_col", lights[0].Color);
+        bodyShader.Set("u_l1_dir", lights[1].Dir); bodyShader.Set("u_l1_col", lights[1].Color);
+        bodyShader.Set("u_l2_dir", lights[2].Dir); bodyShader.Set("u_l2_col", lights[2].Color);
+        foreach (var (body, gpu, model) in new[] { (female, femaleGpu, fModel), (male, maleGpu, mModel) })
+        {
+            bodyShader.Set("u_model", model);
+            bodyShader.Set("u_mvp",   model * extra * vp);
+            body.GetSkinMatrices(skinBuf.AsSpan());
+            bodyShader.SetArray("u_bones", skinBuf);
+            gpu.Draw();
+        }
+    }
 
-    // 3. 여성형 (왼쪽 -0.45)
-    var fPos   = world.BodyPos + new Vector3(-0.45f, 0, 0);
-    var fModel = Matrix4x4.CreateRotationY(world.BodyYaw) * Matrix4x4.CreateTranslation(fPos);
-    bodyShader.Set("u_model", fModel);
-    bodyShader.Set("u_mvp",   fModel * view * proj);
-    female.GetSkinMatrices(skinBuf.AsSpan());
-    bodyShader.SetArray("u_bones", skinBuf);
-    femaleGpu.Draw();
+    // 2. 광택 바닥: 반사층 → 뒤집힌 인형 → 바닥 표면
+    if (studio)
+    {
+        floor.DrawReflection(env, vp, world.CamPos);
+        DrawBodies(mirror, mirCam);
+        floor.DrawSurface(env, vp, world.CamPos);
+    }
 
-    // 4. 남성형 (오른쪽 +0.45)
-    var mPos   = world.BodyPos + new Vector3( 0.45f, 0, 0);
-    var mModel = Matrix4x4.CreateRotationY(world.BodyYaw) * Matrix4x4.CreateTranslation(mPos);
-    bodyShader.Set("u_model", mModel);
-    bodyShader.Set("u_mvp",   mModel * view * proj);
-    male.GetSkinMatrices(skinBuf.AsSpan());
-    bodyShader.SetArray("u_bones", skinBuf);
-    maleGpu.Draw();
+    // 3. 인형 (여성형 왼쪽, 남성형 오른쪽)
+    DrawBodies(Matrix4x4.Identity, world.CamPos);
 
     stream.PushFrame(ctx.ReadPixels(), ctx.Width, ctx.Height);
 });
 
 ctx.Dispose();
+floor?.Dispose();
 env?.Dispose();
 maleGpu?.Dispose();
 femaleGpu?.Dispose();

@@ -110,6 +110,15 @@ sealed class BrowserStream : IDisposable
             await ReadInputLoop(wsc.WebSocket);
             return;
         }
+        if (path == "/frame.jpg")
+        {
+            if (_lastFrame is not { } jpg) { ctx.Response.StatusCode = 503; ctx.Response.Close(); return; }
+            ctx.Response.ContentType = "image/jpeg";
+            ctx.Response.ContentLength64 = jpg.Length;
+            await ctx.Response.OutputStream.WriteAsync(jpg);
+            ctx.Response.Close();
+            return;
+        }
         if (path == "/input" && ctx.Request.HttpMethod == "POST")
         {
             using var sr = new StreamReader(ctx.Request.InputStream);
@@ -208,7 +217,7 @@ sealed class BrowserStream : IDisposable
         <body>
         <canvas id="c"></canvas>
         <div id="info">0 fps</div>
-        <div id="hint">클릭→마우스 캡처 | WASD 이동 | 마우스 시점 | N 파노라마 전환 | Esc 해제</div>
+        <div id="hint">클릭→마우스 캡처 | WASD 이동 | 마우스 시점 | 휠 확대 | N 스튜디오/파노라마 | Esc 해제</div>
         <script>
         'use strict';
         const c   = document.getElementById('c');
@@ -242,6 +251,7 @@ sealed class BrowserStream : IDisposable
           if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
         });
         document.addEventListener('keyup',e=>{keys.delete(e.code);send({type:'keyup',key:e.code});});
+        c.addEventListener('wheel',e=>{e.preventDefault();send({type:'wheel',dy:e.deltaY});},{passive:false});
         </script>
         </body>
         </html>

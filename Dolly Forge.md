@@ -279,42 +279,36 @@ Google 지도의 **스트리트 뷰 레이어**를 기준 자료로 삼는다. �
 ## 7. 기술 구조
 
 ```text
-godot/                      Godot 4.7 .NET (C#) 게임
-  src/Core/                 엔진과 무관한 공용 코어 (테스트·봇과 공유, 서버는 catalog.json 으로 공유)
-    Physical.cs, Assembly.cs  재료 물성·형상·관성, 부품·관절(Fusion 관절 7종)·조립품·질량 특성
+engine/                     C# .NET 10 + Silk.NET OpenGL 4.5 자체 엔진 (Godot 없음)
+  src/Program.cs            렌더 루프: 배경 → 바닥 반사층 → 뒤집힌 인형 → 광택 바닥 → 인형
+  src/Body/CyborgBody.cs    크롬 사이보그 인형: SDF 조형(로프트·둥근 원뿔·타원체 + 홈 파기)을 Surface Nets 로 메시화,
+                            원형별 거리로 14뼈 스키닝, 걷기 애니메이션. 여성형·남성형 체형, 모듈 종류별 크롬 톤
+  src/GL/EnvRenderer.cs     환경: 절차적 사이버 스튜디오(회로 벽·도시 야경 창·천장 조명) / 파노라마 사진, 공용 GLSL(EnvGlsl)
+  src/GL/FloorRenderer.cs   광택 검정 바닥 (평면 반사)
+  src/GL/Shader.cs          크롬 셰이더(환경 반사 × 프레넬 + GGX), 바닥 셰이더 — GLSL 은 ASCII 만
+  src/GL/Context.cs         숨은 SDL 창 + 1600 × 900 FBO
+  src/Stream/BrowserStream.cs  통합 브라우저로 JPEG over WebSocket, 키보드·마우스·휠 입력, /frame.jpg 점검
+  src/Game/World.cs         카메라·이동·방 경계
+  assets/panoramas/         CC0 파노라마 (빌드 때 출력 폴더로 복사)
+godot/src/Core/             엔진과 무관한 공용 코어 (엔진·테스트·봇이 같은 파일을 컴파일)
+    Physical.cs, Assembly.cs  재료 물성·형상·관성, 부품·관절·조립품·질량 특성
     Catalog.cs, Rules.cs      카탈로그·정수 가격·예산, 현실 결합 규칙
-    Cyborg.cs                 안드로이드 사이보그 모듈(표준·HD·LITE)·관절·구동기, 몸 구성, 들기·점프·비행 계산
-    Export.cs                 URDF · USDA(USD Physics) · STL · BOM (가상 부품 표시 포함)
-    Serialization.cs          catalog.json, 기기 JSON(창고 보관)
+    Cyborg.cs                 안드로이드 사이보그 모듈(표준·HD·LITE)·관절·구동기, 몸 구성
+    Export.cs                 URDF · USDA(USD Physics) · STL · BOM
+    Serialization.cs          catalog.json, 기기 JSON
     Net/                      월드 서버 프로토콜·WebSocket 클라이언트
-  src/Game/                 Godot: 월드·자연·도시, 부품 강체, 관절·모터·양자 아날로그 기기, 플레이어·비행, 종이 UI, 통신망 세션
-    FutureCityLife.cs         지평선의 도시(건물·지붕·공원), 언덕과 산 능선, 유리 돔 식물원
-    Site.cs, Settlement.cs    터 배치(정류장·선로·오솔길·시험장)와 지형 다듬기, 정류장·모노레일·작업장 외관·자작나무
-    StreetEnvironment.cs      길을 따라 놓인 한국 주택가 골목(아스팔트·보도·다세대 건물·전봇대·가로등·차) — 거리뷰 기준 최고 디테일 구역, 길가 요소 목록(Census)
-    StreetStyle.cs            나라 양식(통행·도로 선·전봇대·볼라드·길 이름판·건물·길가 소품)
-    MeshBatcher.cs            움직이지 않는 장식 메시를 재질별로 합쳐 그리기 호출을 줄인다
-    Ambience.cs               바람·먼 도시의 소리 바탕
-    Surface.cs, Senses.cs     표면 물성(마찰·반발·요철·열 유출률·발소리·냄새)과 다섯 감각(발밑·발소리 합성·냄새 확산·접촉 화학·감각 기록지)
-    StreetDetail.cs           골목 디테일: 가스관·방범창·실외기·옥상·간판·번호판, 과속방지턱·반사경·도로명판·종량제 봉투·오토바이·텃밭, 차체 단면
-    BrowserStream.cs          통합 브라우저로 화면 전송(JPEG over WebSocket)과 키보드·마우스 입력 되돌리기
-  web/stream.html           통합 브라우저에 뜨는 화면 페이지 (포인터 잠금, 재연결)
-  shaders/                  지형·풀·소나무 가지·물
 server/                     Rust 월드 서버 (외부 crate 없음): QR 계정, 결제·재고, 창고, 몸 구성 저장, 위치 중계
 tools/DollyForge.Core.Tests 코어 단위 테스트 (xUnit)
-tools/DollyForge.Bot        서버 통합 시험 클라이언트 (공용 코어 사용)
+tools/DollyForge.Bot        서버 통합 시험 클라이언트
 tools/validate              URDF·USDA 독립 검증기 (표준 라이브러리 Python)
 ```
 
 ## 8. 실행과 검증
 
-1. 터미널에서 `./run.sh` 를 실행한다. 게임 창은 뜨지 않고, VS Code 통합 브라우저(Open Integrated Browser)에 `http://127.0.0.1:7780/` 탭이 저절로 열린다(저장소의 작은 확장 `tools/vscode-browser` 를 처음 한 번 설치). Ctrl+C 로 서버와 게임을 함께 끝낸다.
-   또는 VS Code 에서 **Terminal → Run Task… → "Dolly Forge: 실행"**. 실사 에셋을 처음 한 번 내려받고(git 에 넣지 않음), Rust 월드 서버를 띄우고, C# 을 빌드해 게임을 켠 뒤 **VS Code 통합 브라우저(Open Integrated Browser)** 로 `http://127.0.0.1:7780/` 을 연다.
-   - Godot 4 는 C# 프로젝트를 웹으로 내보낼 수 없다. 그래서 게임은 이 컴퓨터의 Godot 에서 실사 렌더링(Forward+, Jolt)으로 돌고, 1600 × 900 화면을 JPEG 로 브라우저에 보낸다. 브라우저의 키보드·마우스는 게임 입력으로 돌아간다. 게임은 모니터 없는 가상 화면(`cage`, wlroots headless, GPU 가속) 안에서 그리므로 어떤 창도 뜨지 않는다(`tools/run-game.sh`; cage 가 없으면 작은 창을 화면 구석에 둔다).
-   - 성능: 내장 그래픽(Intel Arrow Lake)에서 3D 는 67 % 해상도로 그려 FSR 2 로 키우고, 화면은 GPU 를 멈추지 않는 비동기 읽기로 가져온다. `DOLLY_STREAM_STATS=1 ./run.sh` 로 5초마다 렌더 fps·GPU 시간을 본다.
-   - 게임은 통합 브라우저 탭에서 넣은 키보드·마우스만 받는다. 숨은 Godot 창에 닿는 실제 마우스·키보드는 버리므로, 데스크톱에서 마우스를 움직여도 시점이 따라가지 않는다(`cage` 가 없어 작은 창으로 돌 때도 같다).
-   - 화면을 클릭하면 마우스가 잡히고(포인터 잠금) Esc 로 놓인다. 잠그기 전에는 마우스가 화면 위를 지나가도 시점이 돌지 않는다. 탭을 두 개 열면 새 탭이 화면을 가져가고, 예전 탭은 다시 붙지 않고 "클릭하면 이 탭으로 가져옵니다"를 띄운다.
-   - 점검용: `GET /frame.jpg` 는 탭의 연결을 빼앗지 않고 요청 뒤에 새로 구운 화면 한 장을 주고, `POST /input` 은 탭과 같은 형식의 입력을 게임 안에 넣는다. `ws://127.0.0.1:7780/ws?watch=1` 은 화면·소리를 받기만 하는 관찰 연결이다(탭을 밀어내지 않는다). 끝낼 때는 "game: Godot 게임 (화면 보내기)" 작업을 종료한다.
-   - 디버그·VR 용으로 "Dolly Forge: 네이티브 창으로 실행" 작업도 있다.
+1. 터미널에서 `./run.sh` 를 실행한다. Rust 월드 서버를 띄우고 엔진을 빌드·실행한 뒤, VS Code 통합 브라우저에 `http://127.0.0.1:7780/` 을 연다. 엔진 창은 화면에 뜨지 않는다(숨은 SDL 창 + FBO, `DISPLAY=:1`).
+   - 조작: 화면 클릭 → 마우스 잡기(Esc 로 놓기), WASD 이동, 마우스 시점, 휠 확대·축소, N 스튜디오 ↔ 파노라마 전환.
+   - 점검: `GET /frame.jpg` 는 마지막 화면 한 장, `POST /input` 은 탭과 같은 형식의 입력(`{"type":"wheel","dy":-400}` 등)을 넣는다.
+   - 인형 메시는 시작할 때 SDF 에서 새로 만든다(수 초).
 2. 신분 등록 신청서에 전화번호를 적고 QR 계정을 발급받는다. 개발 모드에서는 인증 코드가 신청서에 표시된다.
 
 검증 작업:
