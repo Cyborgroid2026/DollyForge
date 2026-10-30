@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>DollyForge</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>dolly-engine</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.21.0" />
+    <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.21.0" />
+    <PackageReference Include="Silk.NET.Windowing.Sdl" Version="2.21.0" />
+    <PackageReference Include="Silk.NET.Input.Glfw" Version="2.21.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.7" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../godot/src/Core/Cyborg.cs" />
+    <Compile Include="../godot/src/Core/Blueprints.cs" />
+    <Compile Include="../godot/src/Core/Catalog.cs" />
+    <Compile Include="../godot/src/Core/Assembly.cs" />
+    <Compile Include="../godot/src/Core/Physical.cs" />
+    <Compile Include="../godot/src/Core/Parametric.cs" />
+    <Compile Include="../godot/src/Core/Rules.cs" />
+    <Compile Include="../godot/src/Core/Serialization.cs" />
+    <Compile Include="../godot/src/Core/Export.cs" />
+    <Compile Include="../godot/src/Core/Net/Protocol.cs" />
+    <Compile Include="../godot/src/Core/Net/WorldClient.cs" />
+  </ItemGroup>
+</Project>
