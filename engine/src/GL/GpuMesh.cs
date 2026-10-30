@@ -14,15 +14,15 @@ sealed class GpuMesh : IDisposable
         _gl  = gl;
         var n = mesh.Vertices.Length;
 
-        // float VBO: pos(3) + norm(3) + color(3) + weights(4) = 13 floats/vert
-        const int fStride = 13 * sizeof(float);
-        var fBuf = new float[n * 13];
+        // float VBO: pos(3) + norm(3) + color(3) + weights(4) + seam(1) = 14 floats/vert
+        const int fStride = 14 * sizeof(float);
+        var fBuf = new float[n * 14];
         for (var i = 0; i < n; i++)
         {
             var v = mesh.Vertices[i];
             var nm = mesh.Normals[i];
             var c  = mesh.Colors[i];
-            var b0 = i * 4; var off = i * 13;
+            var b0 = i * 4; var off = i * 14;
             fBuf[off+0]=v.X;  fBuf[off+1]=v.Y;  fBuf[off+2]=v.Z;
             fBuf[off+3]=nm.X; fBuf[off+4]=nm.Y; fBuf[off+5]=nm.Z;
             fBuf[off+6]=c.X;  fBuf[off+7]=c.Y;  fBuf[off+8]=c.Z;
@@ -30,6 +30,7 @@ sealed class GpuMesh : IDisposable
             fBuf[off+10]=mesh.Weights[b0+1];
             fBuf[off+11]=mesh.Weights[b0+2];
             fBuf[off+12]=mesh.Weights[b0+3];
+            fBuf[off+13]=mesh.Seams.Length > i ? mesh.Seams[i] : 1f;
         }
 
         // int VBO: bones(4 int) — 별도 버퍼로 비트패턴 보존
@@ -66,6 +67,9 @@ sealed class GpuMesh : IDisposable
         // layout=4: weights (bones는 별도 버퍼이므로 먼저 weights)
         gl.EnableVertexAttribArray(4);
         gl.VertexAttribPointer(4, 4, VertexAttribPointerType.Float, false, fStride, (void*)(9*4));
+        // layout=5: seam distance
+        gl.EnableVertexAttribArray(5);
+        gl.VertexAttribPointer(5, 1, VertexAttribPointerType.Float, false, fStride, (void*)(13*4));
 
         // int 버퍼 바인딩 (bones)
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, _bbo);

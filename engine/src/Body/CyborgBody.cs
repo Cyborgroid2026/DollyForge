@@ -12,6 +12,7 @@ public sealed class BodyMesh
     public int[]     Indices  = [];
     public int[]     Bones    = [];   // 정점당 4개
     public float[]   Weights  = [];   // 정점당 4개 (합=1)
+    public float[]   Seams    = [];   // 외피 이음선까지 부호 거리 (m), 셰이더가 가는 선으로 그린다
 
     public const int BoneCount = 14;
     public Transform3D[] Rest   = new Transform3D[BoneCount]; // 부모 기준 쉼 자세
@@ -152,6 +153,7 @@ public sealed class CyborgBody
             Indices  = geo.Indices,
             Bones    = geo.Bones,
             Weights  = geo.Weights,
+            Seams    = geo.Seams,
             Rest     = geo.Rest,
             Global   = geo.Global,
             Parent   = geo.Parent,
@@ -314,14 +316,14 @@ public sealed class CyborgBody
         (float, float, float, float, float)[] torso = male
             ? [
                 (0.815f, 0.040f, 0.035f, 0.035f,  0.000f),
-                (0.855f, 0.110f, 0.078f, 0.075f,  0.000f),
-                (0.910f, 0.160f, 0.090f, 0.098f,  0.000f),
-                (0.960f, 0.166f, 0.096f, 0.104f, -0.005f),
-                (1.010f, 0.160f, 0.096f, 0.100f, -0.005f),
-                (1.060f, 0.152f, 0.095f, 0.092f,  0.000f),
-                (1.110f, 0.150f, 0.097f, 0.090f,  0.000f),
-                (1.170f, 0.160f, 0.100f, 0.094f,  0.000f),
-                (1.230f, 0.178f, 0.104f, 0.102f,  0.000f),
+                (0.855f, 0.110f, 0.086f, 0.075f,  0.000f),
+                (0.910f, 0.155f, 0.096f, 0.098f,  0.000f),
+                (0.960f, 0.160f, 0.099f, 0.104f, -0.005f),
+                (1.010f, 0.154f, 0.100f, 0.100f, -0.005f),
+                (1.060f, 0.145f, 0.100f, 0.092f,  0.000f),
+                (1.110f, 0.146f, 0.101f, 0.090f,  0.000f),
+                (1.170f, 0.160f, 0.103f, 0.094f,  0.000f),
+                (1.230f, 0.180f, 0.105f, 0.102f,  0.000f),
                 (1.290f, 0.198f, 0.108f, 0.108f,  0.000f),
                 (1.350f, 0.212f, 0.106f, 0.110f,  0.000f),
                 (1.410f, 0.212f, 0.098f, 0.108f, -0.005f),
@@ -332,14 +334,14 @@ public sealed class CyborgBody
             ]
             : [
                 (0.750f, 0.030f, 0.030f, 0.030f,  0.000f),
-                (0.790f, 0.100f, 0.074f, 0.070f,  0.000f),
-                (0.840f, 0.158f, 0.082f, 0.092f,  0.000f),
+                (0.790f, 0.100f, 0.080f, 0.070f,  0.000f),
+                (0.840f, 0.158f, 0.088f, 0.092f,  0.000f),
                 (0.890f, 0.182f, 0.090f, 0.104f, -0.005f),
-                (0.940f, 0.170f, 0.086f, 0.100f, -0.005f),
-                (0.990f, 0.150f, 0.080f, 0.088f, -0.005f),
-                (1.040f, 0.126f, 0.074f, 0.072f,  0.000f),
-                (1.075f, 0.112f, 0.070f, 0.066f,  0.000f),
-                (1.120f, 0.126f, 0.076f, 0.072f,  0.000f),
+                (0.940f, 0.170f, 0.088f, 0.100f, -0.005f),
+                (0.990f, 0.150f, 0.085f, 0.088f, -0.005f),
+                (1.040f, 0.126f, 0.082f, 0.072f,  0.000f),
+                (1.075f, 0.112f, 0.080f, 0.066f,  0.000f),
+                (1.120f, 0.124f, 0.081f, 0.070f,  0.000f),
                 (1.180f, 0.137f, 0.084f, 0.080f,  0.000f),
                 (1.240f, 0.142f, 0.087f, 0.082f,  0.000f),
                 (1.300f, 0.145f, 0.083f, 0.080f,  0.000f),
@@ -352,13 +354,13 @@ public sealed class CyborgBody
         Ell(Bone.Root, V(0, G(0.790f, 0.855f), 0.004f), V(G(0.060f, 0.066f), G(0.050f, 0.050f), G(0.058f, 0.064f)), 0.045f); // 샅
 
         // ── 목·머리 (얼굴 없는 달걀형) ─────────────────────────
-        Cap(Bone.Head, V(0, G(1.420f, 1.520f), G(-0.012f, -0.015f)), V(0, G(1.590f, 1.670f), -0.004f),
-            G(0.040f, 0.070f), G(0.033f, 0.052f), G(0.025f, 0.035f));
+        Cap(Bone.Head, V(0, G(1.420f, 1.520f), G(-0.012f, -0.015f)), V(0, G(1.590f, 1.730f), -0.004f),
+            G(0.040f, 0.072f), G(0.033f, 0.056f), G(0.025f, 0.035f));
         (float, float, float, float, float)[] head = male
             ? [
-                (1.640f, 0.016f, 0.016f, 0.016f,  0.026f),
-                (1.652f, 0.056f, 0.050f, 0.046f,  0.022f),
-                (1.680f, 0.068f, 0.064f, 0.066f,  0.014f),
+                (1.638f, 0.012f, 0.012f, 0.012f,  0.024f),
+                (1.655f, 0.042f, 0.038f, 0.034f,  0.020f),
+                (1.680f, 0.062f, 0.060f, 0.062f,  0.012f),
                 (1.710f, 0.073f, 0.072f, 0.080f,  0.006f),
                 (1.750f, 0.078f, 0.083f, 0.096f, -0.002f),
                 (1.790f, 0.080f, 0.085f, 0.099f, -0.006f),
@@ -379,7 +381,7 @@ public sealed class CyborgBody
                 (1.758f, 0.038f, 0.040f, 0.046f, -0.006f),
                 (1.766f, 0.008f, 0.010f, 0.010f, -0.004f),
             ];
-        prims.Add(new Loft(head) { Bone = Bone.Head, Blend = G(0.03f, 0.045f) }.Done());
+        prims.Add(new Loft(head) { Bone = Bone.Head, Blend = G(0.03f, 0.06f) }.Done());
 
         // ── 성별 근육·볼륨 (몸통 뼈) ───────────────────────────
         foreach (var sd in new[] { 1f, -1f })
@@ -389,30 +391,35 @@ public sealed class CyborgBody
             {
                 Ell(Bone.Root, V(sd * 0.085f, 1.365f, 0.078f), V(0.090f, 0.064f, 0.046f), 0.026f,
                     yaw * Quaternion.CreateFromAxisAngle(Vector3.UnitX, 0.12f));                      // 대흉근
-                foreach (var (ay, az) in new[] { (1.255f, 0.086f), (1.190f, 0.083f), (1.125f, 0.080f), (1.062f, 0.076f) })
-                    Ell(Bone.Root, V(sd * 0.036f, ay, az), V(0.029f, 0.028f, 0.016f), 0.016f);        // 복근 8칸
+                foreach (var (ay, az) in new[] { (1.255f, 0.095f), (1.190f, 0.093f), (1.125f, 0.091f), (1.064f, 0.089f) })
+                    Ell(Bone.Root, V(sd * 0.036f, ay, az), V(0.029f, 0.028f, 0.016f), 0.022f);        // 복근 8칸
                 Ell(Bone.Root, V(sd * 0.145f, 1.300f, -0.055f), V(0.070f, 0.150f, 0.055f), 0.040f,
                     Quaternion.CreateFromAxisAngle(Vector3.UnitZ, -sd * 0.18f));                       // 광배근
-                Ell(Bone.Root, V(sd * 0.035f, 1.130f, -0.075f), V(0.030f, 0.130f, 0.030f), 0.030f);  // 척추기립근
-                Ell(Bone.Root, V(sd * 0.075f, 1.390f, -0.062f), V(0.065f, 0.075f, 0.040f), 0.045f);  // 능형근
+                Ell(Bone.Root, V(sd * 0.036f, 1.180f, -0.078f), V(0.030f, 0.120f, 0.028f), 0.035f);  // 척추기립근
                 Ell(Bone.Root, V(sd * 0.075f, 0.965f, -0.070f), V(0.085f, 0.085f, 0.070f), 0.035f);  // 대둔근
                 Cap(Bone.Root, V(sd * 0.030f, 1.585f, -0.030f), V(sd * 0.185f, 1.505f, -0.020f), 0.058f, 0.046f, 0.050f); // 승모근
             }
             else
             {
-                Ell(Bone.Root, V(sd * 0.074f, 1.250f, 0.072f), V(0.072f, 0.070f, 0.064f), 0.030f, yaw); // 가슴
+                Ell(Bone.Root, V(sd * 0.074f, 1.246f, 0.070f), V(0.071f, 0.069f, 0.066f), 0.042f,
+                    yaw * Quaternion.CreateFromAxisAngle(Vector3.UnitX, 0.18f));                   // 가슴
                 Ell(Bone.Root, V(sd * 0.072f, 0.905f, -0.058f), V(0.088f, 0.092f, 0.075f), 0.035f);    // 둔부
                 Cap(Bone.Root, V(sd * 0.035f, 1.445f, -0.012f), V(sd * 0.150f, 1.405f, -0.008f), 0.030f, 0.036f, 0.030f); // 쇄골·어깨선
             }
         }
 
+        if (male)   // 승모근 아래쪽 마름모
+            Ell(Bone.Root, V(0, 1.420f, -0.080f), V(0.075f, 0.120f, 0.032f), 0.045f);
         if (male)   // 복근 좌우 사이 백선
-            prims.Add(new Cone(V(0, 1.030f, 0.096f), V(0, 1.300f, 0.110f), 0.008f, 0.008f) { Bone = Bone.Root, Blend = 0.014f, Carve = true }.Done());
+            prims.Add(new Cone(V(0, 1.030f, 0.106f), V(0, 1.300f, 0.114f), 0.008f, 0.008f) { Bone = Bone.Root, Blend = 0.014f, Carve = true }.Done());
+        prims.Add(new Ellipsoid(V(0, G(1.035f, 1.030f), G(0.084f, 0.104f)), V(0.006f, 0.008f, 0.006f), Quaternion.Identity)
+            { Bone = Bone.Root, Blend = 0.008f, Carve = true }.Done());                                       // 배꼽
 
         // ── 팔·손 ─────────────────────────────────────────────
         var joints = new Vector3[BodyMesh.BoneCount];
         joints[(int)Bone.Root] = V(0, G(0.855f, 0.925f), 0);
         joints[(int)Bone.Head] = V(0, G(1.440f, 1.545f), -0.010f);
+        var arms = new List<(float Sd, Vector3 S, Vector3 E, Vector3 W)>();
 
         foreach (var sd in new[] { 1f, -1f })
         {
@@ -427,21 +434,22 @@ public sealed class CyborgBody
             var E = V(sd * G(0.188f, 0.245f), G(1.095f, 1.170f), G(-0.030f, -0.035f));
             var W = V(sd * G(0.200f, 0.262f), G(0.855f, 0.920f), -0.008f);
             joints[(int)bU] = S; joints[(int)bF] = E; joints[(int)bH] = W;
+            arms.Add((sd, S, E, W));
 
             Ell(bU, V(sd * G(0.159f, 0.208f), G(1.360f, 1.430f), -0.010f),
-                V(G(0.044f, 0.060f), G(0.080f, 0.110f), G(0.046f, 0.064f)), G(0.045f, 0.055f), AlongY(E - S));                  // 삼각근
-            Cap(bU, S, E, G(0.038f, 0.056f), G(0.030f, 0.042f), 0.035f);
+                V(G(0.044f, 0.066f), G(0.080f, 0.112f), G(0.046f, 0.068f)), G(0.045f, 0.055f), AlongY(E - S));                  // 삼각근
+            Cap(bU, S, E, G(0.038f, 0.060f), G(0.030f, 0.044f), 0.035f);
             if (male)
             {
-                Ell(bU, Vector3.Lerp(S, E, 0.55f) + V(0, 0, 0.022f), V(0.046f, 0.080f, 0.048f), 0.024f, AlongY(E - S)); // 이두
-                Ell(bU, Vector3.Lerp(S, E, 0.40f) + V(0, 0, -0.025f), V(0.048f, 0.095f, 0.045f), 0.024f, AlongY(E - S)); // 삼두
+                Ell(bU, Vector3.Lerp(S, E, 0.55f) + V(0, 0, 0.022f), V(0.052f, 0.088f, 0.054f), 0.026f, AlongY(E - S)); // 이두
+                Ell(bU, Vector3.Lerp(S, E, 0.40f) + V(0, 0, -0.025f), V(0.052f, 0.100f, 0.050f), 0.026f, AlongY(E - S)); // 삼두
             }
             else
                 Ell(bU, Vector3.Lerp(S, E, 0.45f) + V(0, 0, -0.010f), V(0.033f, 0.075f, 0.035f), 0.020f, AlongY(E - S));
 
-            Cap(bF, E, W, G(0.031f, 0.050f), G(0.020f, 0.028f), 0.015f);
+            Cap(bF, E, W, G(0.031f, 0.054f), G(0.020f, 0.030f), 0.015f);
             Ell(bF, Vector3.Lerp(E, W, 0.22f) + V(sd * G(0.003f, 0.008f), 0, G(0.004f, 0.008f)),
-                V(G(0.031f, 0.042f), G(0.060f, 0.075f), G(0.030f, 0.040f)), 0.022f, AlongY(W - E));  // 전완근
+                V(G(0.031f, 0.047f), G(0.060f, 0.080f), G(0.030f, 0.044f)), 0.024f, AlongY(W - E));  // 전완근
 
             AddHand(bH, W, sd, G(1f, 1.13f));
 
@@ -455,11 +463,11 @@ public sealed class CyborgBody
             joints[(int)bT] = H; joints[(int)bS] = K; joints[(int)bP] = A;
 
             var Tm = Vector3.Lerp(H, K, 0.45f) + V(0, 0, G(0.004f, 0.008f));
-            Cap(bT, V(sd * G(0.086f, 0.094f), G(0.840f, 0.900f), -0.006f), Tm, G(0.090f, 0.102f), G(0.076f, 0.088f), 0.060f);
-            Cap(bT, Tm, K + V(0, 0, 0.008f), G(0.076f, 0.088f), G(0.046f, 0.054f), 0.040f);
+            Cap(bT, V(sd * G(0.086f, 0.094f), G(0.840f, 0.900f), -0.006f), Tm, G(0.090f, 0.108f), G(0.076f, 0.094f), 0.060f);
+            Cap(bT, Tm, K + V(0, 0, 0.008f), G(0.076f, 0.094f), G(0.046f, 0.056f), 0.040f);
             if (male)
             {
-                Ell(bT, V(sd * 0.100f, 0.700f, 0.040f), V(0.085f, 0.170f, 0.068f), 0.040f);  // 대퇴직근
+                Ell(bT, V(sd * 0.100f, 0.700f, 0.040f), V(0.090f, 0.175f, 0.072f), 0.040f);  // 대퇴직근
                 Ell(bT, V(sd * 0.068f, 0.565f, 0.035f), V(0.040f, 0.065f, 0.040f), 0.025f);  // 내측광근
                 Ell(bT, V(sd * 0.135f, 0.730f, 0.000f), V(0.045f, 0.130f, 0.060f), 0.035f);  // 외측광근
                 Ell(bT, V(sd * 0.095f, 0.720f, -0.040f), V(0.060f, 0.150f, 0.050f), 0.035f); // 햄스트링
@@ -471,8 +479,8 @@ public sealed class CyborgBody
             Cap(bS, K + V(0, 0, 0.008f), A, G(0.043f, 0.049f), G(0.027f, 0.031f), 0.025f);
             if (male)
             {
-                Ell(bS, V(sd * 0.074f, 0.375f, -0.035f), V(0.040f, 0.090f, 0.042f), 0.030f); // 비복근 안쪽
-                Ell(bS, V(sd * 0.108f, 0.390f, -0.030f), V(0.035f, 0.080f, 0.038f), 0.030f); // 비복근 바깥
+                Ell(bS, V(sd * 0.074f, 0.375f, -0.035f), V(0.044f, 0.095f, 0.046f), 0.030f); // 비복근 안쪽
+                Ell(bS, V(sd * 0.108f, 0.390f, -0.030f), V(0.038f, 0.085f, 0.040f), 0.030f); // 비복근 바깥
                 Ell(bS, V(sd * 0.098f, 0.360f, 0.020f), V(0.030f, 0.100f, 0.030f), 0.025f);  // 전경골근
             }
             else
@@ -548,6 +556,37 @@ public sealed class CyborgBody
         for (var j = 0; j < joints.Length; j++) joints[j].Y += lift;
         foreach (var sh in all) sh.Bounds = new Aabb(sh.Bounds.Min + V(0, lift, 0), sh.Bounds.Max + V(0, lift, 0));
         (geo.Bones, geo.Weights) = SkinWeights(geo.Vertices, all, V(0, lift, 0));
+
+        // 외피 이음선: 평면과 몸 표면이 만나는 곡선 (레퍼런스의 어깨·하이컷·목·손목 선)
+        float SeamAt(Vector3 p, Bone owner)
+        {
+            var d = 1f;
+            void Cut(Vector3 o, Vector3 n, bool region)
+            {
+                if (!region) return;
+                var s = Vector3.Dot(p - o, Vector3.Normalize(n));
+                if (M.Abs(s) < M.Abs(d)) d = s;
+            }
+            var torsoOrLeg = owner is Bone.Root or Bone.ThighL or Bone.ThighR;
+            foreach (var (sd, S, E, W) in arms)
+            {
+                if (p.X * sd <= 0) continue;
+                var top = V(sd * 0.150f, G(1.000f, 1.050f), 0);
+                var bot = V(sd * 0.030f, G(0.790f, 0.855f), 0);
+                Cut(top, Vector3.Cross(bot - top, Vector3.UnitZ), torsoOrLeg && p.Y > bot.Y - 0.01f && p.Y < top.Y + 0.02f);
+                var dir = Vector3.Normalize(W - E);
+                Cut(W + dir * 0.004f, dir, owner is Bone.ForeL or Bone.ForeR or Bone.HandL or Bone.HandR && Vector3.Distance(p, W) < 0.045f);
+                if (!male)
+                    Cut(S + V(-sd * 0.022f, 0, 0), V(sd, -0.45f, 0),
+                        owner is Bone.Root or Bone.UpperL or Bone.UpperR && p.Y > S.Y - 0.085f && p.Y < S.Y + 0.08f && M.Abs(p.X) > 0.09f);
+            }
+            if (!male)
+                Cut(V(0, 1.555f, 0), V(0, 1, -0.4f), p.Y > 1.50f && p.Y < 1.62f && p.X * p.X + p.Z * p.Z < 0.0036f);
+            return d;
+        }
+        geo.Seams = new float[geo.Vertices.Length];
+        for (var v = 0; v < geo.Vertices.Length; v++)
+            geo.Seams[v] = SeamAt(geo.Vertices[v] - V(0, lift, 0), (Bone)geo.Bones[v * 4]);
 
         // 뼈: 모두 쉼 회전 없음, 위치만
         int[] parent = [-1, 0, 0, 0, (int)Bone.UpperR, (int)Bone.UpperL, (int)Bone.ForeR, (int)Bone.ForeL,

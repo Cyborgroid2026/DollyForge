@@ -10,13 +10,14 @@ Console.WriteLine($"[engine] 여성형 {female.Mesh.Vertices.Length:N0}  남성�
 // ── GL 컨텍스트 + 스트리밍 ────────────────────────────────────────────────
 var ctx    = new GlContext(1600, 900);
 var stream = new BrowserStream();
-var world  = new World { Body = female, Partner = male };
+var world  = new World(female, male);
 
 Shader?        bodyShader = null;
 EnvRenderer?   env        = null;
 FloorRenderer? floor      = null;
 GpuMesh?       femaleGpu  = null;
 GpuMesh?       maleGpu    = null;
+var            lastStatus = "";
 
 var skinBuf  = new Matrix4x4[BodyMesh.BoneCount];
 var last     = DateTime.UtcNow;
@@ -58,6 +59,7 @@ ctx.Window.Run(() =>
     dt      = Math.Clamp(dt, 0f, 0.1f);
 
     world.Update(dt, stream);
+    if (world.Status != lastStatus) stream.SetStatus(lastStatus = world.Status);
 
     // N 키 엣지 감지 → 환경 전환
     bool nNow = world.IsDown("KeyN");
@@ -71,7 +73,7 @@ ctx.Window.Run(() =>
     var aspect = (float)ctx.Width / ctx.Height;
     var fovTan = MathF.Tan(World.FovY * 0.5f);
 
-    var fwd   = world.CamFwd();
+    var fwd   = world.LookDir;
     var right = Vector3.Normalize(Vector3.Cross(fwd, Vector3.UnitY));
     var up    = Vector3.Cross(right, fwd);
 
@@ -82,10 +84,10 @@ ctx.Window.Run(() =>
     var mirror   = Matrix4x4.CreateScale(1, -1, 1);
     var mirCam   = world.CamPos with { Y = -world.CamPos.Y };
     var studio   = env.Mode == 0;
-    var fModel   = Matrix4x4.CreateRotationY(world.BodyYaw) * Matrix4x4.CreateTranslation(world.BodyPos + world.Side(-0.45f));
-    var mModel   = Matrix4x4.CreateRotationY(world.BodyYaw) * Matrix4x4.CreateTranslation(world.BodyPos + world.Side(0.45f));
+    var gpus     = new[] { femaleGpu, maleGpu };
 
-    void DrawBodies(Matrix4x4 extra, Vector3 cam)
+    // reflection = 바닥에 비친 상: 1인칭이어도 내 몸이 바닥에 비친다
+    void DrawBodies(Matrix4x4 extra, Vector3 cam, bool reflection)
     {
         bodyShader.Use();
         env.Bind(bodyShader);
@@ -96,13 +98,16 @@ ctx.Window.Run(() =>
         bodyShader.Set("u_l0_dir", lights[0].Dir); bodyShader.Set("u_l0_col", lights[0].Color);
         bodyShader.Set("u_l1_dir", lights[1].Dir); bodyShader.Set("u_l1_col", lights[1].Color);
         bodyShader.Set("u_l2_dir", lights[2].Dir); bodyShader.Set("u_l2_col", lights[2].Color);
-        foreach (var (body, gpu, model) in new[] { (female, femaleGpu, fModel), (male, maleGpu, mModel) })
+        for (var i = 0; i < world.Actors.Length; i++)
         {
+            var a = world.Actors[i];
+            if (!reflection && a == world.Player && world.CamView == World.ViewMode.FirstPerson) continue;   // 눈이 머리 안에 있다
+            var model = a.Model;
             bodyShader.Set("u_model", model);
             bodyShader.Set("u_mvp",   model * extra * vp);
-            body.GetSkinMatrices(skinBuf.AsSpan());
+            a.Body.GetSkinMatrices(skinBuf.AsSpan());
             bodyShader.SetArray("u_bones", skinBuf);
-            gpu.Draw();
+            gpus[i].Draw();
         }
     }
 
@@ -110,12 +115,12 @@ ctx.Window.Run(() =>
     if (studio)
     {
         floor.DrawReflection(env, vp, world.CamPos);
-        DrawBodies(mirror, mirCam);
+        DrawBodies(mirror, mirCam, true);
         floor.DrawSurface(env, vp, world.CamPos);
     }
 
-    // 3. 인형 (여성형 왼쪽, 남성형 오른쪽)
-    DrawBodies(Matrix4x4.Identity, world.CamPos);
+    // 3. 인형
+    DrawBodies(Matrix4x4.Identity, world.CamPos, false);
 
     stream.PushFrame(ctx.ReadPixels(), ctx.Width, ctx.Height);
 });

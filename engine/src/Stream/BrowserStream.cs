@@ -34,6 +34,7 @@ sealed class BrowserStream : IDisposable
     readonly object _inputLock = new();
 
     volatile byte[]? _lastFrame;
+    volatile string  _status = "{}";
     volatile bool _running;
 
     public void Start()
@@ -53,6 +54,17 @@ sealed class BrowserStream : IDisposable
         var jpeg = EncodeJpeg(flipped, w, h);
         _lastFrame = jpeg;
         BroadcastFrame(jpeg);
+    }
+
+    // 게임 상태(선택 화면/조종 중·시점)를 JSON 텍스트로 탭에 알린다
+    public void SetStatus(string json)
+    {
+        _status = json;
+        var bytes = Encoding.UTF8.GetBytes(json);
+        lock (_wsLock)
+            foreach (var ws in _ws)
+                if (ws.State == WebSocketState.Open)
+                    try { ws.SendAsync(bytes, WebSocketMessageType.Text, true, default).GetAwaiter().GetResult(); } catch { }
     }
 
     static byte[] FlipY(byte[] src, int w, int h)
@@ -106,7 +118,11 @@ sealed class BrowserStream : IDisposable
         {
             var wsc = await ctx.AcceptWebSocketAsync(null);
             lock (_wsLock) _ws.Add(wsc.WebSocket);
-            if (_lastFrame is { } f) await wsc.WebSocket.SendAsync(f, WebSocketMessageType.Binary, true, default);
+            lock (_wsLock)
+            {
+                wsc.WebSocket.SendAsync(Encoding.UTF8.GetBytes(_status), WebSocketMessageType.Text, true, default).GetAwaiter().GetResult();
+                if (_lastFrame is { } f) wsc.WebSocket.SendAsync(f, WebSocketMessageType.Binary, true, default).GetAwaiter().GetResult();
+            }
             await ReadInputLoop(wsc.WebSocket);
             return;
         }
@@ -211,13 +227,23 @@ sealed class BrowserStream : IDisposable
             body{background:#000;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden}
             canvas{image-rendering:pixelated;cursor:crosshair;display:block;max-width:100vw;max-height:100vh}
             #info{position:fixed;top:6px;left:8px;color:#0f0;font:11px monospace;pointer-events:none}
-            #hint{position:fixed;bottom:6px;left:8px;color:#444;font:11px monospace;pointer-events:none}
+            #hint{position:fixed;bottom:6px;left:8px;color:#777;font:12px monospace;pointer-events:none}
+            #view{position:fixed;top:6px;right:10px;color:#cfd6e4;font:13px sans-serif;pointer-events:none;text-shadow:0 0 4px #000}
+            #pick{position:fixed;left:0;right:0;bottom:9vh;display:none;justify-content:center;gap:28vw}
+            #pick button{font:600 17px sans-serif;color:#e8edf5;background:rgba(20,24,32,.72);border:1px solid #8a94a8;
+              border-radius:10px;padding:14px 26px;cursor:pointer;backdrop-filter:blur(4px)}
+            #pick button:hover{background:rgba(70,80,100,.85);border-color:#dfe6f2}
+            #title{position:fixed;top:5vh;left:0;right:0;text-align:center;color:#dfe6f2;font:600 22px sans-serif;
+              letter-spacing:.06em;display:none;text-shadow:0 0 8px #000}
           </style>
         </head>
         <body>
         <canvas id="c"></canvas>
         <div id="info">0 fps</div>
-        <div id="hint">클릭→마우스 캡처 | WASD 이동 | 마우스 시점 | 휠 확대 | N 스튜디오/파노라마 | Esc 해제</div>
+        <div id="hint"></div>
+        <div id="view"></div>
+        <div id="title">조종할 사이보그를 고르세요</div>
+        <div id="pick"><button data-i="0">여성형 [1]</button><button data-i="1">남성형 [2]</button></div>
         <script>
         'use strict';
         const c   = document.getElementById('c');
@@ -228,7 +254,20 @@ sealed class BrowserStream : IDisposable
         let fps=0,frames=0,last=performance.now(),locked=false;
         const keys=new Set();
 
+        const hint=document.getElementById('hint'),view=document.getElementById('view'),
+              pick=document.getElementById('pick'),title=document.getElementById('title');
+        function status(st){
+          const sel=st.state==='select';
+          pick.style.display=sel?'flex':'none'; title.style.display=sel?'block':'none';
+          view.textContent=sel?'':st.who+' · '+st.view;
+          hint.textContent=sel?'1·2 또는 카드로 선택 | 휠 거리 | N 스튜디오/파노라마'
+            :'클릭→마우스 캡처 | WASD 이동 · Shift 달리기 | 마우스 시점 | V 1인칭/3인칭 뒤/3인칭 앞 | 휠 거리 | C 캐릭터 선택 | N 배경 | Esc 해제';
+        }
+        pick.querySelectorAll('button').forEach(b=>b.addEventListener('click',e=>{
+          e.stopPropagation(); send({type:'select',button:+b.dataset.i}); c.requestPointerLock();
+        }));
         ws.onmessage=e=>{
+          if(typeof e.data==='string'){try{status(JSON.parse(e.data));}catch(_){}return;}
           createImageBitmap(new Blob([e.data],{type:'image/jpeg'})).then(bmp=>{
             if(c.width!==bmp.width||c.height!==bmp.height){c.width=bmp.width;c.height=bmp.height;}
             ctx.drawImage(bmp,0,0);

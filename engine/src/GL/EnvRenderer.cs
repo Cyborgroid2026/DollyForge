@@ -132,7 +132,7 @@ sealed class EnvRenderer : IDisposable
             } else {
                 vec2 uv = p.xy;
                 col = circuitWall(uv, aw) * 0.6;
-                col += rect(uv, vec2(-1.8, 1.0), vec2(1.8, 3.4), 0.35) * vec3(0.9, 0.92, 0.98);
+                col += rect(uv, vec2(-1.4, 1.2), vec2(1.4, 3.2), 0.25) * vec3(0.30, 0.32, 0.36);
             }
             return col;
         }

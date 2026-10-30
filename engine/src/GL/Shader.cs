@@ -61,6 +61,7 @@ sealed class Shader : IDisposable
         layout(location=2) in vec3 a_color;
         layout(location=3) in ivec4 a_bones;
         layout(location=4) in vec4 a_weights;
+        layout(location=5) in float a_seam;
 
         uniform mat4 u_mvp;
         uniform mat4 u_model;
@@ -69,8 +70,10 @@ sealed class Shader : IDisposable
         out vec3 v_pos;
         out vec3 v_norm;
         out vec3 v_color;
+        out float v_seam;
 
         void main() {
+            v_seam    = a_seam;
             mat4 skin = a_weights.x * u_bones[a_bones.x]
                       + a_weights.y * u_bones[a_bones.y]
                       + a_weights.z * u_bones[a_bones.z]
@@ -90,6 +93,7 @@ sealed class Shader : IDisposable
         in vec3 v_pos;
         in vec3 v_norm;
         in vec3 v_color;
+        in float v_seam;
         out vec4 frag_color;
 
         uniform vec3 u_cam_pos;
@@ -129,6 +133,10 @@ sealed class Shader : IDisposable
             col += keyLight(N, V, u_l1_dir, u_l1_col, F);
             col += keyLight(N, V, u_l2_dir, u_l2_col, F);
             col += v_color * u_ambient * (0.55 + 0.45 * N.y) * 0.07;
+            // panel seam: thin anti-aliased groove where the baked plane distance crosses zero
+            float sw = min(fwidth(v_seam) * 1.5, 0.003);
+            float seam = 1.0 - smoothstep(0.0007, 0.0007 + sw, abs(v_seam));
+            col *= 1.0 - 0.75 * seam;
             frag_color = vec4(tonemap(col), 1.0);
         }
         """;
