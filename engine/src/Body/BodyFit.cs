@@ -16,7 +16,9 @@ public sealed class BodyShape
         "tw0", "tw1", "tw2", "tw3", "tw4", "tw5", "tw6", "tw7",
         "tw8", "tw9", "tw10", "tw11", "tw12", "tw13", "tw14", "tw15", // 몸통 단면 너비
         "headW", "neckR", "shX", "delt", "armU", "armF", "armX", "hand",
-        "hipX", "kneeX", "ankX", "thighTop", "thighMid", "shin", "calf", "ankR", "thighOut", "glute", "bust", "chest", "foot",
+        "hipX", "glute", "bust", "chest", "foot",
+        "lr0", "lr1", "lr2", "lr3", "lr4", "lr5", "lr6", "lr7", "lr8", "lr9", "lr10", "lr11", "lr12",     // 다리 단면 너비 (발목 → 엉덩이)
+        "lx0", "lx1", "lx2", "lx3", "lx4", "lx5", "lx6", "lx7", "lx8", "lx9", "lx10", "lx11", "lx12",     // 다리 축 x
     ];
 
     static string DefaultDir => Path.Combine(AppContext.BaseDirectory, "assets", "body");
@@ -250,13 +252,42 @@ public sealed partial class CyborgBody
         }
         var reg = 0f;
         foreach (var l in logp) reg += l * l;
-        return e + 0.01f * reg;
+        // 곡선미: 이웃한 단면 배율이 튀면 윤곽에 꺾임(경계)이 생긴다 → 2차 차분을 강하게 벌한다
+        var smooth = 0f;
+        foreach (var prefix in new[] { "lr", "lx", "tw" })
+        {
+            var idx = BodyShape.Keys.Select((k, i) => (k, i)).Where(t => t.k.StartsWith(prefix) && char.IsDigit(t.k[prefix.Length]))
+                                    .Select(t => t.i).ToArray();
+            for (var j = 1; j + 1 < idx.Length; j++)
+            {
+                var c = logp[idx[j - 1]] - 2 * logp[idx[j]] + logp[idx[j + 1]];
+                smooth += c * c;
+            }
+        }
+        return e + 0.01f * reg + 2f * smooth;
     }
 
     /// <summary>dolly-engine --fit female|male [--out 폴더] [--min 100] [--max 10000]</summary>
     public static void FitCli(string[] args)
     {
         string Arg(string name, string def) { var i = Array.IndexOf(args, name); return i >= 0 && i + 1 < args.Length ? args[i + 1] : def; }
+        if (args.Length > 2 && args[1] == "profile")
+        {
+            // 진단: 정면 실루엣 몸통 너비를 1 cm 간격으로
+            var male = args[2] == "male";
+            var d = MakeDesign(male, BodyShape.LoadFor(male, Arg("--out", Path.Combine(AppContext.BaseDirectory, "assets", "body"))));
+            for (var y = 0.6f; y < 1.6f; y += 0.01f)
+            {
+                var (c, a, x0) = Row(d, y);
+                int lo = Array.IndexOf(c, true), hi = Array.LastIndexOf(c, true);
+                var segs = 0; for (var i = 1; i < c.Length; i++) if (c[i] && !c[i - 1]) segs++;
+                float zf = -1, zb = 1;
+                for (var z = -0.3f; z <= 0.3f; z += 0.001f)
+                    if (d.Eval(d.ToDesign(new Vector3(0, y, z))).Core < 0) { zb = MathF.Min(zb, z); zf = MathF.Max(zf, z); }
+                Console.WriteLine($"{y:F2} core {(lo < 0 ? 0 : (hi - lo + 1) * Dx):F3} segs {segs + (c[0] ? 1 : 0)}  front {zf:F3} back {zb:F3}");
+            }
+            return;
+        }
         var who = args.Length > 1 ? args[1] : "female";
         var outDir = Arg("--out", Path.Combine(AppContext.BaseDirectory, "assets", "body"));
         var minIt = int.Parse(Arg("--min", "100"));

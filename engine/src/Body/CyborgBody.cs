@@ -177,6 +177,7 @@ public sealed partial class CyborgBody
         public Bone  Bone;
         public float Blend;
         public bool  Carve;      // true = 부드럽게 파낸다 (근육 사이 홈)
+        public (float Knee, float Ankle, Bone Thigh, Bone Shin, Bone Foot)? Leg;   // 한 덩어리 다리: 높이로 뼈를 나눈다
         public bool  Arm;        // 팔 묶음: 어깨 높이에서만 몸통과 녹아 붙는다 (손이 허벅지에 붙지 않게)
         public Aabb  Bounds;
         public abstract float Distance(Vector3 p);
@@ -235,9 +236,13 @@ public sealed partial class CyborgBody
     {
         const int N = 192;
         readonly float _y0, _y1;
-        readonly float[] _rx = new float[N], _f = new float[N], _b = new float[N], _cz = new float[N];
+        readonly float[] _rx = new float[N], _f = new float[N], _b = new float[N], _cz = new float[N], _cx = new float[N];
 
         public Loft((float Y, float Rx, float F, float B, float Cz)[] s)
+            : this(s.Select(q => (q.Y, q.Rx, q.F, q.B, q.Cz, 0f)).ToArray()) { }
+
+        /// <summary>단면 중심이 x 로도 움직이는 로프트 (다리: 엉덩이 → 무릎 → 발목 축이 안쪽으로 모인다)</summary>
+        public Loft((float Y, float Rx, float F, float B, float Cz, float Cx)[] s)
         {
             _y0 = s[0].Y; _y1 = s[^1].Y;
             for (var n = 0; n < N; n++)
@@ -252,6 +257,7 @@ public sealed partial class CyborgBody
                 _f[n]  = M.Max(C(p0.F,  p1.F,  p2.F,  p3.F),  0.002f);
                 _b[n]  = M.Max(C(p0.B,  p1.B,  p2.B,  p3.B),  0.002f);
                 _cz[n] = C(p0.Cz, p1.Cz, p2.Cz, p3.Cz);
+                _cx[n] = C(p0.Cx, p1.Cx, p2.Cx, p3.Cx);
             }
         }
 
@@ -268,7 +274,7 @@ public sealed partial class CyborgBody
             var t  = u - i;
             var rx = M.Lerp(_rx[i], _rx[i + 1], t);
             var cz = M.Lerp(_cz[i], _cz[i + 1], t);
-            var dx = p.X;
+            var dx = p.X - M.Lerp(_cx[i], _cx[i + 1], t);
             var dz = p.Z - cz;
             var rz = dz >= 0 ? M.Lerp(_f[i], _f[i + 1], t) : M.Lerp(_b[i], _b[i + 1], t);
             var len = M.Sqrt(dx * dx + dz * dz);
@@ -280,14 +286,15 @@ public sealed partial class CyborgBody
 
         protected override Aabb Box()
         {
-            var r = 0f; var zmin = 0f; var zmax = 0f;
+            float xmin = 0, xmax = 0, zmin = 0, zmax = 0;
             for (var n = 0; n < N; n++)
             {
-                r = M.Max(r, _rx[n]);
+                xmin = M.Min(xmin, _cx[n] - _rx[n]);
+                xmax = M.Max(xmax, _cx[n] + _rx[n]);
                 zmin = M.Min(zmin, _cz[n] - _b[n]);
                 zmax = M.Max(zmax, _cz[n] + _f[n]);
             }
-            return new Aabb(new Vector3(-r, _y0, zmin), new Vector3(r, _y1, zmax));
+            return new Aabb(new Vector3(xmin, _y0, zmin), new Vector3(xmax, _y1, zmax));
         }
     }
 
@@ -541,35 +548,44 @@ public sealed partial class CyborgBody
             var bT = Pick(Bone.ThighL, Bone.ThighR);
             var bS = Pick(Bone.ShinL,  Bone.ShinR);
             var bP = Pick(Bone.FootL,  Bone.FootR);
-            var H = V(sd * G(0.088f, 0.098f) * P["hipX"], G(0.855f, 0.925f), 0);
-            var K = V(sd * G(0.064f, 0.092f) * P["kneeX"], G(0.475f, 0.505f), G(0.008f, 0.010f));
-            var A = V(sd * G(0.064f, 0.088f) * P["ankX"], G(0.085f, 0.090f), -0.012f);
-            float hx = P["hipX"], kx = P["kneeX"], tT = P["thighTop"], tM = P["thighMid"], sh = P["shin"], cf = P["calf"];
+
+            // 다리 한 짝 = 매끈한 로프트 하나 (엉덩이 안쪽 → 발목). 너비 lr*, 축 lx* 는 피팅 값.
+            // (y, 옆 반폭, 앞, 뒤, 앞뒤 중심, 축 x)
+            (float Y, float Rx, float F, float B, float Cz, float Cx)[] leg = male
+                ? [
+                    (0.065f, 0.030f, 0.032f, 0.034f, -0.012f, 0.088f), (0.110f, 0.032f, 0.032f, 0.036f, -0.012f, 0.088f),
+                    (0.180f, 0.036f, 0.034f, 0.044f, -0.012f, 0.089f), (0.270f, 0.044f, 0.040f, 0.056f, -0.010f, 0.090f),
+                    (0.360f, 0.050f, 0.044f, 0.064f, -0.008f, 0.091f), (0.430f, 0.048f, 0.044f, 0.058f, -0.002f, 0.091f),
+                    (0.505f, 0.046f, 0.048f, 0.048f,  0.006f, 0.092f), (0.580f, 0.054f, 0.056f, 0.054f,  0.010f, 0.094f),
+                    (0.660f, 0.066f, 0.066f, 0.062f,  0.010f, 0.097f), (0.740f, 0.076f, 0.074f, 0.070f,  0.006f, 0.100f),
+                    (0.820f, 0.086f, 0.080f, 0.078f,  0.000f, 0.100f), (0.900f, 0.092f, 0.082f, 0.084f, -0.004f, 0.100f),
+                    (0.970f, 0.078f, 0.070f, 0.075f, -0.004f, 0.094f),
+                ]
+                : [
+                    (0.060f, 0.026f, 0.030f, 0.030f, -0.012f, 0.064f), (0.100f, 0.028f, 0.028f, 0.032f, -0.012f, 0.064f),
+                    (0.160f, 0.031f, 0.030f, 0.036f, -0.012f, 0.065f), (0.250f, 0.038f, 0.036f, 0.046f, -0.010f, 0.066f),
+                    (0.330f, 0.043f, 0.040f, 0.054f, -0.008f, 0.067f), (0.400f, 0.042f, 0.040f, 0.050f, -0.004f, 0.067f),
+                    (0.475f, 0.040f, 0.042f, 0.044f,  0.004f, 0.066f), (0.540f, 0.046f, 0.046f, 0.048f,  0.006f, 0.070f),
+                    (0.620f, 0.055f, 0.053f, 0.057f,  0.004f, 0.075f), (0.700f, 0.064f, 0.060f, 0.064f,  0.000f, 0.080f),
+                    (0.780f, 0.073f, 0.066f, 0.072f, -0.004f, 0.085f), (0.850f, 0.080f, 0.070f, 0.078f, -0.006f, 0.088f),
+                    (0.920f, 0.068f, 0.060f, 0.068f, -0.006f, 0.082f),
+                ];
+            for (var i = 0; i < leg.Length; i++)
+            {
+                var r = P[$"lr{i}"];
+                leg[i] = (leg[i].Y, leg[i].Rx * r, leg[i].F * r, leg[i].B * r, leg[i].Cz, sd * leg[i].Cx * P[$"lx{i}"]);
+            }
+            float AxisX(float y)
+            {
+                var i = 0;
+                while (i < leg.Length - 2 && leg[i + 1].Y < y) i++;
+                return M.Lerp(leg[i].Cx, leg[i + 1].Cx, M.Clamp((y - leg[i].Y) / (leg[i + 1].Y - leg[i].Y), 0, 1));
+            }
+            var H = V(AxisX(G(0.855f, 0.925f)), G(0.855f, 0.925f), 0);
+            var K = V(AxisX(G(0.475f, 0.505f)), G(0.475f, 0.505f), G(0.008f, 0.010f));
+            var A = V(AxisX(G(0.085f, 0.090f)), G(0.085f, 0.090f), -0.012f);
             joints[(int)bT] = H; joints[(int)bS] = K; joints[(int)bP] = A;
-
-            var Tm = Vector3.Lerp(H, K, 0.45f) + V(0, 0, G(0.004f, 0.008f));
-            Cap(bT, V(sd * G(0.082f, 0.094f) * hx, G(0.840f, 0.900f), -0.006f), Tm, G(0.094f, 0.108f) * tT, G(0.078f, 0.094f) * tM, 0.060f);
-            Cap(bT, Tm, K + V(0, 0, 0.008f), G(0.076f, 0.094f) * tM, G(0.046f, 0.056f) * sh, 0.040f);
-            if (male)
-            {
-                Ell(bT, V(sd * 0.100f * hx, 0.700f, 0.040f), V(0.090f * tM, 0.175f, 0.072f * tM), 0.040f);  // 대퇴직근
-                Ell(bT, V(sd * 0.068f * kx, 0.565f, 0.035f), V(0.040f * tM, 0.065f, 0.040f * tM), 0.025f);  // 내측광근
-                Ell(bT, V(sd * 0.135f * hx, 0.730f, 0.000f), V(0.045f * tM, 0.130f, 0.060f), 0.035f);  // 외측광근
-                Ell(bT, V(sd * 0.095f * hx, 0.720f, -0.040f), V(0.060f * tM, 0.150f, 0.050f), 0.035f); // 햄스트링
-            }
-            else
-                Ell(bT, V(sd * 0.098f * hx, 0.775f, -0.008f), V(0.072f * P["thighOut"], 0.140f, 0.080f), 0.050f); // 허벅지 바깥 곡선
-
-            if (male) Ell(bS, K + V(0, 0.006f, 0.010f), V(0.036f, 0.042f, 0.034f), 0.040f); // 무릎
-            Cap(bS, K + V(0, 0, 0.008f), A, G(0.043f, 0.049f) * sh, G(0.027f, 0.031f) * P["ankR"], 0.025f);
-            if (male)
-            {
-                Ell(bS, V(sd * 0.074f * kx, 0.375f, -0.035f), V(0.044f * cf, 0.095f, 0.046f * cf), 0.030f); // 비복근 안쪽
-                Ell(bS, V(sd * 0.108f * kx, 0.390f, -0.030f), V(0.038f * cf, 0.085f, 0.040f * cf), 0.030f); // 비복근 바깥
-                Ell(bS, V(sd * 0.098f * kx, 0.360f, 0.020f), V(0.030f * cf, 0.100f, 0.030f), 0.025f);  // 전경골근
-            }
-            else
-                Ell(bS, V(sd * 0.068f * kx, 0.355f, -0.020f), V(0.038f * cf, 0.092f, 0.040f * cf), 0.040f); // 종아리
+            prims.Add(new Loft(leg) { Bone = bT, Blend = 0.075f, Leg = (K.Y, A.Y, bT, bS, bP) }.Done());
 
             AddFoot(bP, A, sd, G(1f, 1.12f) * P["foot"]);
         }
@@ -668,7 +684,6 @@ public sealed partial class CyborgBody
         box = new Aabb(new Vector3(box.Min.X, dsg.Fwd(box.Min.Y), box.Min.Z) * dsg.Scale,
                        new Vector3(box.Max.X, dsg.Fwd(box.Max.Y), box.Max.Z) * dsg.Scale);
         (geo.Vertices, geo.Normals, geo.Indices) = SurfaceNets(dsg.Field, box, Voxel);
-
         // 발바닥을 y = 0 에 붙인다
         var lift = -geo.Vertices.Min(v => v.Y);
         for (var v = 0; v < geo.Vertices.Length; v++) geo.Vertices[v].Y += lift;
@@ -805,8 +820,18 @@ public sealed partial class CyborgBody
             foreach (var pr in prims)
             {
                 if (pr.Carve || !pr.Bounds.HasPoint(p)) continue;
+                var dist = pr.Distance(p);
+                if (pr.Leg is { } lg)
+                {
+                    // 무릎·발목 근처에서 부드럽게 넘어간다 (기울기 0.5 → 약 2 cm 폭)
+                    float up = M.Max(0, lg.Knee - p.Y), dn = M.Max(0, p.Y - lg.Knee), an = M.Max(0, lg.Ankle - p.Y), ab = M.Max(0, p.Y - lg.Ankle);
+                    d[(int)lg.Thigh] = M.Min(d[(int)lg.Thigh], dist + up * 0.5f);
+                    d[(int)lg.Shin]  = M.Min(d[(int)lg.Shin],  dist + dn * 0.5f + an * 0.5f);
+                    d[(int)lg.Foot]  = M.Min(d[(int)lg.Foot],  dist + ab * 0.5f);
+                    continue;
+                }
                 var b = (int)pr.Bone;
-                d[b] = M.Min(d[b], pr.Distance(p));
+                d[b] = M.Min(d[b], dist);
             }
             var min = float.MaxValue;
             for (var b = 0; b < d.Length; b++) min = M.Min(min, d[b]);
