@@ -161,170 +161,52 @@ sealed class BrowserStream : IDisposable
           <meta charset="utf-8">
           <title>Dolly Forge</title>
           <style>
-            *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-            html, body { width:100%; height:100%; overflow:hidden; background:#000; }
-            /* Street View 배경 레이어 */
-            #bg { position:fixed; inset:0; z-index:0; }
-            #bg iframe { width:100%; height:100%; border:none; display:block; }
-            body.sv-mode  #bg iframe { pointer-events:auto; }
-            body.game-mode #bg iframe { pointer-events:none; }
-            /* WebGL 캐릭터 레이어: 검정=투명, 캐릭터만 보임 */
-            #c { position:fixed; inset:0; z-index:1; width:100%; height:100%;
-                 pointer-events:none; }
-            body.game-mode #c { cursor:crosshair; }
-            /* 상단 URL 바 */
-            #bar { position:fixed; top:0; left:0; right:0; z-index:20;
-                   background:rgba(0,0,0,0.82); display:flex; align-items:center;
-                   gap:6px; padding:4px 8px; font:12px 'Consolas','Courier New',monospace; }
-            #bar label { color:#666; flex-shrink:0; }
-            #url-in { flex:1; min-width:0; background:#0a0a0a; color:#0f0;
-                      border:1px solid #333; padding:2px 6px; font:inherit; outline:none; }
-            #url-in:focus { border-color:#0f0; }
-            .btn { background:#111; color:#888; border:1px solid #333;
-                   padding:2px 10px; font:inherit; cursor:pointer; flex-shrink:0; }
-            .btn:hover  { border-color:#0f0; color:#0f0; }
-            .btn.active { border-color:#0f0; color:#0f0; background:#001800; }
-            #fps { color:#0f0; flex-shrink:0; min-width:50px; text-align:right; }
-            /* 하단 힌트 */
-            #hint { position:fixed; bottom:6px; left:8px; z-index:20;
-                    color:#444; font:11px 'Consolas','Courier New',monospace; pointer-events:none; }
+            * { margin:0; padding:0; box-sizing:border-box; }
+            body { background:#000; display:flex; justify-content:center; align-items:center; height:100vh; overflow:hidden; }
+            canvas { image-rendering:pixelated; cursor:crosshair; display:block; max-width:100vw; max-height:100vh; }
+            #info { position:fixed; top:8px; left:8px; color:#0f0; font:12px monospace; pointer-events:none; }
+            #hint { position:fixed; bottom:6px; left:8px; color:#444; font:11px monospace; pointer-events:none; }
           </style>
         </head>
-        <body class="sv-mode">
-
-        <div id="bg"><iframe id="bg-frame" src="about:blank"></iframe></div>
+        <body>
         <canvas id="c"></canvas>
-
-        <div id="bar">
-          <label>배경 URL:</label>
-          <input id="url-in" type="text"
-            placeholder="Google Maps → 공유 → 지도 퍼가기 → src 안의 URL 붙여넣기 (Enter)">
-          <button class="btn active" id="btn-sv">거리뷰 모드</button>
-          <button class="btn"        id="btn-gm">게임 모드</button>
-          <span id="fps">0 fps</span>
-        </div>
-        <div id="hint">거리뷰 모드: 마우스로 거리뷰 조작 | 게임 모드: WASD 이동 · 마우스 시점 · Esc 해제</div>
-
+        <div id="info">0 fps</div>
+        <div id="hint">캔버스 클릭 → 마우스 캡처 | WASD 이동 | 마우스 시점 | Esc 해제</div>
         <script>
         'use strict';
-        const bgFrame = document.getElementById('bg-frame');
-        const urlIn   = document.getElementById('url-in');
-        const btnSv   = document.getElementById('btn-sv');
-        const btnGm   = document.getElementById('btn-gm');
-        const fpsEl   = document.getElementById('fps');
-        const canvas  = document.getElementById('c');
-        let locked = false;
-
-        // ── 모드 전환 ─────────────────────────────────────────────
-        function setMode(m) {
-          document.body.className = m;
-          btnSv.classList.toggle('active', m === 'sv-mode');
-          btnGm.classList.toggle('active', m === 'game-mode');
-          if (m === 'game-mode') canvas.requestPointerLock?.();
-          else if (locked) document.exitPointerLock?.();
-        }
-        btnSv.addEventListener('click', () => setMode('sv-mode'));
-        btnGm.addEventListener('click', () => setMode('game-mode'));
-        document.addEventListener('pointerlockchange', () => {
-          locked = !!document.pointerLockElement;
-          if (!locked) setMode('sv-mode');
-        });
-        document.addEventListener('pointerlockerror', () => setMode('sv-mode'));
-
-        // ── URL 입력 → iframe ────────────────────────────────────
-        function applyUrl() {
-          const u = urlIn.value.trim();
-          bgFrame.src = u || 'about:blank';
-        }
-        urlIn.addEventListener('keydown', e => { if (e.key==='Enter') { applyUrl(); urlIn.blur(); }});
-        urlIn.addEventListener('blur', applyUrl);
-
-        // ── WebGL 초기화 (검정 픽셀 discard → iframe 비침) ──────
-        const gl = canvas.getContext('webgl2', {alpha:true, premultipliedAlpha:false})
-                || canvas.getContext('webgl',  {alpha:true, premultipliedAlpha:false});
-
-        function mkSh(type, src) {
-          const s = gl.createShader(type);
-          gl.shaderSource(s, src); gl.compileShader(s); return s;
-        }
-        const prog = gl.createProgram();
-        gl.attachShader(prog, mkSh(gl.VERTEX_SHADER, `
-          attribute vec2 a_pos;
-          varying   vec2 v_uv;
-          void main(){
-            v_uv = vec2(a_pos.x*0.5+0.5, 0.5-a_pos.y*0.5);
-            gl_Position = vec4(a_pos, 0.0, 1.0);
-          }
-        `));
-        gl.attachShader(prog, mkSh(gl.FRAGMENT_SHADER, `
-          precision highp float;
-          uniform sampler2D u_tex;
-          varying vec2 v_uv;
-          void main(){
-            vec4 c = texture2D(u_tex, v_uv);
-            float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
-            if (lum < 0.03) discard;
-            gl_FragColor = c;
-          }
-        `));
-        gl.linkProgram(prog);
-        gl.useProgram(prog);
-
-        const quadBuf = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-        const aPos = gl.getAttribLocation(prog, 'a_pos');
-        gl.enableVertexAttribArray(aPos);
-        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-        gl.uniform1i(gl.getUniformLocation(prog, 'u_tex'), 0);
-
-        const tex = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, tex);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-        // ── WebSocket 프레임 수신 ────────────────────────────────
-        const ws = new WebSocket('ws://' + location.host + '/ws');
+        const c    = document.getElementById('c');
+        const ctx  = c.getContext('2d');
+        const info = document.getElementById('info');
+        const ws   = new WebSocket('ws://' + location.host + '/ws');
         ws.binaryType = 'arraybuffer';
-        let fps = 0, frames = 0, last = performance.now();
+        let fps = 0, frames = 0, last = performance.now(), locked = false;
+        const keys = new Set();
 
         ws.onmessage = e => {
           createImageBitmap(new Blob([e.data], {type:'image/jpeg'})).then(bmp => {
-            if (canvas.width !== bmp.width || canvas.height !== bmp.height) {
-              canvas.width = bmp.width; canvas.height = bmp.height;
-              gl.viewport(0, 0, bmp.width, bmp.height);
+            if (c.width !== bmp.width || c.height !== bmp.height) {
+              c.width = bmp.width; c.height = bmp.height;
             }
-            gl.clearColor(0,0,0,0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, bmp);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            ctx.drawImage(bmp, 0, 0);
             frames++;
             const now = performance.now();
-            if (now - last >= 1000) { fps = frames; frames = 0; last = now; fpsEl.textContent = fps + ' fps'; }
+            if (now - last >= 1000) { fps = frames; frames = 0; last = now; info.textContent = fps + ' fps'; }
           });
         };
 
-        // ── 입력 이벤트 ──────────────────────────────────────────
-        function send(obj){ if(ws.readyState===1) ws.send(JSON.stringify(obj)); }
-        const keys = new Set();
-        document.addEventListener('mousemove', e => { if(locked) send({type:'mousemove',dx:e.movementX,dy:e.movementY}); });
-        document.addEventListener('mousedown', e => { if(locked) send({type:'mousedown',button:e.button,down:true}); });
-        document.addEventListener('mouseup',   e => { if(locked) send({type:'mouseup',  button:e.button,down:false}); });
+        function send(obj) { if (ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+
+        c.addEventListener('click', () => { if (!locked) c.requestPointerLock(); });
+        document.addEventListener('pointerlockchange', () => { locked = !!document.pointerLockElement; });
+        document.addEventListener('mousemove', e => { if (locked) send({type:'mousemove', dx:e.movementX, dy:e.movementY}); });
+        document.addEventListener('mousedown', e => { if (locked) send({type:'mousedown', button:e.button, down:true}); });
+        document.addEventListener('mouseup',   e => { if (locked) send({type:'mouseup',   button:e.button, down:false}); });
         document.addEventListener('keydown',   e => {
-          if (e.target===urlIn) return;
-          if (e.code==='Escape') { if(locked) document.exitPointerLock(); return; }
+          if (!keys.has(e.code)) { keys.add(e.code); send({type:'keydown', key:e.code}); }
+          if (e.code === 'Escape' && locked) document.exitPointerLock();
           if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
-          if (!keys.has(e.code)) { keys.add(e.code); send({type:'keydown',key:e.code}); }
         });
-        document.addEventListener('keyup', e => {
-          if (e.target===urlIn) return;
-          keys.delete(e.code); send({type:'keyup',key:e.code});
-        });
+        document.addEventListener('keyup', e => { keys.delete(e.code); send({type:'keyup', key:e.code}); });
         </script>
         </body>
         </html>

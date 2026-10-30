@@ -13,9 +13,10 @@ var stream = new BrowserStream();
 var world  = new World();
 world.Body = female;
 
-Shader?  bodyShader = null;
-GpuMesh? femaleGpu  = null;
-GpuMesh? maleGpu    = null;
+Shader?      bodyShader = null;
+GpuMesh?     femaleGpu  = null;
+GpuMesh?     maleGpu    = null;
+EnvRenderer? env        = null;
 var skinBuf = new Matrix4x4[BodyMesh.BoneCount];
 var last    = DateTime.UtcNow;
 
@@ -31,6 +32,7 @@ ctx.Window.Load += () =>
         bodyShader = new Shader(gl, Shader.BodyVert, Shader.BodyFrag);
         femaleGpu  = new GpuMesh(gl, female.Mesh);
         maleGpu    = new GpuMesh(gl, male.Mesh);
+        env        = new EnvRenderer(gl);
         Console.WriteLine("[engine] GL 로드 완료");
     }
     catch (Exception ex) { Console.Error.WriteLine($"[engine] GL 로드 실패: {ex.Message}"); }
@@ -57,6 +59,22 @@ ctx.Window.Run(() =>
     var proj   = world.Proj(aspect);
     var model  = world.BodyModel();
     var mvp    = model * view * proj;
+
+    // 환경 렌더링 (하늘 → 도로+건물)
+    if (env is not null)
+    {
+        // 카메라 방향 벡터 (sky ray 계산)
+        var fwd   = new Vector3(
+            MathF.Sin(world.CamYaw) * MathF.Cos(world.CamPitch),
+            MathF.Sin(world.CamPitch),
+           -MathF.Cos(world.CamYaw) * MathF.Cos(world.CamPitch));
+        var right = Vector3.Normalize(Vector3.Cross(fwd, Vector3.UnitY));
+        var up    = Vector3.Cross(right, fwd);
+        var tan   = MathF.Tan(1.05f * 0.5f);  // fovY=1.05rad
+
+        env.DrawSky(fwd, right, up, tan, aspect);
+        env.DrawWorld(view * proj, new Vector3(0.6f, 1.0f, 0.4f));
+    }
 
     bodyShader.Use();
     bodyShader.Set("u_model",       model);
