@@ -135,18 +135,15 @@ sealed class Shader : IDisposable
         }
 
         void main() {
-            vec3 N  = normalize(v_norm);
-            vec3 V  = normalize(u_cam_pos - v_pos);
-            vec3 F0 = mix(vec3(0.04), v_color, u_metallic);
-
-            vec3 lo = PBR(N, V, u_l0_dir, u_l0_col, F0)
-                    + PBR(N, V, u_l1_dir, u_l1_col, F0)
-                    + PBR(N, V, u_l2_dir, u_l2_col, F0);
-
-            vec3 color = u_ambient * v_color + lo;
-            color = color / (color + 1.0);
-            color = pow(color, vec3(1.0/2.2));
-            frag_color = vec4(color, 1.0);
+            vec3 N   = normalize(v_norm);
+            vec3 L0  = normalize(u_l0_dir);
+            float d0 = max(dot(N, L0), 0.0);
+            float d1 = max(dot(N, normalize(u_l1_dir)), 0.0);
+            float d2 = max(dot(N, normalize(u_l2_dir)), 0.0);
+            vec3 lit = v_color * (u_ambient + u_l0_col * d0 + u_l1_col * d1 + u_l2_col * d2);
+            lit = lit / (lit + 1.0);
+            lit = pow(lit, vec3(1.0/2.2));
+            frag_color = vec4(lit, 1.0);
         }
         """;
 }
