@@ -16,6 +16,7 @@ world.Body = female;
 Shader?      bodyShader = null;
 EnvRenderer? env        = null;
 GpuMesh?     femaleGpu  = null;
+GpuMesh?     maleGpu    = null;
 
 var skinBuf  = new Matrix4x4[BodyMesh.BoneCount];
 var last     = DateTime.UtcNow;
@@ -30,6 +31,7 @@ ctx.Window.Load += () =>
         Console.WriteLine($"[engine] GL: {gl.GetStringS(Silk.NET.OpenGL.GLEnum.Renderer)}");
         bodyShader = new Shader(gl, Shader.BodyVert, Shader.BodyFrag);
         femaleGpu  = new GpuMesh(gl, female.Mesh);
+        maleGpu    = new GpuMesh(gl, male.Mesh);
         env        = new EnvRenderer(gl, assetDir);
         Console.WriteLine("[engine] GL 로드 완료. N 키: 파노라마 전환");
     }
@@ -38,6 +40,14 @@ ctx.Window.Load += () =>
 
 ctx.Window.Initialize();
 stream.Start();
+
+// 키 조명 방향 3개 (크롬 반사용 다방향 조명)
+var lights = new (Vector3 Dir, Vector3 Color)[]
+{
+    (Vector3.Normalize(new(0.5f,  1.0f,  0.6f)), new(2.8f, 2.5f, 2.2f)),  // 메인 (따뜻한 흰빛)
+    (Vector3.Normalize(new(-0.8f, 0.4f,  0.5f)), new(0.6f, 0.7f, 1.0f)),  // 보조 (차가운 파랑)
+    (Vector3.Normalize(new( 0.0f, 0.2f, -1.0f)), new(0.5f, 0.5f, 0.6f)),  // 림 (역광)
+};
 
 ctx.Window.Run(() =>
 {
@@ -53,7 +63,7 @@ ctx.Window.Run(() =>
     if (nNow && !nWas) env?.NextPanorama();
     nWas = nNow;
 
-    if (bodyShader is null || femaleGpu is null || env is null) return;
+    if (bodyShader is null || femaleGpu is null || maleGpu is null || env is null) return;
 
     ctx.BeginFrame();
 
@@ -61,37 +71,51 @@ ctx.Window.Run(() =>
     const float fovY = MathF.PI / 4f;
     var fovTan = MathF.Tan(fovY * 0.5f);
 
-    // 카메라 방향 벡터 (스카이박스 등장방형 샘플링에 사용)
     var fwd   = world.CamFwd();
     var right = Vector3.Normalize(Vector3.Cross(fwd, Vector3.UnitY));
     var up    = Vector3.Cross(right, fwd);
 
-    // 1. 스카이박스: 실사 거리 파노라마
+    // 1. 스카이박스
     env.Draw(fwd, right, up, fovTan, aspect);
 
-    // 2. 캐릭터
-    var view  = world.View();
-    var proj  = world.Proj(aspect);
-    var model = world.BodyModel();
-    var mvp   = model * view * proj;
+    // 2. 공통 셰이더 파라미터
+    var view = world.View();
+    var proj = world.Proj(aspect);
 
     bodyShader.Use();
-    bodyShader.Set("u_model",       model);
-    bodyShader.Set("u_mvp",         mvp);
-    bodyShader.Set("u_cam_pos",     world.CamPos);
-    bodyShader.Set("u_light_dir",   Vector3.Normalize(new Vector3(0.6f, 1.0f, 0.4f)));
-    bodyShader.Set("u_light_color", new Vector3(2.4f, 2.2f, 1.9f));
-    bodyShader.Set("u_ambient",     new Vector3(0.18f, 0.16f, 0.20f));
-    bodyShader.Set("u_metallic",    0.68f);
-    bodyShader.Set("u_roughness",   0.58f);
+    bodyShader.Set("u_cam_pos",      world.CamPos);
+    bodyShader.Set("u_ambient",      new Vector3(0.22f, 0.20f, 0.25f));
+    bodyShader.Set("u_metallic",     1.0f);
+    bodyShader.Set("u_roughness",    0.07f);
+    for (int i = 0; i < lights.Length; i++)
+    {
+        bodyShader.Set($"u_light_dir[{i}]",   lights[i].Dir);
+        bodyShader.Set($"u_light_color[{i}]", lights[i].Color);
+    }
 
-    world.Body!.GetSkinMatrices(skinBuf.AsSpan());
+    // 3. 여성형 (왼쪽 -0.45)
+    var fPos   = world.BodyPos + new Vector3(-0.45f, 0, 0);
+    var fModel = Matrix4x4.CreateRotationY(world.BodyYaw) * Matrix4x4.CreateTranslation(fPos);
+    bodyShader.Set("u_model", fModel);
+    bodyShader.Set("u_mvp",   fModel * view * proj);
+    female.GetSkinMatrices(skinBuf.AsSpan());
     bodyShader.SetArray("u_bones", skinBuf);
     femaleGpu.Draw();
+
+    // 4. 남성형 (오른쪽 +0.45)
+    var mPos   = world.BodyPos + new Vector3( 0.45f, 0, 0);
+    var mModel = Matrix4x4.CreateRotationY(world.BodyYaw) * Matrix4x4.CreateTranslation(mPos);
+    bodyShader.Set("u_model", mModel);
+    bodyShader.Set("u_mvp",   mModel * view * proj);
+    male.GetSkinMatrices(skinBuf.AsSpan());
+    bodyShader.SetArray("u_bones", skinBuf);
+    maleGpu.Draw();
 
     stream.PushFrame(ctx.ReadPixels(), ctx.Width, ctx.Height);
 });
 
 ctx.Dispose();
 env?.Dispose();
+maleGpu?.Dispose();
+femaleGpu?.Dispose();
 stream.Dispose();

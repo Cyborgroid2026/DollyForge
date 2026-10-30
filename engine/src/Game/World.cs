@@ -5,10 +5,10 @@ namespace DollyForge;
 /// <summary>카메라 + 씬 상태</summary>
 sealed class World
 {
-    // 카메라
-    public Vector3 CamPos   = new(0, 1.1f, 2.8f);
+    // 카메라 (남녀 두 캐릭터 동시 조망 — X축으로 ±0.45 배치 기준)
+    public Vector3 CamPos   = new(0, 1.2f, 3.5f);
     public float   CamYaw   = 0f;
-    public float   CamPitch = -0.08f;
+    public float   CamPitch = -0.10f;
 
     // 인형
     public CyborgBody? Body;

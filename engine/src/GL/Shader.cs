@@ -91,8 +91,8 @@ sealed class Shader : IDisposable
         out vec4 frag_color;
 
         uniform vec3 u_cam_pos;
-        uniform vec3 u_light_dir;
-        uniform vec3 u_light_color;
+        uniform vec3 u_light_dir[3];
+        uniform vec3 u_light_color[3];
         uniform vec3 u_ambient;
         uniform float u_metallic;
         uniform float u_roughness;
@@ -116,28 +116,31 @@ sealed class Shader : IDisposable
             return F0 + (1.0-F0)*pow(clamp(1.0-cosT,0.0,1.0),5.0);
         }
 
-        void main() {
-            vec3 N   = normalize(v_norm);
-            vec3 V   = normalize(u_cam_pos - v_pos);
-            vec3 L   = normalize(u_light_dir);
+        vec3 PBR(vec3 N, vec3 V, vec3 L, vec3 lcolor, vec3 F0) {
             vec3 H   = normalize(V + L);
             float NdL = max(dot(N,L), 0.0);
             float NdV = max(dot(N,V), 0.001);
             float NdH = max(dot(N,H), 0.0);
             float HdV = max(dot(H,V), 0.0);
-
-            vec3 F0 = mix(vec3(0.04), v_color, u_metallic);
-            vec3 F  = F_Schlick(HdV, F0);
-            float D = D_GGX(NdH, u_roughness);
-            float G = G_Smith(NdV, NdL, u_roughness);
+            vec3  F   = F_Schlick(HdV, F0);
+            float D   = D_GGX(NdH, u_roughness);
+            float G   = G_Smith(NdV, NdL, u_roughness);
             vec3 spec = (D * G * F) / max(4.0 * NdV * NdL, 0.001);
+            vec3 kD   = (1.0 - F) * (1.0 - u_metallic);
+            return (kD * v_color / PI + spec) * lcolor * NdL;
+        }
 
-            vec3 kD = (1.0 - F) * (1.0 - u_metallic);
-            vec3 diffuse = kD * v_color / PI;
+        void main() {
+            vec3 N  = normalize(v_norm);
+            vec3 V  = normalize(u_cam_pos - v_pos);
+            vec3 F0 = mix(vec3(0.04), v_color, u_metallic);
 
-            vec3 lo = (diffuse + spec) * u_light_color * NdL;
+            vec3 lo = vec3(0.0);
+            for (int i = 0; i < 3; i++)
+                lo += PBR(N, V, normalize(u_light_dir[i]), u_light_color[i], F0);
+
             vec3 color = u_ambient * v_color + lo;
-            color = color / (color + 1.0);  // Reinhard tone map
+            color = color / (color + 1.0);
             color = pow(color, vec3(1.0/2.2));
             frag_color = vec4(color, 1.0);
         }
