@@ -249,15 +249,14 @@ sealed class BrowserStream : IDisposable
         const c   = document.getElementById('c');
         const ctx = c.getContext('2d');
         const info= document.getElementById('info');
-        const ws  = new WebSocket('ws://' + location.host + '/ws');
-        ws.binaryType = 'arraybuffer';
+        let ws=null,selecting=false;
         let fps=0,frames=0,last=performance.now(),locked=false;
         const keys=new Set();
 
         const hint=document.getElementById('hint'),view=document.getElementById('view'),
               pick=document.getElementById('pick'),title=document.getElementById('title');
         function status(st){
-          const sel=st.state==='select';
+          const sel=st.state==='select'; selecting=sel;
           pick.style.display=sel?'flex':'none'; title.style.display=sel?'block':'none';
           view.textContent=sel?'':st.who+' · '+st.view;
           hint.textContent=sel?'1·2 또는 카드로 선택 | 휠 거리 | N 스튜디오/파노라마'
@@ -266,7 +265,14 @@ sealed class BrowserStream : IDisposable
         pick.querySelectorAll('button').forEach(b=>b.addEventListener('click',e=>{
           e.stopPropagation(); send({type:'select',button:+b.dataset.i}); c.requestPointerLock();
         }));
-        ws.onmessage=e=>{
+        // 엔진이 다시 켜지면 저절로 다시 붙는다 (새 페이지가 필요하면 새로고침)
+        function connect(){
+          ws=new WebSocket('ws://'+location.host+'/ws');
+          ws.binaryType='arraybuffer';
+          ws.onmessage=onMsg;
+          ws.onclose=()=>{info.textContent='엔진 연결 끊김 — 다시 연결 중…';setTimeout(connect,1000);};
+        }
+        const onMsg=e=>{
           if(typeof e.data==='string'){try{status(JSON.parse(e.data));}catch(_){}return;}
           createImageBitmap(new Blob([e.data],{type:'image/jpeg'})).then(bmp=>{
             if(c.width!==bmp.width||c.height!==bmp.height){c.width=bmp.width;c.height=bmp.height;}
@@ -277,9 +283,14 @@ sealed class BrowserStream : IDisposable
           });
         };
 
-        function send(o){if(ws.readyState===1)ws.send(JSON.stringify(o));}
+        function send(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o));}
+        connect();
 
-        c.addEventListener('click',()=>{if(!locked)c.requestPointerLock();});
+        // 선택 화면에서는 화면의 왼쪽(여성형)·오른쪽(남성형) 인형을 눌러도 고른다
+        c.addEventListener('click',e=>{
+          if(selecting){const r=c.getBoundingClientRect();send({type:'select',button:(e.clientX-r.left)<r.width/2?0:1});}
+          if(!locked)c.requestPointerLock();
+        });
         document.addEventListener('pointerlockchange',()=>{locked=!!document.pointerLockElement;});
         document.addEventListener('mousemove',e=>{if(locked)send({type:'mousemove',dx:e.movementX,dy:e.movementY});});
         document.addEventListener('mousedown',e=>{if(locked)send({type:'mousedown',button:e.button,down:true});});
