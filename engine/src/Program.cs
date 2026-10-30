@@ -1,6 +1,9 @@
 using DollyForge;
 using System.Numerics;
 
+// ── 레퍼런스 체형 피팅 (창 없이): dolly-engine --fit female|male|both --out engine/assets/body
+if (args.Length > 0 && args[0] == "--fit") { CyborgBody.FitCli(args); return; }
+
 // ── 인형 빌드 ─────────────────────────────────────────────────────────────
 Console.WriteLine("[engine] 캐릭터 메시 빌드 중…");
 var female = CyborgBody.Build(0);
