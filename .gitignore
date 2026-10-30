@@ -29,3 +29,6 @@ obj/
 /reference/
 bin\
 engine/assets/makehuman/
+
+# AI 생성 이미지 (tools/imagegen.py 기본 출력)
+/generated/
