@@ -45,9 +45,8 @@ sealed class GlContext : IDisposable
     {
         Gl = Window.CreateOpenGL();
         Gl.Enable(EnableCap.DepthTest);
-        Gl.Enable(EnableCap.CullFace);
-        Gl.CullFace(TriangleFace.Back);
-        Gl.FrontFace(FrontFaceDirection.Ccw);
+        // 컬링 끔: Surface Nets 메시 와인딩 검증 전까지 양면 렌더링
+        Gl.Disable(EnableCap.CullFace);
         CreateFbo(Width, Height);
         _ready = true;
     }

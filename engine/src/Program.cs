@@ -83,15 +83,13 @@ ctx.Window.Run(() =>
     var proj = world.Proj(aspect);
 
     bodyShader.Use();
-    bodyShader.Set("u_cam_pos",      world.CamPos);
-    bodyShader.Set("u_ambient",      new Vector3(0.22f, 0.20f, 0.25f));
-    bodyShader.Set("u_metallic",     1.0f);
-    bodyShader.Set("u_roughness",    0.07f);
-    for (int i = 0; i < lights.Length; i++)
-    {
-        bodyShader.Set($"u_light_dir[{i}]",   lights[i].Dir);
-        bodyShader.Set($"u_light_color[{i}]", lights[i].Color);
-    }
+    bodyShader.Set("u_cam_pos",   world.CamPos);
+    bodyShader.Set("u_ambient",   new Vector3(0.50f, 0.48f, 0.55f));
+    bodyShader.Set("u_metallic",  1.0f);
+    bodyShader.Set("u_roughness", 0.07f);
+    bodyShader.Set("u_l0_dir",    lights[0].Dir);   bodyShader.Set("u_l0_col", lights[0].Color);
+    bodyShader.Set("u_l1_dir",    lights[1].Dir);   bodyShader.Set("u_l1_col", lights[1].Color);
+    bodyShader.Set("u_l2_dir",    lights[2].Dir);   bodyShader.Set("u_l2_col", lights[2].Color);
 
     // 3. 여성형 (왼쪽 -0.45)
     var fPos   = world.BodyPos + new Vector3(-0.45f, 0, 0);

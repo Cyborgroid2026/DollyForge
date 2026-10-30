@@ -91,8 +91,12 @@ sealed class Shader : IDisposable
         out vec4 frag_color;
 
         uniform vec3 u_cam_pos;
-        uniform vec3 u_light_dir[3];
-        uniform vec3 u_light_color[3];
+        uniform vec3 u_l0_dir;
+        uniform vec3 u_l0_col;
+        uniform vec3 u_l1_dir;
+        uniform vec3 u_l1_col;
+        uniform vec3 u_l2_dir;
+        uniform vec3 u_l2_col;
         uniform vec3 u_ambient;
         uniform float u_metallic;
         uniform float u_roughness;
@@ -117,11 +121,11 @@ sealed class Shader : IDisposable
         }
 
         vec3 PBR(vec3 N, vec3 V, vec3 L, vec3 lcolor, vec3 F0) {
-            vec3 H   = normalize(V + L);
-            float NdL = max(dot(N,L), 0.0);
-            float NdV = max(dot(N,V), 0.001);
-            float NdH = max(dot(N,H), 0.0);
-            float HdV = max(dot(H,V), 0.0);
+            vec3 H    = normalize(V + L);
+            float NdL = max(dot(N, L), 0.0);
+            float NdV = max(dot(N, V), 0.001);
+            float NdH = max(dot(N, H), 0.0);
+            float HdV = max(dot(H, V), 0.0);
             vec3  F   = F_Schlick(HdV, F0);
             float D   = D_GGX(NdH, u_roughness);
             float G   = G_Smith(NdV, NdL, u_roughness);
@@ -135,9 +139,9 @@ sealed class Shader : IDisposable
             vec3 V  = normalize(u_cam_pos - v_pos);
             vec3 F0 = mix(vec3(0.04), v_color, u_metallic);
 
-            vec3 lo = vec3(0.0);
-            for (int i = 0; i < 3; i++)
-                lo += PBR(N, V, normalize(u_light_dir[i]), u_light_color[i], F0);
+            vec3 lo = PBR(N, V, u_l0_dir, u_l0_col, F0)
+                    + PBR(N, V, u_l1_dir, u_l1_col, F0)
+                    + PBR(N, V, u_l2_dir, u_l2_col, F0);
 
             vec3 color = u_ambient * v_color + lo;
             color = color / (color + 1.0);
