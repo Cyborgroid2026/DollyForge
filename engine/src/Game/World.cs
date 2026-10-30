@@ -60,12 +60,18 @@ sealed class World
     // 마우스 시점 방향 (yaw 0 = -Z)
     Vector3 Aim => new(MathF.Sin(CamYaw) * MathF.Cos(CamPitch), MathF.Sin(CamPitch), -MathF.Cos(CamYaw) * MathF.Cos(CamPitch));
 
+    /// <summary>선택 화면에서는 둘 다, 조종 중에는 고른 인형만 씬에 있다</summary>
+    public bool IsVisible(Actor a) => Selected < 0 || a == Player;
+
+    static readonly Vector3[] Home = [new(-0.45f, 0, 0), new(0.45f, 0, 0)];
+
     public void Select(int i)
     {
         if (i < 0 || i >= Actors.Length) return;
         Selected = i;
-        // 고른 인형이 지금 보는 방향 그대로 시작: 몸이 -Z(방 안쪽)를 보게
+        // 고른 인형 하나만 방 가운데에서 -Z(도시 창 쪽)를 보며 시작
         var p = Actors[i];
+        p.Pos = Vector3.Zero;
         p.Yaw = MathF.PI;
         CamYaw = 0; CamPitch = -0.10f;
         UpdateStatus();
@@ -78,7 +84,9 @@ sealed class World
             case "Digit1": Select(0); break;
             case "Digit2": Select(1); break;
             case "KeyC":
-                Selected = -1; CamPitch = -0.12f; UpdateStatus(); break;
+                Selected = -1; CamYaw = 0; CamPitch = -0.12f;
+                for (var k = 0; k < Actors.Length; k++) { Actors[k].Pos = Home[k]; Actors[k].Yaw = 0; }
+                UpdateStatus(); break;
             case "KeyV" when Selected >= 0:
                 CamView = CamView switch
                 {
@@ -131,10 +139,11 @@ sealed class World
 
         if (player is null)
         {
-            // 선택 화면: 두 인형 정면, 휠로만 거리 조절
+            // 선택 화면: 두 인형을 마우스 좌우로 돌려 보고(턴테이블), 휠로 거리 조절
             foreach (var a in Actors) { a.Speed = 0; a.Body.Animate(dt, 0); }
             var mid = (Actors[0].Pos + Actors[1].Pos) * 0.5f;
-            var target = mid + new Vector3(0, 1.15f, 3.2f * CamDist / 2.6f);
+            var dist = 3.2f * CamDist / 2.6f;
+            var target = mid + new Vector3(MathF.Sin(CamYaw) * dist, 1.15f, MathF.Cos(CamYaw) * dist);
             CamPos  = Vector3.Lerp(CamPos, Vector3.Clamp(target, lo + new Vector3(0.3f), hi - new Vector3(0.3f)), dt * 5f);
             LookDir = Vector3.Normalize(mid + new Vector3(0, 0.95f, 0) - CamPos);
             return;
@@ -158,16 +167,8 @@ sealed class World
 
         // 방 경계 + 다른 인형과 겹치지 않기
         player.Pos = new Vector3(M.Clamp(player.Pos.X, lo.X + 0.4f, hi.X - 0.4f), 0, M.Clamp(player.Pos.Z, lo.Z + 0.4f, hi.Z - 0.4f));
-        foreach (var other in Actors)
-        {
-            if (other == player) continue;
-            var d = player.Pos - other.Pos; d.Y = 0;
-            var len = d.Length();
-            const float minGap = 0.5f;
-            if (len < minGap) player.Pos = other.Pos + (len > 1e-4f ? d / len : Vector3.UnitX) * minGap;
-        }
 
-        foreach (var a in Actors) a.Body.Animate(dt, a == player ? player.Speed : 0f);
+        player.Body.Animate(dt, player.Speed);
 
         // 카메라
         var aim   = Aim;

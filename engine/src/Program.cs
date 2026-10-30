@@ -101,6 +101,7 @@ ctx.Window.Run(() =>
         for (var i = 0; i < world.Actors.Length; i++)
         {
             var a = world.Actors[i];
+            if (!world.IsVisible(a)) continue;
             if (!reflection && a == world.Player && world.CamView == World.ViewMode.FirstPerson) continue;   // 눈이 머리 안에 있다
             var model = a.Model;
             bodyShader.Set("u_model", model);
