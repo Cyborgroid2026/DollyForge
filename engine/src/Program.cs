@@ -24,6 +24,10 @@ ctx.Window.Load += () =>
     var gl = ctx.Gl;
     try
     {
+        var renderer = gl.GetStringS(Silk.NET.OpenGL.GLEnum.Renderer);
+        var version  = gl.GetStringS(Silk.NET.OpenGL.GLEnum.Version);
+        Console.WriteLine($"[engine] GL 렌더러: {renderer}");
+        Console.WriteLine($"[engine] GL 버전:   {version}");
         bodyShader = new Shader(gl, Shader.BodyVert, Shader.BodyFrag);
         femaleGpu  = new GpuMesh(gl, female.Mesh);
         maleGpu    = new GpuMesh(gl, male.Mesh);
