@@ -85,6 +85,9 @@ else
   export SDL_VIDEODRIVER=offscreen
 fi
 
+# 해부학 인체 자산 (MakeHuman CC0) — 처음 한 번 받는다
+[ -s engine/assets/makehuman/3dobjs/base.obj ] || ./tools/fetch-makehuman.sh || echo "  MakeHuman 자산을 못 받아 SDF 몸으로 실행합니다"
+
 (cd engine && dotnet build --nologo -v quiet) 2>&1
 
 # 엔진 실행 — [stream] 줄이 출력되면 브라우저 열기

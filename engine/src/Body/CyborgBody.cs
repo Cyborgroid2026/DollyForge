@@ -133,7 +133,10 @@ public sealed partial class CyborgBody
     public static CyborgBody Build(BodyConfig body)
     {
         var gender = body.Gender;
-        if (!Cache.TryGetValue(gender, out var geo)) Cache[gender] = geo = BuildGeometry(gender == 1, BodyShape.LoadFor(gender == 1));
+        if (!Cache.TryGetValue(gender, out var geo))
+            // MakeHuman CC0 자산이 있으면 해부학 메시, 없으면 SDF 설계로
+            Cache[gender] = geo = MhAssets.Shared is { } mh ? MhMesh(mh, gender == 1, LoadMhShape(gender == 1))
+                                                            : BuildGeometry(gender == 1, BodyShape.LoadFor(gender == 1));
 
         // 모듈 색 섞기
         var colors = new Vector3[geo.Vertices.Length];
@@ -348,16 +351,25 @@ public sealed partial class CyborgBody
         public float Scale => TargetHeight / StretchedTop;       // 늘인 공간 → 미터
 
         // 설계 공간의 몸통·팔 거리
+        public float CrotchY;   // 설계 공간 샅 높이: 이보다 아래에서는 두 다리가 서로 녹아 붙지 않는다
+
         public (float Core, float Arm) Eval(Vector3 p)
         {
-            float core = 1e3f, arm = 1e3f;
+            float core = 1e3f, arm = 1e3f, legL = 1e3f, legR = 1e3f;
             foreach (var sh in Prims)
             {
                 if (!sh.Bounds.HasPoint(p)) continue;
                 if (sh.Arm)        arm  = Smin(arm, sh.Distance(p), sh.Blend);
+                else if (sh.Leg is { } lg)
+                {
+                    if (lg.Thigh == Bone.ThighL) legL = sh.Distance(p); else legR = sh.Distance(p);
+                }
                 else if (sh.Carve) core = -Smin(-core, sh.Distance(p), sh.Blend);
                 else               core = Smin(core, sh.Distance(p), sh.Blend);
             }
+            // 다리는 골반과만 부드럽게 이어지고(샅 위), 다리끼리는 붙지 않는다
+            var k = 0.075f * M.Clamp((p.Y - (CrotchY - 0.07f)) / 0.07f, 0, 1);
+            core = Smin(Smin(core, legL, k), legR, k);
             return (core, arm);
         }
         public float Join(float core, float arm, float designY)
@@ -638,6 +650,7 @@ public sealed partial class CyborgBody
             Joints = joints,
             Arms = arms,
             ArmJoinY = G(1.385f, 1.465f) - 0.16f,
+            CrotchY = G(0.770f, 0.840f),
             Knots = male ? [0f, 0.090f, 0.505f, 0.830f, 1.100f, 1.465f, 1.638f, 1.876f]
                          : [0f, 0.085f, 0.475f, 0.760f, 1.075f, 1.385f, 1.535f, 1.766f],
             Scales = Enumerable.Range(0, 7).Select(i => P[$"v{i}"]).ToArray(),
@@ -809,7 +822,7 @@ public sealed partial class CyborgBody
     /// </summary>
     static (int[] Bones, float[] Weights) SkinWeights(Vector3[] verts, Prim[] prims)
     {
-        const float falloff = 0.008f;
+        const float falloff = 0.014f;   // 유연성: 관절 둘레 가중치가 넓게 섞여야 굽혀도 곡선이 꺾이지 않는다
         var bones   = new int[verts.Length * 4];
         var weights = new float[verts.Length * 4];
         Parallel.For(0, verts.Length, v =>
@@ -823,11 +836,11 @@ public sealed partial class CyborgBody
                 var dist = pr.Distance(p);
                 if (pr.Leg is { } lg)
                 {
-                    // 무릎·발목 근처에서 부드럽게 넘어간다 (기울기 0.5 → 약 2 cm 폭)
+                    // 무릎·발목 근처에서 부드럽게 넘어간다 (기울기 0.25 → 약 4~6 cm 폭)
                     float up = M.Max(0, lg.Knee - p.Y), dn = M.Max(0, p.Y - lg.Knee), an = M.Max(0, lg.Ankle - p.Y), ab = M.Max(0, p.Y - lg.Ankle);
-                    d[(int)lg.Thigh] = M.Min(d[(int)lg.Thigh], dist + up * 0.5f);
-                    d[(int)lg.Shin]  = M.Min(d[(int)lg.Shin],  dist + dn * 0.5f + an * 0.5f);
-                    d[(int)lg.Foot]  = M.Min(d[(int)lg.Foot],  dist + ab * 0.5f);
+                    d[(int)lg.Thigh] = M.Min(d[(int)lg.Thigh], dist + up * 0.25f);
+                    d[(int)lg.Shin]  = M.Min(d[(int)lg.Shin],  dist + dn * 0.25f + an * 0.25f);
+                    d[(int)lg.Foot]  = M.Min(d[(int)lg.Foot],  dist + ab * 0.25f);
                     continue;
                 }
                 var b = (int)pr.Bone;

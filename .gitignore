@@ -28,3 +28,4 @@ obj/
 # 참고 이미지 (저작권: 원저작자. 학습·참고용, 저장소·게임에 넣지 않음)
 /reference/
 bin\
+engine/assets/makehuman/

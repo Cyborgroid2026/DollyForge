@@ -22,6 +22,8 @@
     <Content Include="assets/panoramas/*.jpg;assets/panoramas/*.png" CopyToOutputDirectory="PreserveNewest" />
     <!-- 레퍼런스 피팅 결과 체형 (CyborgBody 가 읽는다) -->
     <Content Include="assets/body/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- MakeHuman CC0 인체 자산 (tools/fetch-makehuman.sh 로 받음, git 제외) -->
+    <Content Include="assets/makehuman/**/*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../godot/src/Core/Cyborg.cs" />

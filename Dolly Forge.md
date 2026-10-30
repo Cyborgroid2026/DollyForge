@@ -281,7 +281,12 @@ Google 지도의 **스트리트 뷰 레이어**를 기준 자료로 삼는다. �
 ```text
 engine/                     C# .NET 10 + Silk.NET OpenGL 4.5 자체 엔진 (Godot 없음)
   src/Program.cs            렌더 루프: 배경 → 바닥 반사층 → 뒤집힌 인형 → 광택 바닥 → 인형
-  src/Body/CyborgBody.cs    크롬 사이보그 인형: SDF 조형(로프트·둥근 원뿔·타원체 + 홈 파기)을 Surface Nets 로 메시화,
+  src/Body/MakeHuman.cs     해부학 인체(MakeHuman CC0 기본 메시·모프 타깃·리그): 모프 합성 → 팔·다리 자세 → 얼굴을 달걀 머리로 투영
+                            → Loop 세분 → 163뼈 가중치를 14뼈로 접어 스키닝, 외피 이음선
+  src/Body/BodyFit.cs       레퍼런스 피팅: tools/bodyfit/ref 의 앞·뒤 이미지에서 읽은 실루엣 치수(63개)와 황금비(배꼽/키 = 1/φ,
+                            어깨/허리 = φ)에 모프 슬라이더를 맞춘다. 100회 = 1주기, 최소 100 · 최대 10000회
+                            (dolly-engine --fit mh both --out engine/assets/body → assets/body/mh-*.json)
+  src/Body/CyborgBody.cs    (MakeHuman 자산이 없을 때) SDF 조형 인형: SDF 조형(로프트·둥근 원뿔·타원체 + 홈 파기)을 Surface Nets 로 메시화,
                             원형별 거리로 14뼈 스키닝, 걷기 애니메이션. 여성형·남성형 체형, 모듈 종류별 크롬 톤
   src/GL/EnvRenderer.cs     환경: 절차적 사이버 스튜디오(회로 벽·도시 야경 창·천장 조명) / 파노라마 사진, 공용 GLSL(EnvGlsl)
   src/GL/FloorRenderer.cs   광택 검정 바닥 (평면 반사)
@@ -309,7 +314,7 @@ tools/validate              URDF·USDA 독립 검증기 (표준 라이브러리 
    - 시작하면 캐릭터 선택 화면(두 인형, 마우스 좌우로 돌려 보기): 화면 아래 카드 또는 1(여성형)·2(남성형)로 고르면 그 인형 하나만 방에 남아 조종된다. C 로 다시 선택.
    - 조작: 화면 클릭 → 마우스 잡기(Esc 로 놓기), WASD 이동(Shift 달리기), 마우스로 몸·시점 회전, **V = 1인칭 → 3인칭(뒤) → 3인칭(앞)**, 휠 3인칭 거리, N 스튜디오 ↔ 파노라마. 1인칭에서도 내 몸은 바닥에 비친다.
    - 점검: `GET /frame.jpg` 는 마지막 화면 한 장, `POST /input` 은 탭과 같은 형식의 입력(`{"type":"wheel","dy":-400}` 등)을 넣는다.
-   - 인형 메시는 시작할 때 SDF 에서 새로 만든다(수 초).
+   - 인형은 MakeHuman CC0 자산(`tools/fetch-makehuman.sh`, 약 42 MB, git 제외, run.sh 가 처음 한 번 받음)에 피팅 값을 입혀 시작할 때 만든다. 자산이 없으면 SDF 인형으로 돈다.
 2. 신분 등록 신청서에 전화번호를 적고 QR 계정을 발급받는다. 개발 모드에서는 인증 코드가 신청서에 표시된다.
 
 검증 작업:
