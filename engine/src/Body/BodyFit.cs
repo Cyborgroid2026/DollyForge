@@ -52,10 +52,56 @@ public sealed partial class CyborgBody
         (Kind.CoreWidth, 1.122f, 0.242f), (Kind.CoreWidth, 0.919f, 0.349f),
         (Kind.ArmOuter, 1.383f, 0.189f), (Kind.ArmOuter, 1.131f, 0.226f), (Kind.ArmOuter, 0.977f, 0.236f),
         (Kind.ArmWidth, 1.267f, 0.058f), (Kind.ArmWidth, 0.996f, 0.052f),
-        (Kind.LegOuter, 0.745f, 0.160f), (Kind.LegInner, 0.745f, 0.008f),
-        (Kind.LegOuter, 0.522f, 0.121f), (Kind.LegInner, 0.522f, 0.005f),
-        (Kind.LegOuter, 0.425f, 0.116f), (Kind.LegInner, 0.425f, 0.015f),
-        (Kind.LegOuter, 0.164f, 0.080f), (Kind.LegInner, 0.164f, 0.010f),
+        // 하반신: 앞·뒤 이미지에서 2~4 cm 간격으로 읽은 다리 윤곽 (바깥·안쪽 가장자리, 두 다리 평균)
+        (Kind.LegOuter, 0.822f, 0.166f),
+        (Kind.LegInner, 0.822f, 0.008f),
+        (Kind.LegOuter, 0.783f, 0.163f),
+        (Kind.LegInner, 0.783f, 0.007f),
+        (Kind.LegOuter, 0.745f, 0.157f),
+        (Kind.LegInner, 0.745f, 0.007f),
+        (Kind.LegOuter, 0.706f, 0.150f),
+        (Kind.LegInner, 0.706f, 0.007f),
+        (Kind.LegOuter, 0.648f, 0.138f),
+        (Kind.LegInner, 0.648f, 0.008f),
+        (Kind.LegOuter, 0.590f, 0.128f),
+        (Kind.LegInner, 0.590f, 0.010f),
+        (Kind.LegOuter, 0.551f, 0.121f),
+        (Kind.LegInner, 0.551f, 0.005f),
+        (Kind.LegOuter, 0.493f, 0.116f),
+        (Kind.LegInner, 0.493f, 0.010f),
+        (Kind.LegOuter, 0.435f, 0.118f),
+        (Kind.LegInner, 0.435f, 0.019f),
+        (Kind.LegOuter, 0.377f, 0.114f),
+        (Kind.LegInner, 0.377f, 0.027f),
+        (Kind.LegOuter, 0.319f, 0.106f),
+        (Kind.LegInner, 0.319f, 0.029f),
+        (Kind.LegOuter, 0.261f, 0.095f),
+        (Kind.LegInner, 0.261f, 0.017f),
+        (Kind.LegOuter, 0.203f, 0.082f),
+        (Kind.LegInner, 0.203f, 0.010f),
+        (Kind.LegOuter, 0.145f, 0.080f),
+        (Kind.LegInner, 0.145f, 0.013f),
+        (Kind.LegOuter, 0.745f, 0.166f),
+        (Kind.LegInner, 0.745f, 0.008f),
+        (Kind.LegOuter, 0.667f, 0.155f),
+        (Kind.LegInner, 0.667f, 0.008f),
+        (Kind.LegOuter, 0.551f, 0.119f),
+        (Kind.LegInner, 0.551f, 0.008f),
+        (Kind.LegOuter, 0.474f, 0.117f),
+        (Kind.LegInner, 0.474f, 0.010f),
+        (Kind.LegOuter, 0.396f, 0.115f),
+        (Kind.LegInner, 0.396f, 0.008f),
+        (Kind.LegOuter, 0.319f, 0.106f),
+        (Kind.LegInner, 0.319f, 0.012f),
+        (Kind.LegOuter, 0.242f, 0.092f),
+        (Kind.LegInner, 0.242f, 0.015f),
+        (Kind.LegOuter, 0.164f, 0.080f),
+        (Kind.LegInner, 0.164f, 0.019f),
+        (Kind.LegOuter, 0.087f, 0.073f),
+        (Kind.LegInner, 0.087f, 0.021f),
+        (Kind.CoreWidth, 0.977f, 0.338f),
+        (Kind.CoreWidth, 0.899f, 0.364f),
+        (Kind.CoreWidth, 0.996f, 0.335f),
         (Kind.Crotch, 0, 0.851f), (Kind.Fingertip, 0, 0.716f),
     ];
 
@@ -65,10 +111,49 @@ public sealed partial class CyborgBody
         (Kind.CoreWidth, 1.139f, 0.308f), (Kind.CoreWidth, 0.955f, 0.357f),
         (Kind.ArmOuter, 1.427f, 0.267f), (Kind.ArmOuter, 1.098f, 0.295f),
         (Kind.ArmWidth, 1.283f, 0.103f), (Kind.ArmWidth, 1.078f, 0.113f),
-        (Kind.LegOuter, 0.790f, 0.166f), (Kind.LegInner, 0.790f, 0.010f),
-        (Kind.LegOuter, 0.544f, 0.149f), (Kind.LegInner, 0.544f, 0.021f),
-        (Kind.LegOuter, 0.400f, 0.149f), (Kind.LegInner, 0.400f, 0.024f),
-        (Kind.LegOuter, 0.175f, 0.085f), (Kind.LegInner, 0.175f, 0.015f),
+        // 하반신: 앞·뒤 이미지에서 2~4 cm 간격으로 읽은 다리 윤곽 (바깥·안쪽 가장자리, 두 다리 평균)
+        (Kind.LegOuter, 0.873f, 0.169f),
+        (Kind.LegInner, 0.873f, 0.010f),
+        (Kind.LegOuter, 0.790f, 0.166f),
+        (Kind.LegInner, 0.790f, 0.011f),
+        (Kind.LegOuter, 0.708f, 0.163f),
+        (Kind.LegInner, 0.708f, 0.016f),
+        (Kind.LegOuter, 0.626f, 0.159f),
+        (Kind.LegInner, 0.626f, 0.024f),
+        (Kind.LegOuter, 0.544f, 0.149f),
+        (Kind.LegInner, 0.544f, 0.021f),
+        (Kind.LegOuter, 0.462f, 0.151f),
+        (Kind.LegInner, 0.462f, 0.024f),
+        (Kind.LegOuter, 0.380f, 0.147f),
+        (Kind.LegInner, 0.380f, 0.026f),
+        (Kind.LegOuter, 0.298f, 0.130f),
+        (Kind.LegInner, 0.298f, 0.021f),
+        (Kind.LegOuter, 0.216f, 0.101f),
+        (Kind.LegInner, 0.216f, 0.015f),
+        (Kind.LegOuter, 0.154f, 0.092f),
+        (Kind.LegInner, 0.154f, 0.015f),
+        (Kind.LegOuter, 0.831f, 0.164f),
+        (Kind.LegInner, 0.831f, 0.012f),
+        (Kind.LegOuter, 0.749f, 0.159f),
+        (Kind.LegInner, 0.749f, 0.016f),
+        (Kind.LegOuter, 0.667f, 0.159f),
+        (Kind.LegInner, 0.667f, 0.021f),
+        (Kind.LegOuter, 0.585f, 0.144f),
+        (Kind.LegInner, 0.585f, 0.026f),
+        (Kind.LegOuter, 0.503f, 0.147f),
+        (Kind.LegInner, 0.503f, 0.018f),
+        (Kind.LegOuter, 0.421f, 0.141f),
+        (Kind.LegInner, 0.421f, 0.015f),
+        (Kind.LegOuter, 0.339f, 0.125f),
+        (Kind.LegInner, 0.339f, 0.021f),
+        (Kind.LegOuter, 0.257f, 0.113f),
+        (Kind.LegInner, 0.257f, 0.029f),
+        (Kind.LegOuter, 0.175f, 0.098f),
+        (Kind.LegInner, 0.175f, 0.031f),
+        (Kind.LegOuter, 0.092f, 0.098f),
+        (Kind.LegInner, 0.092f, 0.029f),
+        (Kind.CoreWidth, 0.996f, 0.339f),
+        (Kind.CoreWidth, 0.914f, 0.339f),
         (Kind.Crotch, 0, 0.903f), (Kind.Fingertip, 0, 0.807f),
     ];
 
@@ -159,7 +244,7 @@ public sealed partial class CyborgBody
         for (var i = 0; i < m.Length; i++)
         {
             var r = refs[i].Ref;
-            var w = refs[i].K is Kind.Crotch or Kind.Fingertip ? 4f : 1f;   // 다리 길이·팔 길이는 비례의 뼈대
+            var w = refs[i].K is Kind.Crotch or Kind.Fingertip ? 8f : 1f;   // 다리 길이·팔 길이는 비례의 뼈대
             var t = (m[i] - r) / MathF.Max(r, 0.05f);
             e += w * t * t;
         }
@@ -197,7 +282,7 @@ public sealed partial class CyborgBody
 
         var best = Evaluate(x, out var bestM);
         var first = best;
-        var sigma = 0.06f; var succ = 0; var tries = 0;
+        var sigma = 0.06f; var succ = 0; var tries = 0; var restarts = 0;
         var sw = Stopwatch.StartNew();
         var name = male ? "male" : "female";
         Console.WriteLine($"[fit] {name}: 시작 손실 {best:F4}  (항목 {refs.Length}개, 변수 {keys.Length}개)");
@@ -230,7 +315,12 @@ public sealed partial class CyborgBody
                 shape.Save(BodyShape.PathFor(male, outDir));
                 var gain = (cycleStart - best) / MathF.Max(cycleStart, 1e-6f);
                 Console.WriteLine($"[fit] {name} 주기 {it / cycle,3} (반복 {it,5}): 손실 {best:F4}  주기 개선 {gain * 100:F2}%  σ={sigma:F3}  {sw.Elapsed:mm\\:ss}");
-                if (it >= minIt && gain < 0.0005f && sigma <= 0.004f) { Console.WriteLine($"[fit] {name}: 수렴 — 반복 {it}회에서 멈춤"); break; }
+                if (it >= minIt && gain < 0.0005f && sigma <= 0.004f)
+                {
+                    // 국소 최솟값 탈출: 큰 걸음으로 세 번까지 다시 흔들어 보고, 그래도 안 나아지면 멈춘다
+                    if (restarts < 3) { restarts++; sigma = 0.08f; Console.WriteLine($"[fit] {name}: 재시작 {restarts}/3"); }
+                    else { Console.WriteLine($"[fit] {name}: 수렴 — 반복 {it}회에서 멈춤"); break; }
+                }
                 cycleStart = best;
             }
         }
