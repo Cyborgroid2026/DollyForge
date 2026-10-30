@@ -23,12 +23,14 @@ sealed class World
     public void KeyUp(string code)   => _keys.Remove(code);
     public bool IsDown(string code)  => _keys.Contains(code);
 
+    public Vector3 CamFwd() => new(
+        MathF.Sin(CamYaw) * MathF.Cos(CamPitch),
+        MathF.Sin(CamPitch),
+        -MathF.Cos(CamYaw) * MathF.Cos(CamPitch));
+
     public Matrix4x4 View()
     {
-        var dir = new Vector3(
-            MathF.Sin(CamYaw) * MathF.Cos(CamPitch),
-            MathF.Sin(CamPitch),
-            -MathF.Cos(CamYaw) * MathF.Cos(CamPitch));
+        var dir = CamFwd();
         return Matrix4x4.CreateLookAt(CamPos, CamPos + dir, Vector3.UnitY);
     }
 
