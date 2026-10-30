@@ -649,9 +649,10 @@ public sealed partial class CyborgBody
             geo.Seams[k] = MhSeam(body, male, body.V[i], body.Owner[i]);
         }
 
-        // 크롬은 다각형 면이 그대로 비친다 → Loop 세분 1회 (가중치·이음선·머리 법선도 함께 나눈다)
+        // 크롬은 다각형 면이 그대로 비친다 → Loop 세분 (가중치·이음선·머리 법선도 함께 나눈다)
         var eggT = A.Used.Select(i => body.EggT[i]).ToArray();
         LoopSubdivide(geo, ref eggT);
+        LoopSubdivide(geo, ref eggT);   // 2회: 정점 간격 ~3 mm → 레퍼런스 그림(1 px ≈ 2 mm)의 근육 디테일이 뭉개지지 않게
 
         int[] parent = [-1, 0, 0, 0, (int)Bone.UpperR, (int)Bone.UpperL, (int)Bone.ForeR, (int)Bone.ForeL,
                         0, 0, (int)Bone.ThighR, (int)Bone.ThighL, (int)Bone.ShinR, (int)Bone.ShinL];

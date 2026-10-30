@@ -3,12 +3,16 @@ using System.Numerics;
 
 // ── 레퍼런스 체형 피팅 (창 없이): dolly-engine --fit female|male|both --out engine/assets/body
 if (args.Length > 0 && args[0] == "--fit") { CyborgBody.FitCli(args); return; }
+// ── 레퍼런스와 형태 비교 (개발): dolly-engine --refnormals 출력폴더 [--nodetail]
+if (args.Length > 0 && args[0] == "--refnormals") { CyborgBody.RefNormalsCli(args); return; }
 
 // ── 인형 빌드 ─────────────────────────────────────────────────────────────
 Console.WriteLine("[engine] 캐릭터 메시 빌드 중…");
 var female = CyborgBody.Build(0);
 var male   = CyborgBody.Build(1);
 Console.WriteLine($"[engine] 여성형 {female.Mesh.Vertices.Length:N0}  남성형 {male.Mesh.Vertices.Length:N0}");
+// 레퍼런스 그림의 근육 조각(Marigold 법선 디테일)을 두 인형 법선에 입힌다
+CyborgBody.ApplyReferenceDetail(female, male);
 
 // ── GL 컨텍스트 + 스트리밍 ────────────────────────────────────────────────
 var ctx    = new GlContext(1600, 900);
@@ -27,7 +31,9 @@ var skinBuf  = new Matrix4x4[BodyMesh.BoneCount];
 var last     = DateTime.UtcNow;
 var assetDir = Path.Combine(AppContext.BaseDirectory, "assets", "panoramas");
 // 측정용 (개발): DOLLY_MASK=1 이면 배경·바닥·후처리 없이 몸만 흰색으로 그린다 → 레퍼런스와 실루엣 비교
-var maskMode = Environment.GetEnvironmentVariable("DOLLY_MASK") == "1";
+// DOLLY_MASK=2: 몸을 카메라 공간 법선 색으로 (레퍼런스 Marigold 법선 지도와 형태 비교)
+var maskKind = int.TryParse(Environment.GetEnvironmentVariable("DOLLY_MASK"), out var mk) ? mk : 0;
+var maskMode = maskKind > 0;
 bool nWas    = false;
 
 ctx.Window.Load += () =>
@@ -73,7 +79,7 @@ ctx.Window.Run(() =>
     if (nNow && !nWas) env?.NextPanorama();
     nWas = nNow;
 
-    if (bodyShader is null || femaleGpu is null || maleGpu is null || env is null || floor is null) return;
+    if (bodyShader is null || femaleGpu is null || maleGpu is null || env is null || floor is null || post is null) return;
 
     ctx.BeginFrame();
 
@@ -85,7 +91,7 @@ ctx.Window.Run(() =>
     var up    = Vector3.Cross(right, fwd);
 
     // 1. 배경
-    if (!maskMode) env.Draw(world.CamPos, fwd, right, up, fovTan, aspect, ctx.Height);
+    if (!maskMode) env.Draw(world.CamPos, fwd, right, up, fovTan, aspect, ctx.RenderHeight);
 
     var vp       = world.View() * world.Proj(aspect);
     var mirror   = Matrix4x4.CreateScale(1, -1, 1);
@@ -102,7 +108,7 @@ ctx.Window.Run(() =>
         bodyShader.Set("u_cam_back",  -fwd);
         bodyShader.Set("u_ambient",   new Vector3(0.50f, 0.52f, 0.58f));
         bodyShader.Set("u_roughness", 0.20f);   // 새틴 크롬: 하이라이트가 점이 아니라 넓게 번진다
-        bodyShader.Set("u_mask", maskMode ? 1 : 0);
+        bodyShader.Set("u_mask", maskKind);
         bodyShader.Set("u_matcap_gain", 0.42f);
         bodyShader.Set("u_matcap_mix", 0.5f);   // 일러스트 스튜디오 톤 50 % + AI 크롬 구 매트캡 50 %
         bodyShader.Set("u_curv_gain", 0.1f);
@@ -135,10 +141,9 @@ ctx.Window.Run(() =>
     DrawBodies(Matrix4x4.Identity, world.CamPos, false);
 
     // 4. 후처리 (블룸·색보정·비네트): 레퍼런스 일러스트의 공기감
-    uint? shown = null;
-    if (post is not null && !maskMode) { post.Apply(ctx.ColorTex, ctx.Width, ctx.Height); shown = post.OutputFbo; }
-
-    stream.PushFrame(ctx.ReadPixels(shown), ctx.Width, ctx.Height);
+    // (측정용 마스크 모드는 효과 없이 축소만)
+    post.Apply(ctx.ColorTex, ctx.Width, ctx.Height, plain: maskMode);
+    stream.PushFrame(ctx.ReadPixels(post.OutputFbo), ctx.Width, ctx.Height);
 });
 
 ctx.Dispose();

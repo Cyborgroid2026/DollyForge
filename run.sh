@@ -76,6 +76,11 @@ fi
 # ── 2. C# 엔진 빌드 ───────────────────────────────────────────────────
 echo "[run] 2/2 C# 엔진 빌드 + 실행"
 
+# NVIDIA GPU 가 있으면 그쪽으로 렌더링 (PRIME 렌더 오프로드, 없으면 내장 GPU 그대로)
+if nvidia-smi >/dev/null 2>&1; then
+  export __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia
+fi
+
 # 헤드리스 디스플레이 선택
 if xdpyinfo -display :1 >/dev/null 2>&1; then
   export DISPLAY=:1

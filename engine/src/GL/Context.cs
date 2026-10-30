@@ -15,6 +15,10 @@ sealed class GlContext : IDisposable
     uint _fbo, _colorTex, _depthRbo;
     public int Width  { get; private set; }
     public int Height { get; private set; }
+    /// <summary>슈퍼샘플링 배율: 장면은 Width·Height 의 이 배수로 그리고 후처리가 축소한다 (계단 현상 제거)</summary>
+    public const int Scale = 2;
+    public int RenderWidth  => Width * Scale;
+    public int RenderHeight => Height * Scale;
 
     bool _ready;
 
@@ -47,14 +51,14 @@ sealed class GlContext : IDisposable
         Gl.Enable(EnableCap.DepthTest);
         // 컬링 끔: Surface Nets 메시 와인딩 검증 전까지 양면 렌더링
         Gl.Disable(EnableCap.CullFace);
-        CreateFbo(Width, Height);
+        CreateFbo(RenderWidth, RenderHeight);
         _ready = true;
     }
 
     void OnResize(Vector2D<int> size)
     {
         Width = size.X; Height = size.Y;
-        if (_ready) { DeleteFbo(); CreateFbo(Width, Height); }
+        if (_ready) { DeleteFbo(); CreateFbo(RenderWidth, RenderHeight); }
     }
 
     unsafe void CreateFbo(int w, int h)
@@ -65,8 +69,9 @@ sealed class GlContext : IDisposable
         _colorTex = Gl.GenTexture();
         Gl.BindTexture(TextureTarget.Texture2D, _colorTex);
         Gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba8, (uint)w, (uint)h, 0, PixelFormat.Rgba, PixelType.UnsignedByte, null);
-        Gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)GLEnum.Nearest);
-        Gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)GLEnum.Nearest);
+        // 선형: 후처리가 2×2 블록 한가운데를 읽으면 네 픽셀 평균 = 슈퍼샘플 축소
+        Gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)GLEnum.Linear);
+        Gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)GLEnum.Linear);
         Gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _colorTex, 0);
 
         _depthRbo = Gl.GenRenderbuffer();
@@ -89,7 +94,7 @@ sealed class GlContext : IDisposable
     public void BeginFrame()
     {
         Gl.BindFramebuffer(FramebufferTarget.Framebuffer, _fbo);
-        Gl.Viewport(0, 0, (uint)Width, (uint)Height);
+        Gl.Viewport(0, 0, (uint)RenderWidth, (uint)RenderHeight);
         Gl.ClearColor(0f, 0f, 0f, 1f);
         Gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
     }
@@ -97,10 +102,10 @@ sealed class GlContext : IDisposable
     /// <summary>장면이 그려진 색 텍스처 (후처리 입력)</summary>
     public uint ColorTex => _colorTex;
 
-    /// <summary>fbo 를 주면 그 대상(후처리 결과)에서, 없으면 장면 FBO 에서 읽는다</summary>
-    public unsafe byte[] ReadPixels(uint? fbo = null)
+    /// <summary>후처리 결과(출력 크기 Width×Height) FBO 에서 읽는다</summary>
+    public unsafe byte[] ReadPixels(uint fbo)
     {
-        Gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo ?? _fbo);
+        Gl.BindFramebuffer(FramebufferTarget.Framebuffer, fbo);
         var buf = new byte[Width * Height * 4];
         fixed (byte* p = buf)
             Gl.ReadPixels(0, 0, (uint)Width, (uint)Height, PixelFormat.Rgba, PixelType.UnsignedByte, p);

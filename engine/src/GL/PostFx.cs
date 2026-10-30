@@ -62,8 +62,10 @@ sealed class PostFx : IDisposable
         uniform sampler2D u_scene;
         uniform sampler2D u_bloom;
         uniform float u_aspect;
+        uniform int u_plain;
         void main() {
             vec3 c = texture(u_scene, v_uv).rgb;
+            if (u_plain == 1) { frag = vec4(c, 1.0); return; }
             c += texture(u_bloom, v_uv).rgb * 0.35;
             float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
             // split tone: cool blue in the shadows, neutral highlights
@@ -161,12 +163,12 @@ sealed class PostFx : IDisposable
     }
 
     /// <summary>장면 텍스처 → 후처리 결과 (OutputFbo). 창 크기가 바뀌었으면 대상도 다시 만든다.</summary>
-    public void Apply(uint sceneTex, int w, int h)
+    public void Apply(uint sceneTex, int w, int h, bool plain = false)
     {
         if (w != _w || h != _h) Resize(w, h);
         _gl.Disable(EnableCap.DepthTest);
         int qw = Math.Max(1, _w / 4), qh = Math.Max(1, _h / 4);
-        Pass(_bright, _fboA, qw, qh, sceneTex, () => _gl.Uniform2(_gl.GetUniformLocation(_bright, "u_texel"), 1f / _w, 1f / _h));
+        Pass(_bright, _fboA, qw, qh, sceneTex, () => _gl.Uniform2(_gl.GetUniformLocation(_bright, "u_texel"), 1f / _w, 1f / _h));   // 장면이 2배여도 출력 픽셀 기준
         for (var i = 0; i < 2; i++)
         {
             Pass(_blur, _fboB, qw, qh, _texA, () => _gl.Uniform2(_gl.GetUniformLocation(_blur, "u_dir"), 1.6f / qw, 0f));
@@ -179,6 +181,7 @@ sealed class PostFx : IDisposable
             _gl.BindTexture(TextureTarget.Texture2D, _texA);
             _gl.Uniform1(_gl.GetUniformLocation(_final, "u_bloom"), 1);
             _gl.Uniform1(_gl.GetUniformLocation(_final, "u_aspect"), (float)_w / _h);
+            _gl.Uniform1(_gl.GetUniformLocation(_final, "u_plain"), plain ? 1 : 0);
         });
         _gl.ActiveTexture(TextureUnit.Texture0);
         _gl.BindVertexArray(0);

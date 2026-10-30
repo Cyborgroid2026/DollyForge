@@ -184,6 +184,12 @@ sealed class Shader : IDisposable
             float sw = min(fwidth(v_seam) * 1.5, 0.003);
             float seam = 1.0 - smoothstep(0.0007, 0.0007 + sw, abs(v_seam));
             col *= 1.0 - 0.5 * seam;   // the art draws seams as faint hairlines
+            if (u_mask == 2) {
+                // debug: camera-space normal as color (same convention as the Marigold maps: x right, y up, z to viewer)
+                vec3 fw = -u_cam_back, rt = normalize(cross(fw, vec3(0.0, 1.0, 0.0))), upv = cross(rt, fw);
+                frag_color = vec4(vec3(dot(N, rt), dot(N, upv), dot(N, u_cam_back)) * 0.5 + 0.5, 1.0);
+                return;
+            }
             frag_color = u_mask == 1 ? vec4(1.0) : vec4(tonemap(col), 1.0);
         }
         """;
