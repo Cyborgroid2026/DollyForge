@@ -39,7 +39,7 @@ public sealed class CyborgBody
         Height    = height;
         _restRot  = restRot;
         _pose     = new Quaternion[BodyMesh.BoneCount];
-        for (var i = 0; i < _pose.Length; i++) _pose[i] = Quaternion.Identity;
+        for (var i = 0; i < _pose.Length; i++) _pose[i] = _restRot[i];
         _fingersL = fingersL;
         _fingersR = fingersR;
         _thumbL   = thumbL;
