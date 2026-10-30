@@ -167,10 +167,11 @@ sealed class EnvRenderer : IDisposable
             vec3 b = normalize(vec3(camBack.x, 0.0, camBack.z));
             vec3 side = vec3(-b.z, 0.0, b.x);
             float front = max(dot(rd, b), 0.0);
+            // satin gunmetal look of the reference: dim front box, bright side strips -> rim highlights along limbs
             vec3 c = vec3(0.04, 0.043, 0.05);
-            c += vec3(1.05, 1.07, 1.10) * pow(front, 3.0) * smoothstep(-0.6, 0.2, rd.y);
-            c += vec3(1.20, 1.20, 1.25) * pow(max(rd.y, 0.0), 4.0);
-            c += vec3(0.40, 0.45, 0.55) * pow(abs(dot(rd, side)), 6.0) * smoothstep(-0.1, 0.3, rd.y);
+            c += vec3(0.42, 0.44, 0.48) * pow(front, 3.0) * smoothstep(-0.6, 0.2, rd.y);
+            c += vec3(0.62, 0.62, 0.66) * pow(max(rd.y, 0.0), 4.0);
+            c += vec3(0.80, 0.88, 1.05) * pow(abs(dot(rd, side)), 6.0) * smoothstep(-0.1, 0.3, rd.y);
             c += vec3(0.12, 0.14, 0.20) * pow(max(-dot(rd, b), 0.0), 2.0) * smoothstep(-0.2, 0.2, rd.y);
             c *= mix(0.6, 1.0, smoothstep(-0.45, 0.05, rd.y));
             return c;

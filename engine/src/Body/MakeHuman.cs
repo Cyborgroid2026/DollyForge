@@ -365,16 +365,21 @@ public sealed partial class CyborgBody
             eggT[i] = t;
         }
 
-        // 젖꼭지·발가락 사이 같은 잔 형태는 크롬에서 튀므로 국소 평활
-        foreach (var s in new[] { "L", "R" })
-        {
-            // 가슴 관절 근처에서 가장 앞으로 나온 정점 = 젖꼭지
-            var bh = A.Joint(v, $"breast.{s}____head");
-            var sx = s == "L" ? 1 : -1;
-            var tip = A.Used.Where(i => v[i].X * sx > 0 && Vector3.Distance(v[i], bh) < 1.6f).MaxBy(i => v[i].Z);
-            var c = v[tip];
-            LocalSmooth(A, v, i => MathF.Max(0, 1 - Vector3.Distance(v[i], c) / 0.26f), 8);
-        }
+        // 젖꼭지 (레퍼런스에는 없다): MakeHuman 젖꼭지 크기 타깃이 움직이는 정점들의 좌우 중심.
+        // (breast.L/R 관절은 기본 리그에서 가운데 x 0 으로 잡혀 위치로 쓸 수 없다)
+        var nipples = A.Target("breast/nipple-size-incr") is { } nt
+            ? new[] { 1f, -1f }.Select(sx => nt.I.Where(i => i < v.Length && v[i].X * sx > 0).Select(i => v[i]).Aggregate(Vector3.Zero, (acc, p) => acc + p)
+                                             / Math.Max(1, nt.I.Count(i => i < v.Length && v[i].X * sx > 0))).ToArray()
+            : [];
+        float NearNipple(int i) => nipples.Length == 0 ? 0 : nipples.Max(c => M.Clamp(1.5f - Vector3.Distance(v[i], c) / 0.4f, 0, 1));
+
+        // 레퍼런스처럼 조각 같은 근육: 기본 메시의 근육 굴곡(원본 − 저역 통과)을 법선 방향으로 키운다. 머리·손·발·젖꼭지는 그대로.
+        Define(A, v, male ? 2.0f : 0.7f, i => (1 - A.W14[i * B + (int)Bone.Head] - A.W14[i * B + (int)Bone.HandL] - A.W14[i * B + (int)Bone.HandR]
+                                                - A.W14[i * B + (int)Bone.FootL] - A.W14[i * B + (int)Bone.FootR]) * (1 - eggT[i]) * (1 - NearNipple(i)));
+
+        // 젖꼭지 같은 잔 형태는 크롬에서 튀므로 국소 평활
+        foreach (var c in nipples)
+            Dome(A, v, c, 0.45f);
 
         // 미터로, 발바닥 y = 0
         var minY = A.Used.Min(i => v[i].Y);
@@ -419,23 +424,87 @@ public sealed partial class CyborgBody
         return t * t * (3 - 2 * t);
     }
 
-    static void LocalSmooth(MhAssets A, Vector3[] v, Func<int, float> weight, int iterations)
+    /// <summary>
+    /// 근육 굴곡 강조 (기하 언샤프 마스크): Taubin 평활 12쌍(근육 한 덩이 폭, 약 5 cm 아래를 걸러 냄)과
+    /// 원본의 차이에서 법선 성분만 gain 배 더한다. Taubin 은 팔·다리 같은 가는 원통을 수축시키지 않아서
+    /// 차이에 굵기가 섞이지 않는다 → 큰 실루엣은 그대로, 체형 피팅이 흔들리지 않는다.
+    /// </summary>
+    static void Define(MhAssets A, Vector3[] v, float gain, Func<int, float> weight)
     {
-        var ids = A.Used.Where(i => weight(i) > 0).ToArray();
-        var w = ids.Select(weight).ToArray();
-        var tmp = new Vector3[ids.Length];
-        for (var it = 0; it < iterations; it++)
+        var ids = A.Used;
+        var smooth = (Vector3[])v.Clone();
+        var tmp = new Vector3[v.Length];
+        for (var it = 0; it < 24; it++)
         {
-            for (var k = 0; k < ids.Length; k++)
+            var step = it % 2 == 0 ? 0.5f : -0.53f;
+            foreach (var i in ids)
             {
-                var nb = A.Adj[ids[k]];
-                if (nb.Length == 0) { tmp[k] = v[ids[k]]; continue; }
+                var nb = A.Adj[i];
+                if (nb.Length == 0) { tmp[i] = smooth[i]; continue; }
                 var avg = Vector3.Zero;
-                foreach (var x in nb) avg += v[x];
-                avg /= nb.Length;
-                tmp[k] = Vector3.Lerp(v[ids[k]], avg, 0.5f * w[k]);
+                foreach (var x in nb) avg += smooth[x];
+                tmp[i] = smooth[i] + (avg / nb.Length - smooth[i]) * step;
             }
-            for (var k = 0; k < ids.Length; k++) v[ids[k]] = tmp[k];
+            foreach (var i in ids) smooth[i] = tmp[i];
+        }
+        var n = new Vector3[v.Length];
+        for (var t = 0; t < A.Tris.Length; t += 3)
+        {
+            int a = A.Tris[t], b = A.Tris[t + 1], c = A.Tris[t + 2];
+            var fn = Vector3.Cross(smooth[b] - smooth[a], smooth[c] - smooth[a]);
+            n[a] += fn; n[b] += fn; n[c] += fn;
+        }
+        foreach (var i in ids)
+        {
+            var w = M.Clamp(weight(i), 0, 1);
+            if (w <= 0 || n[i].LengthSquared() < 1e-20f) continue;
+            var nn = Vector3.Normalize(n[i]);
+            v[i] += nn * (Vector3.Dot(v[i] - smooth[i], nn) * gain * w);
+        }
+    }
+
+    /// <summary>
+    /// 반지름 r 안의 잔 형태(젖꼭지)를 지우고 둘레 곡면을 이어 붙인 돔으로 바꾼다:
+    /// r~1.8r 고리 정점들로 국소 높이장 h = a + bx + cy + dx² + exy + fy² 를 최소제곱으로 맞추고, 안쪽 정점을 그 높이로 옮긴다.
+    /// 평활은 원뿔처럼 뾰족한 가슴 끝을 그대로 남기지만, 맞춘 곡면은 가슴의 둥근 형태만 잇는다.
+    /// </summary>
+    static void Dome(MhAssets A, Vector3[] v, Vector3 c, float r)
+    {
+        var inner = A.Used.Where(i => Vector3.Distance(v[i], c) < r).ToArray();
+        var ring = A.Used.Where(i => Vector3.Distance(v[i], c) is var d && d >= r && d < r * 1.8f).ToArray();
+        if (inner.Length == 0 || ring.Length < 12) return;
+        var mid = ring.Aggregate(Vector3.Zero, (s, i) => s + v[i]) / ring.Length;
+        var n = Vector3.Normalize(c - mid);                     // 고리 평면에서 젖꼭지 쪽 = 바깥
+        var t1 = Vector3.Normalize(Vector3.Cross(n, MathF.Abs(n.Y) < 0.9f ? Vector3.UnitY : Vector3.UnitX));
+        var t2 = Vector3.Cross(n, t1);
+        float[] Basis(Vector3 p) { var q = p - c; float x = Vector3.Dot(q, t1), y = Vector3.Dot(q, t2); return [1, x, y, x * x, x * y, y * y]; }
+        // 정규방정식 (6×6) 가우스 소거
+        var m = new double[6, 7];
+        foreach (var i in ring)
+        {
+            var f = Basis(v[i]); var h = Vector3.Dot(v[i] - c, n);
+            for (var a = 0; a < 6; a++) { for (var b = 0; b < 6; b++) m[a, b] += f[a] * f[b]; m[a, 6] += f[a] * h; }
+        }
+        for (var a = 0; a < 6; a++) m[a, a] += 1e-9;
+        for (var col = 0; col < 6; col++)
+        {
+            var piv = Enumerable.Range(col, 6 - col).MaxBy(row => Math.Abs(m[row, col]));
+            for (var k = 0; k < 7; k++) (m[col, k], m[piv, k]) = (m[piv, k], m[col, k]);
+            for (var row = 0; row < 6; row++)
+            {
+                if (row == col) continue;
+                var fct = m[row, col] / m[col, col];
+                for (var k = col; k < 7; k++) m[row, k] -= fct * m[col, k];
+            }
+        }
+        var coef = Enumerable.Range(0, 6).Select(k => (float)(m[k, 6] / m[k, k])).ToArray();
+        foreach (var i in inner)
+        {
+            var f = Basis(v[i]);
+            var h = Vector3.Dot(v[i] - c, n);
+            var fit = 0f; for (var k = 0; k < 6; k++) fit += coef[k] * f[k];
+            var w = Smooth(r, r * 0.6f, Vector3.Distance(v[i], c));   // 가장자리에서 고리와 매끄럽게
+            v[i] += n * ((fit - h) * w);
         }
     }
 

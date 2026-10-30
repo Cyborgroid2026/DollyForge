@@ -128,7 +128,7 @@ sealed class Shader : IDisposable
             float NdV = max(dot(N, V), 0.001);
             vec3 R = reflect(-V, N);
             vec3 F = v_color + (1.0 - v_color) * pow(1.0 - NdV, 5.0);
-            vec3 col = envGlossy(v_pos + N * 0.003, R, u_cam_back, 0.18) * F;
+            vec3 col = envGlossy(v_pos + N * 0.003, R, u_cam_back, 0.08) * F;
             col += keyLight(N, V, u_l0_dir, u_l0_col, F);
             col += keyLight(N, V, u_l1_dir, u_l1_col, F);
             col += keyLight(N, V, u_l2_dir, u_l2_col, F);

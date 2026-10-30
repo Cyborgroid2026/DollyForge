@@ -115,6 +115,8 @@ targets/breast/breast-dist-decr.target
 targets/breast/breast-dist-incr.target
 targets/breast/breast-point-decr.target
 targets/breast/breast-point-incr.target
+targets/breast/nipple-point-incr.target
+targets/breast/nipple-size-incr.target
 targets/breast/breast-trans-down.target
 targets/breast/breast-trans-up.target
 targets/breast/breast-volume-vert-down.target

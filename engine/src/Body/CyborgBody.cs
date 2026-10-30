@@ -104,9 +104,10 @@ public sealed partial class CyborgBody
     // ─── 재질 ────────────────────────────────────────────────────────────
 
     // 크롬 F0 (금속 반사율). 모듈 종류별로 톤만 다르다.
-    static readonly Vector3 ChromeStandard = new(0.80f, 0.82f, 0.85f);
-    static readonly Vector3 ChromeHeavy    = new(0.60f, 0.64f, 0.68f);
-    static readonly Vector3 ChromeLite     = new(0.88f, 0.88f, 0.90f);
+    // 레퍼런스의 건메탈 크롬: 은보다 어둡고 푸른 기 (몸 평균 밝기 0.35, 채도 0.19 에 맞춤)
+    static readonly Vector3 ChromeStandard = new(0.60f, 0.64f, 0.71f);
+    static readonly Vector3 ChromeHeavy    = new(0.46f, 0.50f, 0.56f);
+    static readonly Vector3 ChromeLite     = new(0.70f, 0.72f, 0.77f);
     static Vector3 VariantColor(ModuleVariant v) => v switch {
         ModuleVariant.HeavyDuty => ChromeHeavy,
         ModuleVariant.Lite      => ChromeLite,
@@ -138,14 +139,15 @@ public sealed partial class CyborgBody
             Cache[gender] = geo = MhAssets.Shared is { } mh ? MhMesh(mh, gender == 1, LoadMhShape(gender == 1))
                                                             : BuildGeometry(gender == 1, BodyShape.LoadFor(gender == 1));
 
-        // 모듈 색 섞기
+        // 모듈 색 섞기 × 오목한 곳 그늘 (레퍼런스처럼 근육 사이 홈이 어둡게 가라앉는다)
+        var cavity = Cavity(geo);
         var colors = new Vector3[geo.Vertices.Length];
         for (var v = 0; v < colors.Length; v++)
         {
             var c = Vector3.Zero;
             for (var k = 0; k < 4; k++)
                 c += VariantColor(body.VariantAt(BoneSlot[geo.Bones[v * 4 + k]])) * geo.Weights[v * 4 + k];
-            colors[v] = c;
+            colors[v] = c * cavity[v];
         }
 
         var mesh = new BodyMesh
@@ -163,6 +165,47 @@ public sealed partial class CyborgBody
         };
         return new CyborgBody(mesh, geo.Vertices.Max(v => v.Y));
     }
+
+    /// <summary>
+    /// 정점별 오목함 그늘 (1 = 그대로, 작을수록 어둡게). 이웃 평균 위치가 법선 쪽으로 얼마나 올라와 있는지(라플라시안·법선)를
+    /// 이웃 간격으로 나눈 곡률을 몇 번 퍼뜨린 뒤, 오목한 쪽만 어둡게 한다. 복근·흉근·척추 홈·무릎 뒤가 가라앉는다.
+    /// </summary>
+    static float[] Cavity(BodyMesh g)
+    {
+        var n = g.Vertices.Length;
+        var sum = new Vector3[n]; var cnt = new int[n]; var len = new float[n];
+        for (var t = 0; t < g.Indices.Length; t += 3)
+            for (var e = 0; e < 3; e++)
+            {
+                int a = g.Indices[t + e], b = g.Indices[t + (e + 1) % 3];
+                sum[a] += g.Vertices[b]; cnt[a]++; len[a] += Vector3.Distance(g.Vertices[a], g.Vertices[b]);
+                sum[b] += g.Vertices[a]; cnt[b]++; len[b] += Vector3.Distance(g.Vertices[a], g.Vertices[b]);
+            }
+        var curv = new float[n];
+        for (var i = 0; i < n; i++)
+            if (cnt[i] > 0)
+                curv[i] = Vector3.Dot(sum[i] / cnt[i] - g.Vertices[i], g.Normals[i]) / (len[i] / cnt[i] * len[i] / cnt[i]);
+        // 이웃 평균으로 퍼뜨리기: 삼각형 하나 크기의 잡음 대신 근육 홈 크기의 그늘
+        for (var it = 0; it < CavitySpread; it++)
+        {
+            var acc = new float[n];
+            for (var t = 0; t < g.Indices.Length; t += 3)
+                for (var e = 0; e < 3; e++)
+                {
+                    int a = g.Indices[t + e], b = g.Indices[t + (e + 1) % 3];
+                    acc[a] += curv[b]; acc[b] += curv[a];
+                }
+            for (var i = 0; i < n; i++) curv[i] = cnt[i] > 0 ? (curv[i] + acc[i] / cnt[i]) * 0.5f : curv[i];
+        }
+        // 오목한 정점의 상위 5 % 곡률에서 가장 어둡게 (메시 크기·세분 횟수와 무관)
+        var concave = curv.Where(c => c > 0).Order().ToArray();
+        var full = concave.Length > 0 ? concave[(int)(concave.Length * 0.95f)] : 1f;
+        var occ = new float[n];
+        for (var i = 0; i < n; i++) occ[i] = 1f - CavityDepth * M.Clamp(curv[i] / full, 0, 1);
+        return occ;
+    }
+    const int   CavitySpread = 6;
+    const float CavityDepth  = 0.7f;
 
     // ─── SDF 원형 ────────────────────────────────────────────────────────
 

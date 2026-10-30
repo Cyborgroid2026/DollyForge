@@ -49,7 +49,7 @@ stream.Start();
 // 하이라이트용 키 조명 3개 (크롬의 반짝임은 주로 환경 반사가 만든다)
 var lights = new (Vector3 Dir, Vector3 Color)[]
 {
-    (Vector3.Normalize(new(0.4f,  1.0f,  0.8f)), new(1.6f, 1.6f, 1.7f)),  // 앞 위 (소프트박스 쪽)
+    (Vector3.Normalize(new(0.4f,  1.0f,  0.8f)), new(1.0f, 1.0f, 1.08f)), // 앞 위 (소프트박스 쪽, 레퍼런스처럼 정면은 은은하게)
     (Vector3.Normalize(new(-0.9f, 0.5f,  0.2f)), new(0.7f, 0.8f, 1.0f)),  // 왼쪽 (차가운 파랑)
     (Vector3.Normalize(new( 0.6f, 0.3f, -1.0f)), new(0.9f, 0.9f, 1.0f)),  // 뒤 림
 };
@@ -97,7 +97,7 @@ ctx.Window.Run(() =>
         bodyShader.Set("u_cam_pos",   cam);
         bodyShader.Set("u_cam_back",  -fwd);
         bodyShader.Set("u_ambient",   new Vector3(0.50f, 0.52f, 0.58f));
-        bodyShader.Set("u_roughness", 0.10f);
+        bodyShader.Set("u_roughness", 0.20f);   // 새틴 크롬: 하이라이트가 점이 아니라 넓게 번진다
         bodyShader.Set("u_l0_dir", lights[0].Dir); bodyShader.Set("u_l0_col", lights[0].Color);
         bodyShader.Set("u_l1_dir", lights[1].Dir); bodyShader.Set("u_l1_col", lights[1].Color);
         bodyShader.Set("u_l2_dir", lights[2].Dir); bodyShader.Set("u_l2_col", lights[2].Color);
