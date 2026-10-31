@@ -9,7 +9,11 @@ sealed record ContentMaterial(string Id, string Name, float Density, Vector3 Col
 /// <summary>콘텐츠 팩 아이템: 형상과 실제 치수(mm)</summary>
 sealed record ContentItem(string Id, string Name, string Category, string Shape, float[] Mm, float Edge, string Mat);
 
-sealed record FurnitureDef(string Item, Vector2 Pos, float Yaw, bool SpawnPoint, bool Wall, bool Ceiling);
+/// <summary>Movable = 붙박이가 아닌 내 물건: 엔진은 집에 굽지 않고, 세계 서버가 강체로 놓는다</summary>
+sealed record FurnitureDef(string Item, Vector2 Pos, float Yaw, bool SpawnPoint, bool Wall, bool Ceiling, bool Movable);
+
+/// <summary>결합 방법 (joining.json): 접합부 그리기 — fillet = 이어진 필렛 곡면, seam = 머리카락 이음선 + 둘레 필렛</summary>
+sealed record JoinDef(string Id, string Name, string Render, float FilletMm);
 sealed record RoomDef(string Id, string Name, Vector2 Pos, Vector2 Size, bool Spawn, FurnitureDef[] Furniture);
 sealed record HouseDef(string Id, string Name, Vector2 Footprint, float WallHeight, Dictionary<string, string> Shell, RoomDef[] Rooms);
 
@@ -32,6 +36,7 @@ sealed class ContentPack
     public readonly Dictionary<string, ContentItem> Items = [];
     public readonly Dictionary<string, HouseDef> Houses = [];
     public WorldLayout Layout = WorldLayout.Default;
+    public readonly Dictionary<string, JoinDef> Joins = [];
 
     public static string DefaultDir => Path.Combine(AppContext.BaseDirectory, "content", "dolly");
 
@@ -75,7 +80,8 @@ sealed class ContentPack
                             f.TryGetProperty("yaw_deg", out var y) ? y.GetSingle() : 0,
                             f.TryGetProperty("spawn_point", out var s) && s.GetBoolean(),
                             f.TryGetProperty("wall", out var w) && w.GetBoolean(),
-                            f.TryGetProperty("ceiling", out var cl) && cl.GetBoolean())).ToArray()
+                            f.TryGetProperty("ceiling", out var cl) && cl.GetBoolean(),
+                            f.TryGetProperty("movable", out var mv) && mv.GetBoolean())).ToArray()
                         : [])).ToArray();
                 var shell = h.GetProperty("shell").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString()!);
                 pack.Houses[h.GetProperty("id").GetString()!] = new(h.GetProperty("id").GetString()!, h.GetProperty("name").GetString()!,
@@ -94,6 +100,13 @@ sealed class ContentPack
                 V2(w.GetProperty("settled").GetProperty("center")), V2(w.GetProperty("settled").GetProperty("radius")), V2(w.GetProperty("settled").GetProperty("edge")),
                 w.GetProperty("edit_reach_m").GetSingle(), w.GetProperty("dig").GetProperty("tool_volume_m3").GetSingle(), w.GetProperty("dig").GetProperty("yields").GetString()!);
             WorldLayout.Default = pack.Layout;
+        }
+        if (files.TryGetProperty("joining", out var jf))
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, jf.GetString()!)));
+            foreach (var m in doc.RootElement.GetProperty("methods").EnumerateArray())
+                pack.Joins[m.GetProperty("id").GetString()!] = new(m.GetProperty("id").GetString()!, m.GetProperty("name").GetString()!,
+                    m.GetProperty("render").GetString()!, m.GetProperty("fillet_mm").GetSingle());
         }
         Console.WriteLine($"[content] 재료 {pack.Materials.Count} · 아이템 {pack.Items.Count} · 집 설계도 {pack.Houses.Count}");
         return pack;

@@ -87,7 +87,8 @@ sealed class WorldRenderer : IDisposable
     readonly Shader _shader;
     readonly Dictionary<(int X, int Z), StaticMesh> _fine = [];
     readonly StaticMesh _coarse, _shell, _furniture, _glass;
-    readonly Dictionary<(Vector3 Half, float R, string Item), StaticMesh> _bodyMeshes = [];
+    readonly Dictionary<string, StaticMesh> _bodyMeshes = [];
+    readonly Dictionary<string, Task<StaticMeshData>> _bodyPending = [];
     readonly StaticMesh[] _treeNear, _treeFar;
     readonly List<Vector4>[] _instNear, _instFar;
     readonly GrassRenderer _grass;
@@ -107,6 +108,7 @@ sealed class WorldRenderer : IDisposable
         uniform int u_instanced;
         uniform float u_time;
         uniform mat4 u_model;
+        uniform vec3 u_body_light;
         out vec3 v_world; out vec3 v_local; out vec3 v_nrm; out vec4 v_col; out vec4 v_light;
         void main() {
             vec3 p = a_pos;
@@ -124,7 +126,8 @@ sealed class WorldRenderer : IDisposable
                 v_local = p;
                 p += u_offset;
             }
-            v_world = p; v_nrm = u_instanced == 2 ? mat3(u_model) * a_nrm : a_nrm; v_col = a_col; v_light = a_light;
+            v_world = p; v_nrm = u_instanced == 2 ? mat3(u_model) * a_nrm : a_nrm; v_col = a_col;
+            v_light = u_instanced == 2 ? vec4(a_light.x, a_light.yzw * u_body_light) : a_light;   // things: self-occlusion x light where they stand
             gl_Position = u_vp * vec4(v_world, 1.0);
         }
         """;
@@ -139,6 +142,11 @@ sealed class WorldRenderer : IDisposable
         uniform float u_alpha;
         uniform int u_kind;
         uniform vec3 u_brick, u_roof, u_floor;
+        uniform int u_instanced;
+        uniform vec4 u_ghost;                         // placement preview: tint rgb, alpha
+        uniform int u_nocc;                           // things lying around: their boxes shade the ground (contact shadow + sun shadow)
+        uniform vec4 u_occ_c[24];
+        uniform vec4 u_occ_h[24];
         """ + EnvRenderer.EnvGlsl + """
 
         float vnoise(vec2 x) {
@@ -242,6 +250,23 @@ sealed class WorldRenderer : IDisposable
                     base *= 0.8 + 0.4 * vnoise(vec2(atan(v_local.z, v_local.x) * 5.0, v_local.y * 1.5));
                 }
             }
+            if (u_instanced != 2) {
+                for (int i = 0; i < u_nocc; i++) {
+                    vec3 c = u_occ_c[i].xyz, h = u_occ_h[i].xyz;
+                    vec3 q = abs(v_world - c) - h;
+                    float d = length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+                    float reach = clamp(min(h.x, min(h.y, h.z)) * 1.5 + 0.08, 0.08, 0.6);
+                    float facing = clamp(dot(n, normalize(c - v_world)), 0.0, 1.0);
+                    ao *= 1.0 - 0.6 * (1.0 - smoothstep(0.0, reach, d)) * (0.3 + 0.7 * facing);
+                    // sun shadow: does the ray toward the sun pass through the box?
+                    vec3 o = v_world + n * 0.01 - c;
+                    vec3 inv = 1.0 / (u_sun + vec3(1e-6));
+                    vec3 t0 = (-h - o) * inv, t1 = (h - o) * inv;
+                    vec3 tn = min(t0, t1), tf = max(t0, t1);
+                    float a = max(max(tn.x, tn.y), tn.z), b = min(min(tf.x, tf.y), tf.z);
+                    if (b > max(a, 0.0)) sunv *= 0.12;
+                }
+            }
             vec3 sunCol = vec3(3.1, 2.85, 2.5);
             vec3 skyCol = vec3(0.46, 0.58, 0.82);
             vec3 lit;
@@ -259,6 +284,11 @@ sealed class WorldRenderer : IDisposable
                     + vec3(2.6, 2.1, 1.5) * lamp * ao;
             }
             vec3 col = base * lit * u_exposure;
+            if (u_ghost.a > 0.0) {
+                float rim = pow(1.0 - max(dot(n, V), 0.0), 2.0);
+                frag = vec4(tonemap(mix(col, u_ghost.rgb, 0.45 + 0.4 * rim)), u_ghost.a);
+                return;
+            }
             if (u_alpha < 0.99) {                       // glass: sky reflection by fresnel
                 float fr = 0.04 + 0.96 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
                 col = mix(col * 0.3, envColor(v_world, reflect(-V, n), 0.0), fr);
@@ -301,25 +331,53 @@ sealed class WorldRenderer : IDisposable
         }
     }
 
-    /// <summary>물건 (서버 Rapier 의 강체): 아이템 치수의 둥근 상자, 재료 색. 같은 모양은 메시를 한 번만 짓는다</summary>
-    public void DrawBodies(IEnumerable<(Vector3 Half, float R, string Item, Matrix4x4 Model)> bodies)
+    /// <summary>
+    /// 물건 (서버 Rapier 의 강체 = 부품 조립체): 부품 모양을 결합대로 이은 거리장 메시. 같은 모양은 한 번만, 일꾼 스레드에서 짓는다
+    /// (다 지을 때까지는 그리지 않는다). light = 그 자리의 해·하늘·전등, ghost = 놓을 자리 미리보기 (색 rgb, 불투명도 a)
+    /// </summary>
+    public void DrawBodies(IEnumerable<(AssemblyDef Shape, Matrix4x4 Model, Vector3 Light, Vector4 Ghost)> bodies)
     {
         _shader.Use();
         _shader.Set("u_instanced", 2);
         _shader.Set("u_kind", 0);
-        foreach (var (half, r, item, model) in bodies)
+        _shader.Set("u_nocc", 0);
+        foreach (var (shape, model, light, ghost) in bodies)
         {
-            if (!_bodyMeshes.TryGetValue((half, r, item), out var mesh))
-            {
-                var col = _scene.Pack.Items.TryGetValue(item, out var it) ? _scene.Pack.Color(it.Mat, new(0.5f, 0.45f, 0.4f)) : new Vector3(0.5f);
-                if (item == "soil_sack") col = new Vector3(0.28f, 0.22f, 0.14f);   // 마대 포대 (속은 흙)
-                var sc = new SdfScene { Blend = 0.001f }.Add(SdfPrim.Box(-half, half, r, col));
-                _bodyMeshes[(half, r, item)] = mesh = new StaticMesh(_gl, WorldScene.MeshScenePublic(sc, Math.Clamp(r / 2, 0.006f, 0.02f)));
-            }
+            var mesh = BodyMesh(shape);
+            if (mesh is null) continue;
             _shader.Set("u_model", model);
+            _shader.Set("u_body_light", light);
+            _shader.Set("u_ghost", ghost);
+            if (ghost.W > 0) { _gl.Enable(EnableCap.Blend); _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha); _gl.DepthMask(false); }
             mesh.Draw();
+            if (ghost.W > 0) { _gl.DepthMask(true); _gl.Disable(EnableCap.Blend); }
         }
+        _shader.Set("u_ghost", Vector4.Zero);
         _shader.Set("u_instanced", 0);
+    }
+
+    StaticMesh? BodyMesh(AssemblyDef shape)
+    {
+        if (_bodyMeshes.TryGetValue(shape.Key, out var mesh)) return mesh;
+        if (!_bodyPending.TryGetValue(shape.Key, out var task))
+            _bodyPending[shape.Key] = task = Task.Run(() => Parts.Mesh(_scene.Pack, shape));
+        if (!task.IsCompleted) return null;
+        _bodyPending.Remove(shape.Key);
+        if (task.IsFaulted) { Console.Error.WriteLine($"[world] 물건 메시 실패: {task.Exception?.InnerException?.Message}"); task = Task.FromResult(new StaticMeshData()); }
+        return _bodyMeshes[shape.Key] = new StaticMesh(_gl, task.Result);
+    }
+
+    /// <summary>놓인 물건의 경계 상자들: 땅·집·가구 면에 접촉 그늘과 해 그림자를 드리운다 (가까운 24개)</summary>
+    public void SetOccluders(IReadOnlyList<(Vector3 Center, Vector3 Half)> boxes)
+    {
+        _shader.Use();
+        var n = Math.Min(boxes.Count, 24);
+        _shader.Set("u_nocc", n);
+        for (var i = 0; i < n; i++)
+        {
+            _shader.Set($"u_occ_c[{i}]", new Vector4(boxes[i].Center, 0));
+            _shader.Set($"u_occ_h[{i}]", new Vector4(boxes[i].Half, 0));
+        }
     }
 
     public void Draw(EnvRenderer env, Matrix4x4 vp, Vector3 camPos, float time)
@@ -335,6 +393,7 @@ sealed class WorldRenderer : IDisposable
         _shader.Set("u_kind", 0);
         _shader.Set("u_instanced", 0);
         _shader.Set("u_time", time);
+        _shader.Set("u_ghost", Vector4.Zero);
         _shader.Set("u_brick", _scene.House.Brick);
         _shader.Set("u_roof", _scene.House.Roof);
         _shader.Set("u_floor", _scene.House.Floor);

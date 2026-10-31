@@ -73,8 +73,11 @@ sealed class World
     public bool InWorld => Selected >= 0 && Scene is not null;
     float _vy;
     bool _grounded;
-    /// <summary>세계를 바꾸는 손짓 (Program 이 세계 서버에 요청한다): 왼쪽 클릭 파기 · 오른쪽 클릭 붓기 · E 줍기 · Q 내려놓기</summary>
-    public enum Gesture { None, Dig, Pour, Pickup, Drop }
+    /// <summary>세계를 바꾸는 손짓 (Program 이 세계 서버에 요청한다): 왼쪽 클릭 파기 · 오른쪽 클릭 붓기 · E 줍기 · Q 내려놓기 · F 잇기 · X 풀기</summary>
+    public enum Gesture { None, Dig, Pour, Pickup, Drop, Join, Split }
+    /// <summary>손에 든 것의 자세: R 세로축 90° · T 앞으로 눕히기 90° (놓을 때 그대로 놓인다)</summary>
+    public Quaternion HeldTurn = Quaternion.Identity;
+    public void ResetHeldTurn() => HeldTurn = Quaternion.Identity;
     public readonly Queue<Gesture> Gestures = new();
     /// <summary>상태 줄에 함께 보이는 것: 들고 있는 것, 세계 서버의 알림</summary>
     public string Held = "", Note = "";
@@ -149,6 +152,10 @@ sealed class World
             case "KeyC": ShowSelection(); break;
             case "KeyE" when InWorld: Gestures.Enqueue(Gesture.Pickup); break;
             case "KeyQ" when InWorld: Gestures.Enqueue(Gesture.Drop); break;
+            case "KeyF" when InWorld: Gestures.Enqueue(Gesture.Join); break;
+            case "KeyX" when InWorld: Gestures.Enqueue(Gesture.Split); break;
+            case "KeyR" when InWorld: HeldTurn = Quaternion.Normalize(Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathF.PI / 2) * HeldTurn); break;
+            case "KeyT" when InWorld: HeldTurn = Quaternion.Normalize(Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI / 2) * HeldTurn); break;
             case "KeyV" when Selected >= 0:
                 CamView = CamView switch
                 {

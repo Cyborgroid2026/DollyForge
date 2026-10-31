@@ -8,6 +8,18 @@
   "road": {"z": -10.5, "half": 2.6},
   "field": {"x_half": 72, "z": [-96, -24]},
   "settled": {"center": [0, -4], "radius": [120, 42], "edge": [0.75, 1.35], "_doc": "타원 안은 외곽·시골 평지, 밖으로 갈수록 야생 (야생 정도 = 1 − 평평함, 0.5 이상이면 wild 구역)"},
+  "starter": {
+    "_doc": "처음 세계를 열 때 내 집에 놓이는 내 물건 (세계 서버의 강체). pos 는 집 기준 [x, z] (부품 가운데), yaw_deg 는 세로축 회전, 긴 원기둥은 눕힌다. 차고 작업장 오른쪽 벽을 따라 놓인 처음 받은 부품들",
+    "items": [
+      {"item": "steel_bar", "pos": [11.35, 1.2], "yaw_deg": 90},
+      {"item": "steel_bar", "pos": [11.35, 2.4], "yaw_deg": 90},
+      {"item": "steel_plate", "pos": [11.25, 3.5], "yaw_deg": 0},
+      {"item": "plank_oak", "pos": [11.0, 4.9], "yaw_deg": 90},
+      {"item": "plank_oak", "pos": [11.45, 4.9], "yaw_deg": 90},
+      {"item": "aluminium_profile", "pos": [11.0, 6.2], "yaw_deg": 0},
+      {"item": "aluminium_profile", "pos": [11.0, 6.45], "yaw_deg": 0}
+    ]
+  },
   "sun_dir": [0.55, 0.62, -0.56],
   "edit_reach_m": 3.0,
   "dig": {"tool_volume_m3": 0.015, "yields": "soil_sack", "_doc": "삽 한 번 = 흙 포대 하나 부피 (400×250×150 mm). 부으면 같은 부피의 둥근 흙이 지형에 더해진다 (흙의 양이 보존된다)"}

@@ -40,6 +40,9 @@
     {"id": "rope", "name": "밧줄 10 m", "ref": "lead / string", "shape": "cyl", "mm": [250, 120], "mat": "linen", "fill": 0.12, "joints": ["H"], "from": "process:twist:flax_bundle", "uses": ["tie", "lead_animal", "climb"]},
     {"id": "name_tag", "name": "이름표", "ref": "name tag", "shape": "box", "mm": [60, 30, 2], "edge": 2, "mat": "brass_c260", "joints": ["H"], "from": "process:engrave", "uses": ["name_animal", "label"]},
     {"id": "backpack", "name": "배낭 (30 L)", "ref": "bundle", "shape": "box", "mm": [300, 200, 500], "edge": 50, "mat": "synthetic_leather", "fill": 0.02, "joints": ["M"], "from": "process:sew", "uses": ["carry"], "note": "부피 30 L 와 무게만큼만 담긴다"},
-    {"id": "whetstone", "name": "손 숫돌", "ref": null, "shape": "box", "mm": [200, 50, 25], "edge": 3, "mat": "sandstone", "joints": [], "from": "process:stonecutter", "uses": ["sharpen"]}
+    {"id": "whetstone", "name": "손 숫돌", "ref": null, "shape": "box", "mm": [200, 50, 25], "edge": 3, "mat": "sandstone", "joints": [], "from": "process:stonecutter", "uses": ["sharpen"]},
+    {"id": "arc_welder", "name": "인버터 아크 용접기", "ref": null, "shape": "box", "mm": [320, 140, 250], "edge": 8, "mat": "steel_s235", "fill": 0.14, "joints": ["M"], "from": "buy", "uses": ["weld"], "note": "같은 금속끼리 녹여 잇는다 (joining.json weld)"},
+    {"id": "spanner_13", "name": "스패너 13 mm (M8 볼트)", "ref": null, "shape": "box", "mm": [180, 30, 8], "edge": 2, "mat": "tool_steel", "fill": 0.6, "joints": ["M"], "from": "process:forge+quench", "uses": ["bolt"]},
+    {"id": "cordless_driver", "name": "충전 드라이버", "ref": null, "shape": "box", "mm": [190, 70, 220], "edge": 10, "mat": "polymer_composite", "fill": 0.55, "joints": ["M"], "from": "buy", "uses": ["screw", "drill"]}
   ]
 }

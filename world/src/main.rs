@@ -1,7 +1,7 @@
-//! Dolly Forge 세계 서버 (0.12 · M2): 지형 편집 · 존중 규칙 · Rapier 실물리 · 섹션 저장의 권한을 가진다.
+//! Dolly Forge 세계 서버 (0.12 · M2·M3): 지형 편집 · 존중 규칙 · Rapier 실물리 · 부품 결합 · 섹션 저장의 권한을 가진다.
 //! C# 엔진이 TCP(127.0.0.1:7701)로 한 줄 JSON 을 주고받는다:
-//!   엔진 → 서버  hello{player, ground, trees} · dig{p, n} · pour{p} · pickup{p} · drop{p, v}
-//!   서버 → 엔진  welcome{edits, bodies, held} · edit{edit} · deny{msg} · body_add · body_del · bodies{list} · held{item}
+//!   엔진 → 서버  hello{player, ground, trees, houses} · dig{p, n} · pour{p} · pickup{id, p} · drop{p, q, v} · join{id, p} · split{id, p}
+//!   서버 → 엔진  welcome{edits, bodies, held} · edit{edit} · deny{msg} · note{msg} · body_add{body} · body_del{id} · bodies{list} · held{shape}
 //! 물리는 60 Hz, 움직이는 물건의 자세는 20 Hz 로 보낸다. (계정·경제는 server/ 의 계정 서버가 맡는다)
 
 mod content;
@@ -86,6 +86,7 @@ fn main() {
                         if let Some(c) = conns.get_mut(&id) {
                             c.1 = player.clone();
                         }
+                        w.set_houses(&m["houses"]);
                         w.set_ground(&m["ground"], &m["trees"]);
                         let welcome = w.welcome(&player);
                         send(&mut conns, Some(id), &welcome);
@@ -94,7 +95,7 @@ fn main() {
                     let player = conns.get(&id).map(|c| c.1.clone()).unwrap_or_else(|| "local".into());
                     for out in w.request(&player, &m) {
                         // 거절과 들기 상태는 요청한 이에게, 세계의 변화는 모두에게
-                        let only = matches!(out["t"].as_str(), Some("deny" | "held"));
+                        let only = matches!(out["t"].as_str(), Some("deny" | "held" | "note"));
                         send(&mut conns, if only { Some(id) } else { None }, &out);
                     }
                 }

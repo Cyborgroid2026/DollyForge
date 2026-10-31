@@ -94,12 +94,114 @@ static class SurfaceNets
         void Shade(int v) { nrm[v] = normal(mesh.Pos[v]); col[v] = color(mesh.Pos[v]); }
         if (parallel) Parallel.For(0, nv, Shade); else for (var v = 0; v < nv; v++) Shade(v);
         mesh.Nrm.AddRange(nrm); mesh.Col.AddRange(col);
+        FixWinding(mesh, nrm);
+        return mesh;
+    }
+
+    static void FixWinding(StaticMeshData mesh, Vector3[] nrm)
+    {
         for (var t = 0; t < mesh.Idx.Count; t += 3)
         {
             int a = mesh.Idx[t], b = mesh.Idx[t + 1], c = mesh.Idx[t + 2];
             var fn = Vector3.Cross(mesh.Pos[b] - mesh.Pos[a], mesh.Pos[c] - mesh.Pos[a]);
             if (Vector3.Dot(fn, nrm[a] + nrm[b] + nrm[c]) < 0) { mesh.Idx[t + 1] = c; mesh.Idx[t + 2] = b; }
         }
+    }
+
+    const int B = 8;   // 희소 블록 한 변의 칸 수
+
+    /// <summary>
+    /// 희소 Surface Nets: 8³ 칸 블록마다 가운데 거리 하나로 "이 블록에 곡면이 지나갈 수 있나"를 먼저 보고, 지나갈 수 있는 블록만 표본을 뽑는다.
+    /// 3 mm 강판처럼 얇고 넓은 부품을 고운 간격으로 메시화할 때 빈 공간의 표본을 건너뛴다 (거리장은 실제 거리보다 크지 않아야 한다).
+    /// 덩어리 하나(섹션 경계 없음)를 위한 것이라 bounds 밖은 비어 있다고 본다.
+    /// </summary>
+    public static StaticMeshData MeshSparse(Func<Vector3, float> sdf, Vector3 lo, Vector3 hi, float step,
+                                            Func<Vector3, Vector3> normal, Func<Vector3, Vector4> color)
+    {
+        int nx = (int)MathF.Ceiling((hi.X - lo.X) / step), ny = (int)MathF.Ceiling((hi.Y - lo.Y) / step), nz = (int)MathF.Ceiling((hi.Z - lo.Z) / step);
+        int bx = (nx + B - 1) / B, by = (ny + B - 1) / B, bz = (nz + B - 1) / B;
+        var reach = MathF.Sqrt(3) * 0.5f * B * step * 1.25f + step;
+        var blocks = new List<(int X, int Y, int Z)>();
+        var all = new (int, int, int)[bx * by * bz];
+        for (var k = 0; k < bz; k++) for (var j = 0; j < by; j++) for (var i = 0; i < bx; i++) all[(k * by + j) * bx + i] = (i, j, k);
+        var active = new bool[all.Length];
+        Parallel.For(0, all.Length, b =>
+        {
+            var (i, j, k) = all[b];
+            var c = lo + (new Vector3(i, j, k) * B + new Vector3(B * 0.5f)) * step;
+            active[b] = MathF.Abs(sdf(c)) < reach;
+        });
+        for (var b = 0; b < all.Length; b++) if (active[b]) blocks.Add(all[b]);
+
+        // 블록마다 표본 (B+1)³: 칸 [b·B, b·B+B) 의 여덟 모서리
+        const int S = B + 1;
+        var samples = new float[blocks.Count][];
+        Parallel.For(0, blocks.Count, bi =>
+        {
+            var (i0, j0, k0) = blocks[bi];
+            var g = new float[S * S * S];
+            for (var k = 0; k < S; k++) for (var j = 0; j < S; j++) for (var i = 0; i < S; i++)
+                g[(k * S + j) * S + i] = sdf(lo + new Vector3(i0 * B + i, j0 * B + j, k0 * B + k) * step);
+            samples[bi] = g;
+        });
+
+        // 칸마다 정점 (모서리 교차점의 평균)
+        var mesh = new StaticMeshData();
+        var cellVert = new Dictionary<(int, int, int), int>();
+        var corner = new float[8];
+        for (var bi = 0; bi < blocks.Count; bi++)
+        {
+            var (i0, j0, k0) = blocks[bi]; var g = samples[bi];
+            for (var k = 0; k < B; k++) for (var j = 0; j < B; j++) for (var i = 0; i < B; i++)
+            {
+                var mask = 0;
+                for (var c = 0; c < 8; c++)
+                {
+                    corner[c] = g[((k + Corners[c, 2]) * S + (j + Corners[c, 1])) * S + (i + Corners[c, 0])];
+                    if (corner[c] < 0) mask |= 1 << c;
+                }
+                if (mask == 0 || mask == 255) continue;
+                var sum = Vector3.Zero; var cnt = 0;
+                for (var e = 0; e < 12; e++)
+                {
+                    int a = Edges[e, 0], b = Edges[e, 1];
+                    if ((corner[a] < 0) == (corner[b] < 0)) continue;
+                    var t = corner[a] / (corner[a] - corner[b]);
+                    var pa = new Vector3(Corners[a, 0], Corners[a, 1], Corners[a, 2]);
+                    var pb = new Vector3(Corners[b, 0], Corners[b, 1], Corners[b, 2]);
+                    sum += pa + (pb - pa) * t; cnt++;
+                }
+                var cell = (i0 * B + i, j0 * B + j, k0 * B + k);
+                cellVert[cell] = mesh.Pos.Count;
+                mesh.Pos.Add(lo + (new Vector3(cell.Item1, cell.Item2, cell.Item3) + sum / cnt) * step);
+            }
+        }
+        int V(int i, int j, int k) => cellVert.TryGetValue((i, j, k), out var v) ? v : -1;
+        void Quad(int a, int b, int c, int d)
+        {
+            if (a < 0 || b < 0 || c < 0 || d < 0) return;
+            mesh.Idx.Add(a); mesh.Idx.Add(b); mesh.Idx.Add(c);
+            mesh.Idx.Add(a); mesh.Idx.Add(c); mesh.Idx.Add(d);
+        }
+        // 면: 기준 표본이 그 블록 안 [b·B, b·B+B) 인 모서리만 (모서리마다 한 번)
+        for (var bi = 0; bi < blocks.Count; bi++)
+        {
+            var (i0, j0, k0) = blocks[bi]; var g = samples[bi];
+            float G(int i, int j, int k) => g[(k * S + j) * S + i];
+            for (var k = 0; k < B; k++) for (var j = 0; j < B; j++) for (var i = 0; i < B; i++)
+            {
+                int x = i0 * B + i, y = j0 * B + j, z = k0 * B + k;
+                var in0 = G(i, j, k) < 0;
+                if (in0 != (G(i + 1, j, k) < 0)) Quad(V(x, y - 1, z - 1), V(x, y, z - 1), V(x, y, z), V(x, y - 1, z));
+                if (in0 != (G(i, j + 1, k) < 0)) Quad(V(x - 1, y, z - 1), V(x - 1, y, z), V(x, y, z), V(x, y, z - 1));
+                if (in0 != (G(i, j, k + 1) < 0)) Quad(V(x - 1, y - 1, z), V(x, y - 1, z), V(x, y, z), V(x - 1, y, z));
+            }
+        }
+        var nv = mesh.Pos.Count;
+        var nrm = new Vector3[nv]; var col = new Vector4[nv];
+        Parallel.For(0, nv, v => { nrm[v] = normal(mesh.Pos[v]); col[v] = color(mesh.Pos[v]); });
+        mesh.Nrm.AddRange(nrm); mesh.Col.AddRange(col);
+        FixWinding(mesh, nrm);
         return mesh;
     }
 }

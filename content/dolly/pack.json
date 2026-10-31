@@ -64,6 +64,7 @@
     "biomes": "biomes.json",
     "zones": "zones.json",
     "houses": "houses.json",
-    "world": "world.json"
+    "world": "world.json",
+    "joining": "joining.json"
   }
 }

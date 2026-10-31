@@ -2,7 +2,7 @@
 //!   집 골격·이웃 집터·길·시골 공용지는 형태가 정해져 있고, 밖(야생)만 자유롭다.
 //!   내 마당은 내가 부은 것만 다시 팔 수 있다 (own_placed).
 
-use crate::content::{Layout, Pack};
+use crate::content::{Layout, Pack, FLOOR_Y};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Action {
@@ -45,13 +45,24 @@ pub fn wildness(l: &Layout, x: f32, z: f32) -> f32 {
     smooth(l.settled_edge.0, l.settled_edge.1, e)
 }
 
-/// 자리의 구역 id (집 번호가 있으면 함께)
-pub fn zone_at(l: &Layout, x: f32, z: f32) -> (&'static str, Option<usize>) {
+/// 자리의 구역 id (집 번호가 있으면 함께). 집 안의 방 공간(바깥벽 안쪽, 바닥 위 · 천장 아래)은 집 안이고, 벽·바닥·지붕 자체는 골격이다
+pub fn zone_at(l: &Layout, p: [f32; 3]) -> (&'static str, Option<usize>) {
+    let [x, y, z] = p;
     let (fw, fd) = l.footprint;
+    const WALL: f32 = 0.12;
     for (i, hx) in l.house_x.iter().enumerate() {
         let ox = hx + l.origin_dx;
         if x >= ox && x <= ox + fw && z >= 0.0 && z <= fd {
-            return (if i == l.own_house { "home_shell" } else { "neighbour_home" }, Some(i));
+            let room = x > ox + WALL && x < ox + fw - WALL && z > WALL && z < fd - WALL && y > FLOOR_Y + 0.03 && y < l.wall_height - 0.03;
+            let own = i == l.own_house;
+            return (
+                match (own, room) {
+                    (true, true) => "home_interior",
+                    (true, false) => "home_shell",
+                    _ => "neighbour_home",
+                },
+                Some(i),
+            );
         }
     }
     for (i, hx) in l.house_x.iter().enumerate() {
@@ -79,7 +90,7 @@ pub trait PlacedBy {
 
 pub fn judge(pack: &Pack, player: &str, action: Action, p: [f32; 3], placed: &impl PlacedBy) -> Verdict {
     let l = &pack.layout;
-    let (zone, house) = zone_at(l, p[0], p[2]);
+    let (zone, house) = zone_at(l, p);
     let z = &pack.zones[zone];
     let rule = z.rules.get(action.key()).cloned().unwrap_or_else(|| "deny".into());
     // 한 사람 놀이(v0.1): 내 집(own_house)의 주인은 이 접속자
@@ -128,5 +139,10 @@ mod tests {
         assert_eq!(wild.zone, "wild");
         assert!(wild.ok, "밖(야생)은 자유롭다");
         assert!(judge(&p, "local", Action::Place, [2.0, 0.0, -4.0], &Nothing).ok, "내 마당에는 놓을 수 있다");
+        let room = judge(&p, "local", Action::Place, [-3.8, 0.4, 2.5], &Nothing);
+        assert_eq!(room.zone, "home_interior", "침실 바닥 위는 집 안");
+        assert!(room.ok, "내 방에는 가구를 놓을 수 있다");
+        assert!(!dig(-3.8, 2.5).ok, "침실 바닥은 골격이라 파지 않는다");
+        assert!(!judge(&p, "local", Action::Place, [18.0, 0.4, 3.0], &Nothing).ok, "이웃 집 안에는 놓지 않는다");
     }
 }

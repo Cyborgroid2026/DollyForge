@@ -17,6 +17,8 @@
     {"id": "aluminium_ingot", "name": "알루미늄 주괴", "ref": null, "shape": "box", "mm": [200, 60, 40], "edge": 5, "mat": "al6061_t6", "joints": [], "from": "process:electrolysis", "uses": ["profile", "cast"], "note": "전기 분해 공정 해금 뒤"},
     {"id": "aluminium_profile", "name": "알루미늄 프로파일 2020", "ref": null, "shape": "box", "mm": [20, 20, 1000], "edge": 3, "mat": "al6061_t6", "fill": 0.42, "joints": ["F", "L"], "from": "process:extrude", "uses": ["frame", "machine"], "note": "지금 카탈로그(Catalog.cs)의 프로파일과 같은 규격"},
     {"id": "titanium_ingot", "name": "티타늄 주괴", "ref": null, "shape": "box", "mm": [200, 60, 40], "edge": 5, "mat": "ti6al4v", "joints": [], "from": "process:kroll", "uses": ["body", "forge"], "note": "마지막 공정 단계"},
-    {"id": "titanium_plate", "name": "티타늄 판 500 × 500 × 2", "ref": null, "shape": "box", "mm": [500, 500, 2], "edge": 3, "mat": "ti6al4v", "joints": ["F"], "from": "process:roll", "uses": ["body", "plating"]}
+    {"id": "titanium_plate", "name": "티타늄 판 500 × 500 × 2", "ref": null, "shape": "box", "mm": [500, 500, 2], "edge": 3, "mat": "ti6al4v", "joints": ["F"], "from": "process:roll", "uses": ["body", "plating"]},
+    {"id": "bolt_m8", "name": "M8 육각 볼트·너트 (30 mm)", "ref": null, "shape": "cyl", "mm": [13, 38], "mat": "steel_s235", "fill": 0.45, "joints": ["F"], "from": "process:forge", "uses": ["bolt"]},
+    {"id": "wood_screw", "name": "목재 나사 (4 × 40 mm)", "ref": null, "shape": "cyl", "mm": [4, 40], "mat": "steel_s235", "fill": 0.8, "joints": ["F"], "from": "process:forge", "uses": ["screw"]}
   ]
 }

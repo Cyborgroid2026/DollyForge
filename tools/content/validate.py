@@ -44,6 +44,7 @@ def volume(shape, mm, edge=0.0):
     raise ValueError(shape)
 
 
+MAT_KINDS = {"metal", "wood", "stone", "glass", "polymer", "fibre", "liquid", "bulk", "other"}
 DIMS = {"box": 3, "cyl": 2, "tube": 3, "sphere": 1}
 
 
@@ -64,6 +65,7 @@ def main():
         for k in ("name", "density", "mu_s", "mu_k", "restitution"):
             if k not in m: err(f"재료 {m['id']}: {k} 없음")
         if m.get("density", 0) <= 0: err(f"재료 {m['id']}: 밀도가 0 이하")
+        if m.get("kind") not in MAT_KINDS: err(f"재료 {m['id']}: 계열 kind = {m.get('kind')} 는 정의되지 않음")
         mats[m["id"]] = m
 
     # ── 아이템 ────────────────────────────────────────────────────────────
@@ -205,6 +207,37 @@ def main():
             iv = 1
             for d in items[y]["mm"]: iv *= d / 1000
             if abs(iv - w["dig"]["tool_volume_m3"]) > 0.1 * iv: err(f"세계: 삽 한 번 부피 {w['dig']['tool_volume_m3']} m³ 가 {y} 부피 {iv:.4f} m³ 와 다름 (흙 보존)")
+
+        # 처음 놓이는 내 물건: 내 집 안, 혼자 들 수 있는 것
+        if w["house"] in houses:
+            fw, fd = houses[w["house"]]["footprint_m"]
+            for s in w.get("starter", {}).get("items", []):
+                if s["item"] not in items: err(f"세계: 시작 물건 {s['item']} 없음"); continue
+                x, z = s["pos"]
+                if not (0 < x < fw and 0 < z < fd): err(f"세계: 시작 물건 {s['item']} 자리 {s['pos']} 가 집 밖")
+                if masses.get(s["item"], 0) > std["carry_limit_kg"]: err(f"세계: 시작 물건 {s['item']} 은 혼자 들 수 없다")
+            for room in houses[w["house"]]["rooms"]:
+                for f in room.get("furniture", []):
+                    if f.get("movable") and masses.get(f["item"], 0) > std["carry_limit_kg"]:
+                        err(f"집 {w['house']}/{room['id']}: 옮길 수 있는 가구 {f['item']} {masses[f['item']]:.1f} kg 이 운반 한계를 넘음")
+                    if f.get("movable") and (f.get("wall") or f.get("ceiling")): err(f"집 {w['house']}/{room['id']}: 벽·천장 붙박이 {f['item']} 은 옮길 수 없다")
+
+    # ── 결합 규칙 (0.6 · 4장) ─────────────────────────────────────────────
+    if "joining" in pack["files"]:
+        jd = load(pack["files"]["joining"])
+        for k in jd["rigid_kinds"]:
+            if k not in MAT_KINDS: err(f"결합: 계열 {k} 없음")
+        whens = {"same_metal", "any_wood", "not_both_wood"}
+        for mth in jd["methods"]:
+            where = f"결합 {mth['id']}"
+            if mth["joint"] not in joints_ok: err(f"{where}: 연결부 {mth['joint']} 는 규격에 없음")
+            if mth["when"] not in whens: err(f"{where}: 조건 {mth['when']} 정의 없음")
+            if mth["render"] not in ("fillet", "seam"): err(f"{where}: 그리기 {mth['render']} 정의 없음")
+            if mth["tool"] not in items: err(f"{where}: 공구 {mth['tool']} 없음")
+            for c in mth.get("consumes", {}):
+                if c not in items: err(f"{where}: 소모품 {c} 없음")
+            if mth["render"] == "fillet" and mth.get("undo"): err(f"{where}: 완전히 녹여 이은 결합은 풀 수 없다")
+        if jd["methods"][0]["when"] != "same_metal": warn("결합: 용접(같은 금속)이 가장 먼저여야 금속끼리 볼트로 잇지 않는다")
 
     # ── 생물군계 ─────────────────────────────────────────────────────────
     bio = load(pack["files"]["biomes"])

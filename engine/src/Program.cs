@@ -26,6 +26,12 @@ var stream = new BrowserStream();
 var world  = new World(female, male) { Scene = scene };
 // 세계 서버 (Rust, world/): 파기·붓기·물건 물리·존중 규칙의 권한
 var link   = scene is not null ? new WorldLink(scene) : null;
+if (link is not null && scene is not null)
+{
+    scene.Bodies = () => link.Solids;                 // 걷기 물리·시선이 놓인 물건에도 닿는다
+    link.HeldChanged += world.ResetHeldTurn;
+}
+Placement? place = null;                              // 들고 있는 것을 놓을 자리 (미리보기·Q)
 WorldRenderer? worldGfx = null;
 
 Shader?        bodyShader = null;
@@ -86,12 +92,13 @@ ctx.Window.Run(() =>
     if (link is not null && scene is not null)
     {
         link.Pump();
+        place = world.Player is { } holder0 && link.Held is { } h0 ? FindPlacement(scene, h0, holder0) : null;
         HandleGestures(link, scene);
-        var heldName = link.Held is { } hid && scene.Pack.Items.TryGetValue(hid, out var hit) ? hit.Name : link.Held ?? "";
+        var heldName = link.Held is null ? "" : link.HeldMass > 0 ? FormattableString.Invariant($"{link.HeldName} ({link.HeldMass:0.0} kg)") : link.HeldName;
         world.SetHud(heldName, link.Note);
     }
     if (world.Status != lastStatus) stream.SetStatus(lastStatus = world.Status);
-    if (world.Player is { } pl) stream.Debug = FormattableString.Invariant($"{{\"x\":{pl.Pos.X:F3},\"y\":{pl.Pos.Y:F3},\"z\":{pl.Pos.Z:F3},\"camYaw\":{world.CamYaw:F4},\"camPitch\":{world.CamPitch:F4},\"held\":{System.Text.Json.JsonSerializer.Serialize(world.Held)},\"note\":{System.Text.Json.JsonSerializer.Serialize(world.Note)},\"bodies\":{link?.Bodies.Count ?? 0},\"edits\":{scene?.Terrain.EditCount ?? 0}}}");
+    if (world.Player is { } pl) stream.Debug = FormattableString.Invariant($"{{\"x\":{pl.Pos.X:F3},\"y\":{pl.Pos.Y:F3},\"z\":{pl.Pos.Z:F3},\"camYaw\":{world.CamYaw:F4},\"camPitch\":{world.CamPitch:F4},\"held\":{System.Text.Json.JsonSerializer.Serialize(world.Held)},\"note\":{System.Text.Json.JsonSerializer.Serialize(world.Note)},\"bodies\":{link?.Bodies.Count ?? 0},\"aim\":{(link?.Raycast(world.CamPos, world.LookDir, 6) is { } ah ? ah.Id : -1)},\"place\":{(place is not { } pv ? "null" : FormattableString.Invariant($"[{pv.P.X:F3},{pv.P.Y:F3},{pv.P.Z:F3},{(pv.Valid ? 1 : 0)}]"))},\"things\":{ThingsJson()},\"edits\":{scene?.Terrain.EditCount ?? 0}}}");
 
     // N 키 엣지 감지 → 환경 전환
     bool nNow = world.IsDown("KeyN");
@@ -124,16 +131,35 @@ ctx.Window.Run(() =>
     var gpus     = new[] { femaleGpu, maleGpu };
 
     // 1-b. 세계: 지형 · 집 · 가구 · 유리
-    if (world.InWorld && worldGfx is not null && !maskMode) worldGfx.Draw(env, vp, world.CamPos, (float)(now - started).TotalSeconds);
-    // 1-c. 물건 (서버 Rapier 강체) + 손에 든 것
+    if (world.InWorld && worldGfx is not null && !maskMode)
+    {
+        worldGfx.SetOccluders(link is null ? [] : link.Bodies.Values
+            .Select(b => ShapeBox(scene!, b.Shape, b.Model))
+            .OrderBy(o => Vector3.DistanceSquared(o.C, world.CamPos)).Take(24).Select(o => (o.C, o.H)).ToList());
+        worldGfx.Draw(env, vp, world.CamPos, (float)(now - started).TotalSeconds);
+    }
+    // 1-c. 물건 (서버 Rapier 강체 = 부품 조립체) + 손에 든 것 + 놓을 자리 미리보기
     if (world.InWorld && worldGfx is not null && link is not null && !maskMode)
     {
-        var list = link.Bodies.Values.Select(b => (b.Half, b.R, b.Item, Matrix4x4.CreateFromQuaternion(b.Q) * Matrix4x4.CreateTranslation(b.P))).ToList();
-        if (link.Held is { } held && world.Player is { } holder && scene!.Pack.Items.TryGetValue(held, out var hi))
+        var list = new List<(AssemblyDef, Matrix4x4, Vector3, Vector4)>();
+        foreach (var b in link.Bodies.Values)
         {
-            var (hh, hr) = BodyShape(hi);
-            var at = holder.Pos + holder.Facing * 0.36f + new Vector3(0, 1.0f, 0);
-            list.Add((hh, hr, held, Matrix4x4.CreateRotationY(holder.Yaw + MathF.PI / 2) * Matrix4x4.CreateTranslation(at)));
+            if (!(Vector3.Distance(b.P, b.LightAt) < 0.02f)) { b.Light = scene!.LightAt(b.P + new Vector3(0, 0.05f, 0)); b.LightAt = b.P; }
+            list.Add((b.Shape, b.Model, b.Light, Vector4.Zero));
+        }
+        if (link.Held is { } held && world.Player is { } holder)
+        {
+            var q = HeldRotation(holder);
+            var (c, hh) = ShapeBox(scene!, held, Matrix4x4.CreateFromQuaternion(q));
+            // 3인칭에서는 가슴 앞에 든 모습, 1인칭은 시야를 가리지 않게 숨긴다 (놓을 자리 미리보기가 보인다)
+            if (world.CamView != World.ViewMode.FirstPerson && !world.PlayerHidden)
+            {
+                var at = holder.Pos + holder.Facing * (0.28f + MathF.Min(hh.X, hh.Z)) + new Vector3(0, 1.0f, 0) - c;
+                list.Add((held, Matrix4x4.CreateFromQuaternion(q) * Matrix4x4.CreateTranslation(at), scene!.LightAt(holder.Pos + new Vector3(0, 1, 0)), Vector4.Zero));
+            }
+            if (place is { } spot)
+                list.Add((held, Matrix4x4.CreateFromQuaternion(spot.Q) * Matrix4x4.CreateTranslation(spot.P), Vector3.One,
+                    spot.Valid ? new Vector4(0.35f, 0.95f, 0.45f, 0.42f) : new Vector4(1f, 0.32f, 0.25f, 0.42f)));
         }
         worldGfx.DrawBodies(list);
     }
@@ -201,13 +227,81 @@ maleGpu?.Dispose();
 femaleGpu?.Dispose();
 stream.Dispose();
 
-/// <summary>아이템 치수 → 서버와 같은 둥근 상자 (가장 얇은 치수가 높이: 바닥에 눕는다)</summary>
-static (Vector3 Half, float R) BodyShape(ContentItem it)
+/// <summary>조립체를 m 으로 옮겼을 때의 경계 상자 (가운데, 반 치수)</summary>
+static (Vector3 C, Vector3 H) ShapeBox(WorldScene scene, AssemblyDef a, Matrix4x4 m)
 {
-    var d = it.Mm.Select(x => x / 1000f).Concat(Enumerable.Repeat(0.1f, 3)).Take(3).OrderByDescending(x => x).ToArray();
-    var half = new Vector3(d[0], d[2], d[1]) * 0.5f;
-    return (half, MathF.Min(it.Edge / 1000f, half.Y * 0.9f));
+    Vector3 lo = new(float.MaxValue), hi = new(float.MinValue);
+    foreach (var part in a.Parts)
+    {
+        var pm = Matrix4x4.CreateFromQuaternion(part.Q) * Matrix4x4.CreateTranslation(part.P) * m;
+        var h = Parts.Half(scene.Pack, part.Item);
+        var e = new Vector3(
+            MathF.Abs(pm.M11) * h.X + MathF.Abs(pm.M21) * h.Y + MathF.Abs(pm.M31) * h.Z,
+            MathF.Abs(pm.M12) * h.X + MathF.Abs(pm.M22) * h.Y + MathF.Abs(pm.M32) * h.Z,
+            MathF.Abs(pm.M13) * h.X + MathF.Abs(pm.M23) * h.Y + MathF.Abs(pm.M33) * h.Z);
+        lo = Vector3.Min(lo, pm.Translation - e); hi = Vector3.Max(hi, pm.Translation + e);
+    }
+    return ((lo + hi) * 0.5f, (hi - lo) * 0.5f);
 }
+
+/// <summary>손에 든 것의 자세: 내가 보는 쪽을 90° 단위로 맞추고 (앞이 나를 보게), R·T 로 돌린 만큼</summary>
+Quaternion HeldRotation(Actor holder)
+{
+    var f = holder.Facing;
+    var yaw = MathF.Round(MathF.Atan2(f.X, f.Z) / (MathF.PI / 2)) * (MathF.PI / 2) + MathF.PI;
+    return Quaternion.Normalize(Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw) * world.HeldTurn);
+}
+
+/// <summary>
+/// 놓을 자리: 시선이 닿은 면(손이 닿는 3 m 안)에 조립체의 경계 상자가 맞닿게 놓는다. 부품 상자 안쪽 점들이 벽·땅·다른 물건 밖이어야 놓을 수 있다.
+/// 최종 판정은 세계 서버가 실제 충돌 모양으로 다시 한다.
+/// </summary>
+Placement? FindPlacement(WorldScene scene, AssemblyDef held, Actor holder)
+{
+    var t = scene.Raycast(world.CamPos, world.LookDir, 7);
+    if (t >= 7) return null;
+    var hit = world.CamPos + world.LookDir * t;
+    if (Vector3.Distance(hit, world.EyePos) > scene.Pack.Layout.EditReach) return null;
+    var n = scene.Gradient(hit);
+    if (n.Y > 0.8f) n = Vector3.UnitY;                    // 바닥·상판 위는 똑바로 세운다
+    var q = HeldRotation(holder);
+    var rot = Matrix4x4.CreateFromQuaternion(q);
+    var (c, h) = ShapeBox(scene, held, rot);
+    var support = MathF.Abs(n.X) * h.X + MathF.Abs(n.Y) * h.Y + MathF.Abs(n.Z) * h.Z;
+    var pos = hit + n * (support + 0.004f) - c;
+    // 상자가 비었나: 가운데 거리가 반 대각선보다 크면 비었고, 0 보다 작으면 걸리고, 그 사이면 여덟으로 나눠 다시 본다 (벽 두께보다 고운 데까지)
+    bool Free(Matrix4x4 pm, Vector3 c, Vector3 h, int depth)
+    {
+        var d = scene.Sdf(Vector3.Transform(c, pm));
+        if (d >= h.Length()) return true;
+        if (d < 0) return false;
+        if (depth == 0) return true;
+        var q = h * 0.5f;
+        for (var i = 0; i < 8; i++)
+            if (!Free(pm, c + new Vector3((i & 1) == 0 ? -q.X : q.X, (i & 2) == 0 ? -q.Y : q.Y, (i & 4) == 0 ? -q.Z : q.Z), q, depth - 1)) return false;
+        return true;
+    }
+    bool Fits(Vector3 at) => held.Parts.All(part =>
+    {
+        var pm = Matrix4x4.CreateFromQuaternion(part.Q) * Matrix4x4.CreateTranslation(part.P) * rot * Matrix4x4.CreateTranslation(at);
+        return Free(pm, Vector3.Zero, Vector3.Max(Parts.Half(scene.Pack, part.Item) - new Vector3(0.01f), new Vector3(0.0005f)), 5);
+    });
+    var ok = Fits(pos);
+    // 걸리면 내 쪽으로 5 cm 씩 당겨 본다: 벽 밑동을 겨냥하면 벽에 붙여 놓인다
+    var back = new Vector3(-world.LookDir.X, 0, -world.LookDir.Z);
+    if (!ok && back.LengthSquared() > 1e-4f)
+    {
+        back = Vector3.Normalize(back);
+        for (var k = 1; k <= 16 && !ok; k++)
+            if (Fits(pos + back * (0.05f * k))) { pos += back * (0.05f * k); ok = true; }
+    }
+    // 몸과 겹치지 않게
+    if (ok && Vector2.Distance(new(pos.X + c.X, pos.Z + c.Z), new(holder.Pos.X, holder.Pos.Z)) < 0.3f + MathF.Min(h.X, h.Z) && pos.Y + c.Y - h.Y < holder.Pos.Y + 1.7f) ok = false;
+    return new Placement(pos, q, ok);
+}
+
+string ThingsJson() => link is null ? "[]" : "[" + string.Join(",", link.Bodies.Values.Select(b => FormattableString.Invariant(
+    $"{{\"id\":{b.Id},\"items\":\"{string.Join("+", b.Shape.Parts.Select(p => p.Item))}\",\"joints\":\"{string.Join(",", b.Shape.Joints.Select(j => j.Method))}\",\"p\":[{b.P.X:F3},{b.P.Y:F3},{b.P.Z:F3}]}}"))) + "]";
 
 /// <summary>손짓 → 세계 서버 요청. 겨냥은 화면 가운데(카메라 시선)가 닿는 곳, 손이 닿는지는 서버가 다시 판정한다</summary>
 void HandleGestures(WorldLink link, WorldScene scene)
@@ -217,19 +311,35 @@ void HandleGestures(WorldLink link, WorldScene scene)
         var g = world.Gestures.Dequeue();
         var player = world.Player;
         if (player is null) continue;
+        var aimed = link.Raycast(world.CamPos, world.LookDir, 7);
         switch (g)
         {
             case World.Gesture.Dig or World.Gesture.Pour:
             {
                 var t = scene.Raycast(world.CamPos, world.LookDir, 10);
                 var p = world.CamPos + world.LookDir * t;
+                if (g == World.Gesture.Dig && aimed is { } ab && ab.T <= t + 0.02f) { world.SetHud(world.Held, "✕ 물건이다 (E 줍기 · F 잇기 · X 풀기)"); break; }
                 if (t >= 10 || Vector3.Distance(p, world.EyePos) > scene.Pack.Layout.EditReach + 0.3f) { world.SetHud(world.Held, "✕ 손이 닿는 곳(3 m 안)의 땅을 겨냥한다"); break; }
                 if (g == World.Gesture.Dig) link.Dig(p, scene.Gradient(p), world.EyePos);
                 else link.Pour(p, world.EyePos);
                 break;
             }
-            case World.Gesture.Pickup: link.Pickup(player.Pos + new Vector3(0, 0.3f, 0)); break;
-            case World.Gesture.Drop: link.Drop(player.Pos + player.Facing * 0.6f + new Vector3(0, 1.0f, 0), player.Facing * 1.5f + new Vector3(0, 0.6f, 0)); break;
+            case World.Gesture.Pickup:
+                link.Pickup(aimed?.Id, player.Pos + new Vector3(0, 0.3f, 0), world.EyePos);
+                break;
+            case World.Gesture.Drop:
+                if (link.Held is null) { link.Pickup(null, player.Pos, world.EyePos); break; }   // 서버가 "들고 있는 것이 없다"
+                if (place is { Valid: true } pl) link.Drop(pl.P, pl.Q, Vector3.Zero);
+                else if (place is not null) world.SetHud(world.Held, "✕ 그 자리에는 들어가지 않는다 (R·T 로 돌리거나 다른 곳을 겨냥한다)");
+                else link.Drop(player.Pos + player.Facing * 0.7f + new Vector3(0, 1.0f, 0), HeldRotation(player), player.Facing * 1.2f + new Vector3(0, 0.5f, 0));
+                break;
+            case World.Gesture.Join or World.Gesture.Split:
+                if (aimed is not { } a) { world.SetHud(world.Held, g == World.Gesture.Join ? "✕ 이을 물건을 겨냥한다 (맞닿은 내 물건과 이어진다)" : "✕ 풀 조립체를 겨냥한다"); break; }
+                var hitP = world.CamPos + world.LookDir * a.T;
+                if (g == World.Gesture.Join) link.Join(a.Id, hitP, world.EyePos); else link.Split(a.Id, hitP, world.EyePos);
+                break;
         }
     }
 }
+
+readonly record struct Placement(Vector3 P, Quaternion Q, bool Valid);

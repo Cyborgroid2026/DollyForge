@@ -1,5 +1,5 @@
 {
-  "_doc": "정해진 형태의 집 (0.4). 골격(벽·지붕·바닥·문틀)은 zone home_shell 로 보호되고, 방 안은 home_interior. 치수 m. 방의 pos_m 은 건물 모서리 기준 [x, z] (앞면 = z 0, 길 쪽). 가구의 pos_m 은 방 모서리 기준이고 놓인 가구의 바닥 모서리다 (yaw 는 그 가구 중심으로 90° 단위 회전, 0 이면 가구의 앞이 +z 를 본다). wall: true 인 문·창은 벽에 뚫리는 개구부로, pos_m 은 개구부의 시작점, yaw 0 = x 방향 벽(z = pos.z), yaw 90 = z 방향 벽(x = pos.x). 시작은 침실 충전 침대 옆.",
+  "_doc": "정해진 형태의 집 (0.4). 골격(벽·지붕·바닥·문틀)은 zone home_shell 로 보호되고, 방 안은 home_interior. 치수 m. 방의 pos_m 은 건물 모서리 기준 [x, z] (앞면 = z 0, 길 쪽). 가구의 pos_m 은 방 모서리 기준이고 놓인 가구의 바닥 모서리다 (yaw 는 그 가구 중심으로 90° 단위 회전, 0 이면 가구의 앞이 +z 를 본다). wall: true 인 문·창은 벽에 뚫리는 개구부로, pos_m 은 개구부의 시작점, yaw 0 = x 방향 벽(z = pos.z), yaw 90 = z 방향 벽(x = pos.x). 시작은 침실 충전 침대 옆. movable: true 인 가구는 붙박이가 아니라 내 물건(세계 서버의 강체)이라 들어 옮길 수 있다.",
   "houses": [
     {"id": "suburb_house_a", "name": "외곽 단층 주택 A형", "footprint_m": [12, 7.5], "storeys": 1, "wall_height_m": 2.6,
      "shell": {"walls": "clay_brick", "roof": "terracotta", "floor": "oak", "frames": "oak", "ceiling": "concrete"},
@@ -7,8 +7,8 @@
        {"id": "bedroom", "name": "침실 (시작 방)", "pos_m": [0, 0], "size_m": [3.6, 3.0], "spawn": true,
         "furniture": [
           {"item": "charging_bed", "pos_m": [0.2, 0.1], "yaw_deg": 0, "spawn_point": true},
-          {"item": "desk", "pos_m": [1.6, 2.3], "yaw_deg": 180},
-          {"item": "chair", "pos_m": [2.0, 1.75], "yaw_deg": 0},
+          {"item": "desk", "pos_m": [1.6, 2.3], "yaw_deg": 180, "movable": true},
+          {"item": "chair", "pos_m": [2.0, 1.75], "yaw_deg": 0, "movable": true},
           {"item": "wardrobe", "pos_m": [2.6, 0.1], "yaw_deg": 270},
           {"item": "carpet", "pos_m": [0.6, 1.3], "yaw_deg": 0},
           {"item": "electric_lamp_home", "pos_m": [1.8, 1.5], "yaw_deg": 0, "ceiling": true},
@@ -32,8 +32,8 @@
         ]},
        {"id": "storage", "name": "창고", "pos_m": [0, 3.0], "size_m": [3.6, 4.5],
         "furniture": [
-          {"item": "crate_wood", "pos_m": [0.2, 3.7], "yaw_deg": 0},
-          {"item": "crate_wood", "pos_m": [1.3, 3.7], "yaw_deg": 0}
+          {"item": "crate_wood", "pos_m": [0.2, 3.7], "yaw_deg": 0, "movable": true},
+          {"item": "crate_wood", "pos_m": [1.3, 3.7], "yaw_deg": 0, "movable": true}
         ]},
        {"id": "garage_workshop", "name": "차고 작업장", "pos_m": [8.6, 0], "size_m": [3.4, 7.5],
         "furniture": [

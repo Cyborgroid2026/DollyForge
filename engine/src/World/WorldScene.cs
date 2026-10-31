@@ -92,8 +92,77 @@ sealed class WorldScene
         return false;
     }
 
-    /// <summary>충돌용 (유리·가구 포함)</summary>
-    public float Sdf(Vector3 p) => Houses(p, MathF.Min(Terrain.Sdf(p), Flora.Sdf(p, false)), false);
+    /// <summary>놓인 물건(세계 서버의 강체) 부품 상자들: WorldLink 가 바꿔 끼운다</summary>
+    public Func<WorldLink.Solid[]>? Bodies;
+
+    /// <summary>충돌용 (유리·가구·놓인 물건 포함)</summary>
+    public float Sdf(Vector3 p)
+    {
+        var d = Houses(p, MathF.Min(Terrain.Sdf(p), Flora.Sdf(p, false)), false);
+        return Bodies is { } b ? MathF.Min(d, WorldLink.SolidSdf(b(), p)) : d;
+    }
+
+    /// <summary>놓인 물건을 빼고 (물건을 놓을 자리 검사)</summary>
+    public float StaticSdf(Vector3 p) => Houses(p, MathF.Min(Terrain.Sdf(p), Flora.Sdf(p, false)), false);
+
+    (StaticMeshData Shell, float[][] Own, float[][] Other)? _collision;
+
+    /// <summary>
+    /// 세계 서버 Rapier 에 보낼 집 충돌 모양 (집 기준 좌표): 골격(벽·바닥·천장·지붕, 문·창 개구부로 깎인 곡면)은 화면과 같은 거리장을 8 cm 간격으로 뽑은 삼각형,
+    /// 붙박이 가구·문짝·유리는 기본형 상자 [cx, cy, cz, hx, hy, hz] (모두 축에 맞는 상자). 내 집은 가구까지, 이웃 집은 유리만.
+    /// </summary>
+    public (StaticMeshData Shell, float[][] Own, float[][] Other) CollisionShapes()
+    {
+        if (_collision is { } c) return c;
+        var sw = Stopwatch.StartNew();
+        var shell = new SdfScene { Blend = House.Shell.Blend };
+        foreach (var p in House.Shell.Adds) shell.Add(p);
+        shell.Subs.AddRange(House.Shell.Subs);
+        var mesh = SurfaceNets.MeshSparse(shell.Eval, shell.Min - new Vector3(0.2f), shell.Max + new Vector3(0.2f), 0.08f, _ => Vector3.UnitY, _ => Vector4.Zero);
+        static float[] Box(SdfPrim p) => [p.Center.X, p.Center.Y, p.Center.Z, (p.AabbMax.X - p.AabbMin.X) / 2, (p.AabbMax.Y - p.AabbMin.Y) / 2, (p.AabbMax.Z - p.AabbMin.Z) / 2];
+        var glass = House.Glass.Select(Box).ToArray();
+        var own = House.Furniture.Where(f => f.Item is not ("carpet" or "electric_lamp_home")).SelectMany(f => f.Scene.Adds).Select(Box).Concat(glass).ToArray();
+        c = (mesh, own, glass);
+        Console.WriteLine($"[world] 집 충돌: 골격 삼각형 {mesh.Idx.Count / 3:N0} · 가구·유리 상자 {own.Length} ({sw.Elapsed.TotalSeconds:0.0} 초)");
+        _collision = c;
+        return c;
+    }
+
+    /// <summary>
+    /// 한 점의 빛 (놓인 물건을 그릴 때): x 해 보임(부드러운 그림자), y 하늘 보임(실내는 창으로 드는 만큼), z 침실 전등.
+    /// 정점마다 굽는 정적 메시와 같은 식을 위를 보는 면 하나로 줄였다.
+    /// </summary>
+    public Vector3 LightAt(Vector3 p)
+    {
+        var sun = 1f; var t = 0.05f;
+        for (var i = 0; i < 48 && t < 60; i++)
+        {
+            var hh = OpticalSdf(p + SunDir * t);
+            if (hh < 0.002f) { sun = 0; break; }
+            sun = MathF.Min(sun, 10 * hh / t);
+            t += Math.Clamp(hh, 0.02f, 2.5f);
+        }
+        sun = Math.Clamp(sun, 0, 1);
+        var inside = Indoors(p);
+        var sky = inside ? 0.25f : 1 - 0.65f * Flora.Cover(p);
+        var lamp = 0f;
+        foreach (var lp in House.Lamps)
+        {
+            var lw = lp + HouseOrigins[OwnHouse];
+            var to = lw - p; var dist = to.Length();
+            if (dist > 7 || dist < 1e-3f || !inside) continue;
+            var dir = to / dist; var vis = 1f; var tt = 0.05f;
+            for (var i = 0; i < 32 && tt < dist - 0.25f; i++)
+            {
+                var hh = OpticalSdf(p + dir * tt);
+                if (hh < 0.002f) { vis = 0; break; }
+                vis = MathF.Min(vis, 8 * hh / tt);
+                tt += MathF.Max(hh, 0.02f);
+            }
+            lamp += Math.Clamp(vis, 0, 1) * 0.8f / (dist * dist + 0.6f);
+        }
+        return new Vector3(sun, sky, lamp);
+    }
 
     /// <summary>빛용 (유리는 빛을 막지 않는다)</summary>
     public float OpticalSdf(Vector3 p) => Houses(p, MathF.Min(Terrain.Sdf(p), Flora.Sdf(p, true)), true);

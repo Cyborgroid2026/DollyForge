@@ -93,7 +93,7 @@ sealed class HouseModel
             {
                 if (!pack.Items.TryGetValue(f.Item, out var item)) continue;
                 if (f.Wall) { Opening(pack, m, item, r, f, roomCenter, furniture); continue; }
-                if (!furniture) continue;
+                if (!furniture || f.Movable) continue;   // 옮길 수 있는 가구는 세계 서버의 강체 (Parts·WorldLink)
                 var scene = Furnish(pack, item, r, f, m);
                 if (scene is null) continue;
                 m.Furniture.Add((f.Item, scene));
@@ -162,11 +162,12 @@ sealed class HouseModel
         m.Furniture.Add((item.Id, new SdfScene { Blend = 0.01f }.Add(leaf)));
     }
 
-    /// <summary>가구 한 점: 아이템 치수로 기본형을 짓고 방 안 자리로 옮긴다 (90° 단위 회전)</summary>
-    static SdfScene? Furnish(ContentPack pack, ContentItem item, RoomDef r, FurnitureDef f, HouseModel m)
+    /// <summary>아이템 한 점의 기본형: 바닥 가운데가 원점, 앞이 +z (가구는 다리·상판·서랍처럼 실제 모양, 그 밖은 아이템 치수의 둥근 상자·원기둥)</summary>
+    public static List<SdfPrim>? ItemPrims(ContentPack pack, ContentItem item, float wallHeight, out float w, out float d, out float h)
     {
+        w = d = h = 0;
         if (item.Mm.Length < 2) return null;
-        float w = item.Mm[0] / 1000f, d, h;
+        w = item.Mm[0] / 1000f;
         if (item.Shape == "cyl") { d = w; h = item.Mm[1] / 1000f; } else { d = item.Mm[1] / 1000f; h = item.Mm.Length > 2 ? item.Mm[2] / 1000f : 0.1f; }
         var col = pack.Color(item.Mat, new(0.6f));
         var parts = new List<SdfPrim>();
@@ -209,7 +210,7 @@ sealed class HouseModel
                 B(-hw, 0, -hd, hw, 0.02f, hd, 0.006f, new(0.55f, 0.27f, 0.22f));
                 break;
             case "electric_lamp_home":
-                var top = m.WallHeight - FloorY;
+                var top = wallHeight - FloorY;
                 C(0, top - 0.35f, 0, 0.006f, 0.35f, 0.002f, new(0.2f, 0.2f, 0.2f));
                 C(0, top - 0.48f, 0, 0.13f, 0.14f, 0.01f, new(0.95f, 0.92f, 0.85f), 1f);
                 break;
@@ -257,6 +258,14 @@ sealed class HouseModel
                 break;
         }
 
+        return parts;
+    }
+
+    /// <summary>가구 한 점: 아이템 치수로 기본형을 짓고 방 안 자리로 옮긴다 (90° 단위 회전)</summary>
+    static SdfScene? Furnish(ContentPack pack, ContentItem item, RoomDef r, FurnitureDef f, HouseModel m)
+    {
+        var parts = ItemPrims(pack, item, m.WallHeight, out var w, out var d, out _);
+        if (parts is null) return null;
         // 90° 단위 회전과 자리: 회전한 바닥 모서리가 pos
         var yaw = ((int)MathF.Round(f.Yaw / 90) % 4 + 4) % 4;
         var (rw, rd) = yaw % 2 == 0 ? (w, d) : (d, w);

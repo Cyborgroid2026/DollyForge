@@ -284,7 +284,7 @@ sealed class BrowserStream : IDisposable
           document.getElementById('note').textContent=sel?'':(st.note||'');
           document.getElementById('aim').style.display=(!sel&&st.world)?'block':'none';
           hint.textContent=sel?'1·2 또는 카드로 선택 | 휠 거리 | N 스튜디오/파노라마'
-            :'클릭→마우스 캡처 | WASD 이동 · Shift 달리기 | 마우스 시점 | 왼쪽 클릭 파기 · 오른쪽 클릭 붓기 · E 줍기 · Q 내려놓기 | V 시점 | C 캐릭터 선택 | Esc 해제';
+            :'클릭→마우스 캡처 | WASD 이동 · Shift 달리기 | 마우스 시점 | 왼쪽 클릭 파기 · 오른쪽 클릭 붓기 · E 줍기 · Q 놓기 · R/T 돌리기 · F 잇기 · X 풀기 | V 시점 | C 캐릭터 선택 | Esc 해제';
         }
         pick.querySelectorAll('button').forEach(b=>b.addEventListener('click',e=>{
           e.stopPropagation(); send({type:'select',button:+b.dataset.i}); c.requestPointerLock();
