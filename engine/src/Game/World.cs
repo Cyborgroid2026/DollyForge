@@ -73,6 +73,14 @@ sealed class World
     public bool InWorld => Selected >= 0 && Scene is not null;
     float _vy;
     bool _grounded;
+    /// <summary>세계를 바꾸는 손짓 (Program 이 세계 서버에 요청한다): 왼쪽 클릭 파기 · 오른쪽 클릭 붓기 · E 줍기 · Q 내려놓기</summary>
+    public enum Gesture { None, Dig, Pour, Pickup, Drop }
+    public readonly Queue<Gesture> Gestures = new();
+    /// <summary>상태 줄에 함께 보이는 것: 들고 있는 것, 세계 서버의 알림</summary>
+    public string Held = "", Note = "";
+    public void SetHud(string held, string note) { if (held == Held && note == Note) return; Held = held; Note = note; UpdateStatus(); }
+    public Vector3 EyePos => Player is { } p ? p.Pos + new Vector3(0, p.EyeHeight, 0) : CamPos;
+
     /// <summary>3인칭 카메라가 좁은 곳에서 머리에 붙어 몸을 그리지 않는다</summary>
     public bool PlayerHidden { get; private set; }
 
@@ -139,6 +147,8 @@ sealed class World
             case "Digit1": Select(0); break;
             case "Digit2": Select(1); break;
             case "KeyC": ShowSelection(); break;
+            case "KeyE" when InWorld: Gestures.Enqueue(Gesture.Pickup); break;
+            case "KeyQ" when InWorld: Gestures.Enqueue(Gesture.Drop); break;
             case "KeyV" when Selected >= 0:
                 CamView = CamView switch
                 {
@@ -169,7 +179,7 @@ sealed class World
         };
         Status = Selected < 0
             ? """{"state":"select"}"""
-            : $$"""{"state":"play","who":"{{Actors[Selected].Name}}","view":"{{view}}"}""";
+            : $$"""{"state":"play","who":"{{Actors[Selected].Name}}","view":"{{view}}","held":{{System.Text.Json.JsonSerializer.Serialize(Held)}},"note":{{System.Text.Json.JsonSerializer.Serialize(Note)}},"world":{{(InWorld ? "true" : "false")}}}""";
     }
 
     public void Update(float dt, BrowserStream stream)
@@ -186,6 +196,7 @@ sealed class World
                         break;
                     case "keyup":     _keys.Remove(ev.Key); break;
                     case "select":    Select(ev.Button); break;
+                    case "mousedown" when InWorld: Gestures.Enqueue(ev.Button == 2 ? Gesture.Pour : ev.Button == 0 ? Gesture.Dig : Gesture.None); break;
                     case "hello":     ShowSelection(); break;
                     case "wheel":     CamDist = M.Clamp(CamDist * MathF.Exp(ev.Dy * 0.001f), 1.0f, 6.0f); break;
                     case "mousemove":

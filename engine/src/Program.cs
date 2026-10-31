@@ -24,6 +24,8 @@ catch (Exception ex) { Console.Error.WriteLine($"[world] 세계를 짓지 못해
 var ctx    = new GlContext(1600, 900);
 var stream = new BrowserStream();
 var world  = new World(female, male) { Scene = scene };
+// 세계 서버 (Rust, world/): 파기·붓기·물건 물리·존중 규칙의 권한
+var link   = scene is not null ? new WorldLink(scene) : null;
 WorldRenderer? worldGfx = null;
 
 Shader?        bodyShader = null;
@@ -81,8 +83,15 @@ ctx.Window.Run(() =>
     dt      = Math.Clamp(dt, 0f, 0.1f);
 
     world.Update(dt, stream);
+    if (link is not null && scene is not null)
+    {
+        link.Pump();
+        HandleGestures(link, scene);
+        var heldName = link.Held is { } hid && scene.Pack.Items.TryGetValue(hid, out var hit) ? hit.Name : link.Held ?? "";
+        world.SetHud(heldName, link.Note);
+    }
     if (world.Status != lastStatus) stream.SetStatus(lastStatus = world.Status);
-    if (world.Player is { } pl) stream.Debug = FormattableString.Invariant($"{{\"x\":{pl.Pos.X:F3},\"y\":{pl.Pos.Y:F3},\"z\":{pl.Pos.Z:F3},\"camYaw\":{world.CamYaw:F4},\"camPitch\":{world.CamPitch:F4}}}");
+    if (world.Player is { } pl) stream.Debug = FormattableString.Invariant($"{{\"x\":{pl.Pos.X:F3},\"y\":{pl.Pos.Y:F3},\"z\":{pl.Pos.Z:F3},\"camYaw\":{world.CamYaw:F4},\"camPitch\":{world.CamPitch:F4},\"held\":{System.Text.Json.JsonSerializer.Serialize(world.Held)},\"note\":{System.Text.Json.JsonSerializer.Serialize(world.Note)},\"bodies\":{link?.Bodies.Count ?? 0},\"edits\":{scene?.Terrain.EditCount ?? 0}}}");
 
     // N 키 엣지 감지 → 환경 전환
     bool nNow = world.IsDown("KeyN");
@@ -116,6 +125,18 @@ ctx.Window.Run(() =>
 
     // 1-b. 세계: 지형 · 집 · 가구 · 유리
     if (world.InWorld && worldGfx is not null && !maskMode) worldGfx.Draw(env, vp, world.CamPos, (float)(now - started).TotalSeconds);
+    // 1-c. 물건 (서버 Rapier 강체) + 손에 든 것
+    if (world.InWorld && worldGfx is not null && link is not null && !maskMode)
+    {
+        var list = link.Bodies.Values.Select(b => (b.Half, b.R, b.Item, Matrix4x4.CreateFromQuaternion(b.Q) * Matrix4x4.CreateTranslation(b.P))).ToList();
+        if (link.Held is { } held && world.Player is { } holder && scene!.Pack.Items.TryGetValue(held, out var hi))
+        {
+            var (hh, hr) = BodyShape(hi);
+            var at = holder.Pos + holder.Facing * 0.36f + new Vector3(0, 1.0f, 0);
+            list.Add((hh, hr, held, Matrix4x4.CreateRotationY(holder.Yaw + MathF.PI / 2) * Matrix4x4.CreateTranslation(at)));
+        }
+        worldGfx.DrawBodies(list);
+    }
     // 세계에서는 해가 키 조명, 하늘이 채움빛
     var keyLights = world.InWorld
         ? new (Vector3 Dir, Vector3 Color)[] { (WorldScene.SunDir, new(2.4f, 2.2f, 1.9f)), (Vector3.Normalize(new(-0.3f, 1, 0.4f)), new(0.35f, 0.42f, 0.6f)), (Vector3.Normalize(new(-0.5f, 0.2f, 0.8f)), new(0.2f, 0.2f, 0.22f)) }
@@ -171,6 +192,7 @@ ctx.Window.Run(() =>
 });
 
 ctx.Dispose();
+link?.Dispose();
 floor?.Dispose();
 worldGfx?.Dispose();
 post?.Dispose();
@@ -178,3 +200,36 @@ env?.Dispose();
 maleGpu?.Dispose();
 femaleGpu?.Dispose();
 stream.Dispose();
+
+/// <summary>아이템 치수 → 서버와 같은 둥근 상자 (가장 얇은 치수가 높이: 바닥에 눕는다)</summary>
+static (Vector3 Half, float R) BodyShape(ContentItem it)
+{
+    var d = it.Mm.Select(x => x / 1000f).Concat(Enumerable.Repeat(0.1f, 3)).Take(3).OrderByDescending(x => x).ToArray();
+    var half = new Vector3(d[0], d[2], d[1]) * 0.5f;
+    return (half, MathF.Min(it.Edge / 1000f, half.Y * 0.9f));
+}
+
+/// <summary>손짓 → 세계 서버 요청. 겨냥은 화면 가운데(카메라 시선)가 닿는 곳, 손이 닿는지는 서버가 다시 판정한다</summary>
+void HandleGestures(WorldLink link, WorldScene scene)
+{
+    while (world.Gestures.Count > 0)
+    {
+        var g = world.Gestures.Dequeue();
+        var player = world.Player;
+        if (player is null) continue;
+        switch (g)
+        {
+            case World.Gesture.Dig or World.Gesture.Pour:
+            {
+                var t = scene.Raycast(world.CamPos, world.LookDir, 10);
+                var p = world.CamPos + world.LookDir * t;
+                if (t >= 10 || Vector3.Distance(p, world.EyePos) > scene.Pack.Layout.EditReach + 0.3f) { world.SetHud(world.Held, "✕ 손이 닿는 곳(3 m 안)의 땅을 겨냥한다"); break; }
+                if (g == World.Gesture.Dig) link.Dig(p, scene.Gradient(p), world.EyePos);
+                else link.Pour(p, world.EyePos);
+                break;
+            }
+            case World.Gesture.Pickup: link.Pickup(player.Pos + new Vector3(0, 0.3f, 0)); break;
+            case World.Gesture.Drop: link.Drop(player.Pos + player.Facing * 0.6f + new Vector3(0, 1.0f, 0), player.Facing * 1.5f + new Vector3(0, 0.6f, 0)); break;
+        }
+    }
+}

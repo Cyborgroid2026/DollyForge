@@ -85,7 +85,9 @@ sealed class WorldRenderer : IDisposable
 {
     readonly GL _gl;
     readonly Shader _shader;
-    readonly StaticMesh _fine, _coarse, _shell, _furniture, _glass;
+    readonly Dictionary<(int X, int Z), StaticMesh> _fine = [];
+    readonly StaticMesh _coarse, _shell, _furniture, _glass;
+    readonly Dictionary<(Vector3 Half, float R, string Item), StaticMesh> _bodyMeshes = [];
     readonly StaticMesh[] _treeNear, _treeFar;
     readonly List<Vector4>[] _instNear, _instFar;
     readonly GrassRenderer _grass;
@@ -104,6 +106,7 @@ sealed class WorldRenderer : IDisposable
         uniform vec3 u_offset;
         uniform int u_instanced;
         uniform float u_time;
+        uniform mat4 u_model;
         out vec3 v_world; out vec3 v_local; out vec3 v_nrm; out vec4 v_col; out vec4 v_light;
         void main() {
             vec3 p = a_pos;
@@ -114,11 +117,14 @@ sealed class WorldRenderer : IDisposable
                 p.z += cos(u_time * 1.1 + a_inst.z * 0.29 + a_pos.x * 0.5) * 0.06 * sway;
                 v_local = p;
                 p = p * a_inst.w + a_inst.xyz;
+            } else if (u_instanced == 2) {
+                v_local = p;
+                p = (u_model * vec4(p, 1.0)).xyz;
             } else {
                 v_local = p;
                 p += u_offset;
             }
-            v_world = p; v_nrm = a_nrm; v_col = a_col; v_light = a_light;
+            v_world = p; v_nrm = u_instanced == 2 ? mat3(u_model) * a_nrm : a_nrm; v_col = a_col; v_light = a_light;
             gl_Position = u_vp * vec4(v_world, 1.0);
         }
         """;
@@ -209,7 +215,7 @@ sealed class WorldRenderer : IDisposable
                     float g1 = vnoise(v_world.xz * 0.35), g2 = vnoise(v_world.xz * 2.7), g3 = vnoise(v_world.xz * 11.0);
                     base *= mix(1.0, 0.78 + 0.32 * g1 + 0.14 * g2 + 0.10 * g3, grass);
                     base = mix(base, base * vec3(1.08, 1.04, 0.80), grass * smoothstep(0.55, 0.9, g2) * 0.6);
-                    base *= mix(1.0, 0.8, grass);       // the turf seen from afar: shaded blade roots, matches the blade field at its fade ring
+                    base *= mix(1.0, 0.74, grass);       // the turf seen from afar: shaded blade roots, matches the blade field at its fade ring
                 }
             } else if (u_kind == 1) {
                 // material by colour: the shell mesh carries the content-pack colours of brick, roof and floor
@@ -267,7 +273,7 @@ sealed class WorldRenderer : IDisposable
     {
         _gl = gl; _scene = scene;
         _shader = new Shader(gl, Vert, Frag);
-        _fine = new StaticMesh(gl, scene.TerrainFine);
+        foreach (var (k, m) in scene.FineSections) _fine[k] = new StaticMesh(gl, m);
         _coarse = new StaticMesh(gl, scene.TerrainCoarse);
         _shell = new StaticMesh(gl, scene.Shell);
         _furniture = new StaticMesh(gl, scene.Furniture);
@@ -295,6 +301,27 @@ sealed class WorldRenderer : IDisposable
         }
     }
 
+    /// <summary>물건 (서버 Rapier 의 강체): 아이템 치수의 둥근 상자, 재료 색. 같은 모양은 메시를 한 번만 짓는다</summary>
+    public void DrawBodies(IEnumerable<(Vector3 Half, float R, string Item, Matrix4x4 Model)> bodies)
+    {
+        _shader.Use();
+        _shader.Set("u_instanced", 2);
+        _shader.Set("u_kind", 0);
+        foreach (var (half, r, item, model) in bodies)
+        {
+            if (!_bodyMeshes.TryGetValue((half, r, item), out var mesh))
+            {
+                var col = _scene.Pack.Items.TryGetValue(item, out var it) ? _scene.Pack.Color(it.Mat, new(0.5f, 0.45f, 0.4f)) : new Vector3(0.5f);
+                if (item == "soil_sack") col = new Vector3(0.28f, 0.22f, 0.14f);   // 마대 포대 (속은 흙)
+                var sc = new SdfScene { Blend = 0.001f }.Add(SdfPrim.Box(-half, half, r, col));
+                _bodyMeshes[(half, r, item)] = mesh = new StaticMesh(_gl, WorldScene.MeshScenePublic(sc, Math.Clamp(r / 2, 0.006f, 0.02f)));
+            }
+            _shader.Set("u_model", model);
+            mesh.Draw();
+        }
+        _shader.Set("u_instanced", 0);
+    }
+
     public void Draw(EnvRenderer env, Matrix4x4 vp, Vector3 camPos, float time)
     {
         _shader.Use();
@@ -311,7 +338,13 @@ sealed class WorldRenderer : IDisposable
         _shader.Set("u_brick", _scene.House.Brick);
         _shader.Set("u_roof", _scene.House.Roof);
         _shader.Set("u_floor", _scene.House.Floor);
-        _fine.Draw();
+        // 편집으로 다시 지은 섹션을 바꿔 끼운다
+        while (_scene.Rebuilt.TryDequeue(out var rb))
+        {
+            if (_fine.Remove(rb.Key, out var old)) old.Dispose();
+            _fine[rb.Key] = new StaticMesh(_gl, rb.Mesh);
+        }
+        foreach (var m in _fine.Values) m.Draw();
         // 먼 섹션: 가까운 영역은 비우고, 겹친 띠에서는 깊이를 살짝 밀어 가까운 섹션이 이긴다
         var h = WorldScene.FineHalf - 0.5f;
         _shader.Set("u_hole", new Vector4(-h, -h, h, h));
@@ -347,7 +380,7 @@ sealed class WorldRenderer : IDisposable
 
     public void Dispose()
     {
-        _shader.Dispose(); _fine.Dispose(); _coarse.Dispose(); _shell.Dispose(); _furniture.Dispose(); _glass.Dispose();
+        _shader.Dispose(); foreach (var m in _fine.Values) m.Dispose(); foreach (var m in _bodyMeshes.Values) m.Dispose(); _coarse.Dispose(); _shell.Dispose(); _furniture.Dispose(); _glass.Dispose();
         foreach (var m in _treeNear) m.Dispose();
         foreach (var m in _treeFar) m.Dispose();
         _grass.Dispose();

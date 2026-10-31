@@ -81,11 +81,82 @@ sealed class Terrain
     public Vector2 Gradient(float x, float z, float e = 0.05f) =>
         new((Height(x + e, z) - Height(x - e, z)) / (2 * e), (Height(x, z + e) - Height(x, z - e)) / (2 * e));
 
-    /// <summary>거리장: 높이 차를 기울기로 나눠 실제 거리에 가깝게 (충돌·그림자 모두 이 값)</summary>
+    /// <summary>거리장: 높이 차를 기울기로 나눠 실제 거리에 가깝게 (충돌·그림자 모두 이 값). 파고 부은 편집을 더한다</summary>
     public float Sdf(Vector3 p)
     {
         var g = Gradient(p.X, p.Z, 0.25f);
-        return (p.Y - Height(p.X, p.Z)) / MathF.Sqrt(1 + g.LengthSquared());
+        return ApplyEdits(p, (p.Y - Height(p.X, p.Z)) / MathF.Sqrt(1 + g.LengthSquared()));
+    }
+
+    // ─── 편집 (세계 서버가 허락한 파기·붓기): 둥근 구를 부드럽게 빼고 더한다 (0.10 곡선미 회복) ─────────────
+
+    public readonly record struct Edit(long Id, bool Add, Vector3 P, float R);
+    const float EditCell = 2, EditBlend = 0.08f;
+    readonly Dictionary<(int, int), List<Edit>> _edits = [];
+    readonly object _editLock = new();
+    public int EditCount { get; private set; }
+
+    static (int, int) EditKey(float x, float z) => ((int)MathF.Floor(x / EditCell), (int)MathF.Floor(z / EditCell));
+
+    public void AddEdit(Edit e)
+    {
+        lock (_editLock)
+        {
+            var k = EditKey(e.P.X, e.P.Z);
+            if (!_edits.TryGetValue(k, out var l)) _edits[k] = l = [];
+            if (l.Any(x => x.Id == e.Id)) return;
+            l.Add(e); l.Sort((a, b) => a.Id.CompareTo(b.Id));
+            EditCount++;
+        }
+    }
+
+    /// <summary>p 근처의 편집들 (id 순서)</summary>
+    List<Edit>? EditsNear(Vector3 p)
+    {
+        if (EditCount == 0) return null;
+        List<Edit>? found = null;
+        var (cx, cz) = EditKey(p.X, p.Z);
+        lock (_editLock)
+            for (var a = -1; a <= 1; a++)
+                for (var b = -1; b <= 1; b++)
+                    if (_edits.TryGetValue((cx + a, cz + b), out var l))
+                        foreach (var e in l)
+                            if (Vector3.DistanceSquared(e.P, p) < (e.R + 1) * (e.R + 1)) (found ??= []).Add(e);
+        found?.Sort((a, b) => a.Id.CompareTo(b.Id));
+        return found;
+    }
+
+    public bool HasEditsIn(float x0, float z0, float x1, float z1)
+    {
+        if (EditCount == 0) return false;
+        lock (_editLock)
+            foreach (var l in _edits.Values)
+                foreach (var e in l)
+                    if (e.P.X + e.R > x0 && e.P.X - e.R < x1 && e.P.Z + e.R > z0 && e.P.Z - e.R < z1) return true;
+        return false;
+    }
+
+    public float ApplyEdits(Vector3 p, float d)
+    {
+        var list = EditsNear(p);
+        if (list is null) return d;
+        foreach (var e in list)
+        {
+            var s = Vector3.Distance(p, e.P) - e.R;
+            if (e.Add) { var h = MathF.Max(EditBlend - MathF.Abs(d - s), 0) / EditBlend; d = MathF.Min(d, s) - h * h * EditBlend * 0.25f; }
+            else { var h = MathF.Max(EditBlend - MathF.Abs(d + s), 0) / EditBlend; d = MathF.Max(d, -s) + h * h * EditBlend * 0.25f; }
+        }
+        return d;
+    }
+
+    /// <summary>편집이 드러낸 흙의 정도 (0 = 손대지 않은 땅, 1 = 파거나 부은 흙)</summary>
+    public float Disturbed(Vector3 p)
+    {
+        var list = EditsNear(p);
+        if (list is null) return 0;
+        var w = 0f;
+        foreach (var e in list) w = MathF.Max(w, 1 - Smooth(e.R * 0.9f, e.R * 1.6f, Vector3.Distance(p, e.P)));
+        return w;
     }
 
     public Vector3 Normal(Vector3 p)
@@ -121,6 +192,8 @@ sealed class Terrain
         var field = Smooth(fz.Y, fz.Y - 4, z) * (1 - Smooth(fz.X + 4, fz.X, z)) * (1 - Smooth(L.FieldXHalf - 2, L.FieldXHalf + 4, MathF.Abs(x)));
         var furrow = 0.5f + 0.5f * MathF.Sin(x * MathF.Tau / 1.2f);
         Mix(Vector3.Lerp(soil * 0.8f, new Vector3(0.33f, 0.47f, 0.18f), furrow * Smooth(-40, -60, z)), field);
+        // 파거나 부은 흙
+        Mix(soil * 0.85f, Disturbed(p));
         // 가파른 비탈은 바위
         var n = Normal(p);
         Mix(rock, Smooth(0.82f, 0.68f, n.Y));

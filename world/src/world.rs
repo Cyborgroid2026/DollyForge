@@ -215,7 +215,7 @@ impl World {
     fn rebuild_ground(&mut self) {
         let Some(g) = self.ground.as_mut() else { return };
         if let Some(c) = g.collider.take() {
-            self.phys.colliders.remove(c, &mut self.phys.islands, &mut self.phys.bodies, true);
+            self.phys.remove_collider(c);
         }
         // parry 높이장: 행 = z, 열 = x, 열 우선 저장 (data[i + j * nrows])
         let n = g.n;
@@ -335,6 +335,14 @@ impl World {
     /// 돌려주는 것은 모든 접속자에게 보낼 메시지들 (거절은 요청한 이에게만 가도 되지만 v0.1 은 한 사람)
     pub fn request(&mut self, player: &str, m: &Value) -> Vec<Value> {
         let p3 = |v: &Value| -> [f32; 3] { [0, 1, 2].map(|i| v[i].as_f64().unwrap_or(0.0) as f32) };
+        // 손이 닿는 곳만 (엔진이 보낸 눈 위치에서 world.json 의 edit_reach_m 안)
+        if matches!(m["t"].as_str(), Some("dig" | "pour")) {
+            let (p, from) = (p3(&m["p"]), p3(&m["from"]));
+            let d = ((p[0] - from[0]).powi(2) + (p[1] - from[1]).powi(2) + (p[2] - from[2]).powi(2)).sqrt();
+            if d > self.pack.layout.edit_reach + 0.3 {
+                return vec![json!({"t": "deny", "action": m["t"], "msg": format!("손이 닿지 않는다 ({d:.1} m, {} m 까지)", self.pack.layout.edit_reach), "p": p})];
+            }
+        }
         match m["t"].as_str().unwrap_or_default() {
             "dig" => {
                 let p = p3(&m["p"]);
@@ -394,7 +402,7 @@ impl World {
                     return vec![json!({"t": "deny", "action": "pickup", "msg": format!("{:.0} kg: 혼자 들 수 있는 {} kg 을 넘는다", mass, self.pack.carry_limit_kg)})];
                 }
                 let b = self.bodies.remove(&id).unwrap();
-                self.phys.remove_body_with_colliders(b.handle);
+                self.phys.remove_body_with_colliders(b.handle, true);
                 self.held.insert(player.into(), b.item.clone());
                 self.save_players();
                 self.dirty_bodies = true;
@@ -448,7 +456,7 @@ impl World {
             .collect();
         for id in lost {
             if let Some(b) = self.bodies.remove(&id) {
-                self.phys.remove_body_with_colliders(b.handle);
+                self.phys.remove_body_with_colliders(b.handle, true);
             }
         }
         out

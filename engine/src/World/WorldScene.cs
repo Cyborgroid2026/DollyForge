@@ -23,7 +23,7 @@ sealed class WorldScene
     public const float GroundStep = 0.5f, GroundHalf = 64;
     public static readonly int GroundCount = (int)(2 * GroundHalf / GroundStep) + 1;
     public float[] GroundA = [], GroundB = [];     // A: 풀색 rgb + 풀 양,  B: 해 보임 · 하늘 보임 · 풀 키(0…1) · 꽃 확률
-    public StaticMeshData TerrainFine = new(), TerrainCoarse = new(), Shell = new(), Furniture = new(), Glass = new();
+    public StaticMeshData TerrainCoarse = new(), Shell = new(), Furniture = new(), Glass = new();
     public readonly Vector3[] HouseOrigins = Terrain.HouseX.Select(x => new Vector3(x + WorldLayout.Default.OriginDx, 0, 0)).ToArray();
     public Vector3 Spawn => House.Spawn + HouseOrigins[OwnHouse];
     public float SpawnYaw => House.SpawnYaw;
@@ -39,7 +39,7 @@ sealed class WorldScene
         Flora = new Flora(Terrain);
         Flora.BuildMeshes();
         Console.WriteLine($"[world] 나무 {Flora.Trees.Count:N0} 그루 (변형 {Flora.Variants.Count}개, 정점 {Flora.Variants.Sum(v => v.Near.VertexCount):N0}) {sw.Elapsed.TotalSeconds:0.0} 초");
-        var def = pack.Houses.Values.First();
+        var def = pack.Houses.TryGetValue(pack.Layout.House, out var hd) ? hd : pack.Houses.Values.First();
         House = HouseModel.Build(pack, def, furniture: true);
         _neighbourCollide = new SdfScene { Blend = 0.01f };
         foreach (var p in House.Shell.Adds) _neighbourCollide.Add(p);
@@ -57,7 +57,7 @@ sealed class WorldScene
         Console.WriteLine($"[world] 지형 메시·빛 {sw.Elapsed.TotalSeconds:0.0} 초");
         BuildHouse();
         BuildGround();
-        Console.WriteLine($"[world] 지형 정점 {TerrainFine.VertexCount + TerrainCoarse.VertexCount:N0} · 집 {Shell.VertexCount:N0} · 가구 {Furniture.VertexCount:N0} · {sw.Elapsed.TotalSeconds:0.0} 초");
+        Console.WriteLine($"[world] 지형 정점 {FineSections.Values.Sum(m => m.VertexCount) + TerrainCoarse.VertexCount:N0} · 집 {Shell.VertexCount:N0} · 가구 {Furniture.VertexCount:N0} · {sw.Elapsed.TotalSeconds:0.0} 초");
     }
 
     // ─── 거리장 ───────────────────────────────────────────────────────────
@@ -171,15 +171,20 @@ sealed class WorldScene
 
     void BuildTerrain()
     {
-        TerrainFine = Sections(0.25f, 32, FineHalf, 0);
-        TerrainCoarse = Sections(1f, 32, CoarseHalf, FineHalf - 4);
-        Console.WriteLine($"[world]   지형 메시 정점 {TerrainFine.VertexCount:N0} + {TerrainCoarse.VertexCount:N0}");
-        Bake(TerrainFine, fullSky: false, shadowSteps: 40, shadowMax: 120);
+        // 가까운 지형은 8 m 섹션마다 따로 둔다: 파고 부으면 그 섹션만 다시 짓는다
+        foreach (var (key, mesh) in SectionList(FineStep, FineN, FineHalf, 0)) FineSections[key] = mesh;
+        TerrainCoarse = Merge(SectionList(1f, 32, CoarseHalf, FineHalf - 4).Select(s => s.Mesh));
+        Console.WriteLine($"[world]   지형 메시 정점 {FineSections.Values.Sum(m => m.VertexCount):N0} ({FineSections.Count} 섹션) + {TerrainCoarse.VertexCount:N0}");
+        Parallel.ForEach(FineSections.Values, m => Bake(m, fullSky: false, shadowSteps: 40, shadowMax: 120, parallel: false));
         Bake(TerrainCoarse, fullSky: false, shadowSteps: 20, shadowMax: 400, terrainOnly: true);
     }
 
-    /// <summary>half 범위의 섹션들을 메시화해 하나로 합친다. skipInner 안쪽의 섹션은 건너뛴다 (가까운 섹션이 그린다)</summary>
-    StaticMeshData Sections(float step, int n, float half, float skipInner)
+    public const float FineStep = 0.25f;
+    public const int FineN = 32;
+    public readonly Dictionary<(int X, int Z), StaticMeshData> FineSections = [];
+
+    /// <summary>half 범위의 섹션들 (skipInner 안쪽은 건너뛴다: 가까운 섹션이 그린다)</summary>
+    List<((int X, int Z) Key, StaticMeshData Mesh)> SectionList(float step, int n, float half, float skipInner)
     {
         var size = step * n;
         var count = (int)(2 * half / size);
@@ -191,39 +196,107 @@ sealed class WorldScene
                 if (skipInner > 0 && x0 >= -skipInner && x0 + size <= skipInner && z0 >= -skipInner && z0 + size <= skipInner) continue;
                 cols.Add((x, z));
             }
-        var parts = new StaticMeshData[cols.Count][];
-        Parallel.For(0, cols.Count, ci =>
+        var parts = new StaticMeshData[cols.Count];
+        Parallel.For(0, cols.Count, ci => parts[ci] = Column(step, n, half, cols[ci].X, cols[ci].Z));
+        return cols.Select((c, i) => (c, parts[i])).ToList();
+    }
+
+    /// <summary>섹션 기둥 하나: 표면이 지나는 높이의 섹션들을 Surface Nets 로 메시화 (편집이 있으면 둥근 구를 반영)</summary>
+    StaticMeshData Column(float step, int n, float half, int x, int z)
+    {
+        var size = step * n;
+        float x0 = -half + x * size, z0 = -half + z * size;
+        // 기둥의 높이 범위 → 표면이 지나는 섹션만
+        float lo = float.MaxValue, hi = float.MinValue;
+        for (var a = 0; a <= 8; a++) for (var b = 0; b <= 8; b++)
         {
-            var (x, z) = cols[ci];
-            float x0 = -half + x * size, z0 = -half + z * size;
-            // 기둥의 높이 범위 → 표면이 지나는 섹션만
-            float lo = float.MaxValue, hi = float.MinValue;
-            for (var a = 0; a <= 8; a++) for (var b = 0; b <= 8; b++)
+            var hgt = Terrain.Height(x0 + size * a / 8, z0 + size * b / 8);
+            lo = MathF.Min(lo, hgt); hi = MathF.Max(hi, hgt);
+        }
+        var y0 = (int)MathF.Floor((lo - 1.5f) / size); var y1 = (int)MathF.Floor((hi + 1.5f) / size);
+        // 이 기둥의 높이 표 (−2 … n+2): 표본마다 노이즈를 다시 부르지 않게
+        var m = n + 5;
+        var hs = new float[m * m];
+        for (var k = 0; k < m; k++) for (var i = 0; i < m; i++) hs[k * m + i] = Terrain.Height(x0 + (i - 2) * step, z0 + (k - 2) * step);
+        float Base(Vector3 p)
+        {
+            var i = (int)MathF.Round((p.X - x0) / step) + 2; var k = (int)MathF.Round((p.Z - z0) / step) + 2;
+            i = Math.Clamp(i, 1, m - 2); k = Math.Clamp(k, 1, m - 2);
+            var gx = (hs[k * m + i + 1] - hs[k * m + i - 1]) / (2 * step); var gz = (hs[(k + 1) * m + i] - hs[(k - 1) * m + i]) / (2 * step);
+            return (p.Y - hs[k * m + i]) / MathF.Sqrt(1 + gx * gx + gz * gz);
+        }
+        var edited = Terrain.HasEditsIn(x0 - 1, z0 - 1, x0 + size + 1, z0 + size + 1);
+        Func<Vector3, float> sdf = edited ? p => Terrain.ApplyEdits(p, Base(p)) : Base;
+        Func<Vector3, Vector3> normal = edited
+            ? p =>
             {
-                var hgt = Terrain.Height(x0 + size * a / 8, z0 + size * b / 8);
-                lo = MathF.Min(lo, hgt); hi = MathF.Max(hi, hgt);
+                const float e = 0.05f;
+                var g = new Vector3(Terrain.Sdf(p + new Vector3(e, 0, 0)) - Terrain.Sdf(p - new Vector3(e, 0, 0)), Terrain.Sdf(p + new Vector3(0, e, 0)) - Terrain.Sdf(p - new Vector3(0, e, 0)), Terrain.Sdf(p + new Vector3(0, 0, e)) - Terrain.Sdf(p - new Vector3(0, 0, e)));
+                return g.LengthSquared() > 1e-20f ? Vector3.Normalize(g) : Vector3.UnitY;
             }
-            var y0 = (int)MathF.Floor((lo - 1.5f) / size); var y1 = (int)MathF.Floor((hi + 1.5f) / size);
-            // 이 기둥의 높이 표 (−2 … n+2): 표본마다 노이즈를 다시 부르지 않게
-            var m = n + 5;
-            var hs = new float[m * m];
-            for (var k = 0; k < m; k++) for (var i = 0; i < m; i++) hs[k * m + i] = Terrain.Height(x0 + (i - 2) * step, z0 + (k - 2) * step);
-            float SdfAt(Vector3 p)
+            : Terrain.Normal;
+        var list = new List<StaticMeshData>();
+        for (var y = y0; y <= y1; y++)
+        {
+            var mesh = SurfaceNets.Mesh(sdf, new Vector3(x0, y * size, z0), step, (n, n, n), normal, Terrain.Color, parallel: false);
+            if (mesh.VertexCount > 0) list.Add(mesh);
+        }
+        return Merge(list);
+    }
+
+    /// <summary>편집 하나가 닿는 가까운 섹션들을 다시 짓고 빛을 굽는다 (일꾼 스레드에서 부른다)</summary>
+    public List<((int X, int Z) Key, StaticMeshData Mesh)> RebuildAround(Vector3 p, float r)
+    {
+        var size = FineStep * FineN;
+        var keys = new HashSet<(int, int)>();
+        foreach (var dx in new[] { -r - 0.6f, r + 0.6f })
+            foreach (var dz in new[] { -r - 0.6f, r + 0.6f })
+                keys.Add(((int)MathF.Floor((p.X + dx + FineHalf) / size), (int)MathF.Floor((p.Z + dz + FineHalf) / size)));
+        var count = (int)(2 * FineHalf / size);
+        var outList = new List<((int, int), StaticMeshData)>();
+        foreach (var k in keys)
+        {
+            if (k.Item1 < 0 || k.Item2 < 0 || k.Item1 >= count || k.Item2 >= count) continue;
+            var mesh = Column(FineStep, FineN, FineHalf, k.Item1, k.Item2);
+            Bake(mesh, fullSky: false, shadowSteps: 40, shadowMax: 120);
+            outList.Add((k, mesh));
+        }
+        return outList;
+    }
+
+    /// <summary>파거나 부은 자리의 풀을 걷어 낸다 (풀 지도 갱신)</summary>
+    public void ClearGrass(Vector3 p, float r)
+    {
+        var n = GroundCount;
+        int i0 = (int)MathF.Floor((p.X - r - 0.8f + GroundHalf) / GroundStep), i1 = (int)MathF.Ceiling((p.X + r + 0.8f + GroundHalf) / GroundStep);
+        int k0 = (int)MathF.Floor((p.Z - r - 0.8f + GroundHalf) / GroundStep), k1 = (int)MathF.Ceiling((p.Z + r + 0.8f + GroundHalf) / GroundStep);
+        for (var k = Math.Max(0, k0); k <= Math.Min(n - 1, k1); k++)
+            for (var i = Math.Max(0, i0); i <= Math.Min(n - 1, i1); i++)
             {
-                var i = (int)MathF.Round((p.X - x0) / step) + 2; var k = (int)MathF.Round((p.Z - z0) / step) + 2;
-                i = Math.Clamp(i, 1, m - 2); k = Math.Clamp(k, 1, m - 2);
-                var gx = (hs[k * m + i + 1] - hs[k * m + i - 1]) / (2 * step); var gz = (hs[(k + 1) * m + i] - hs[(k - 1) * m + i]) / (2 * step);
-                return (p.Y - hs[k * m + i]) / MathF.Sqrt(1 + gx * gx + gz * gz);
+                float x = -GroundHalf + i * GroundStep, z = -GroundHalf + k * GroundStep;
+                var d = MathF.Sqrt((x - p.X) * (x - p.X) + (z - p.Z) * (z - p.Z));
+                var a = (k * n + i) * 4 + 3;
+                GroundA[a] = MathF.Min(GroundA[a], Smooth(r + 0.3f, r + 0.75f, d));   // 삽질에 흩어진 흙: 구덩이 둘레 0.3 m 는 풀이 없다 (풀 지도 0.5 m 칸에서도 보이게)
             }
-            var list = new List<StaticMeshData>();
-            for (var y = y0; y <= y1; y++)
-            {
-                var mesh = SurfaceNets.Mesh(SdfAt, new Vector3(x0, y * size, z0), step, (n, n, n), Terrain.Normal, Terrain.Color, parallel: false);
-                if (mesh.VertexCount > 0) list.Add(mesh);
-            }
-            parts[ci] = list.ToArray();
+        GroundVersion++;
+    }
+
+    public int GroundVersion;
+
+    /// <summary>다시 지은 섹션 (일꾼 스레드 → 렌더러가 GPU 메시를 바꾼다)</summary>
+    public readonly System.Collections.Concurrent.ConcurrentQueue<((int X, int Z) Key, StaticMeshData Mesh)> Rebuilt = new();
+    readonly object _rebuildLock = new();
+
+    /// <summary>서버가 허락한 편집을 세계에 반영한다: 충돌은 바로, 메시·빛은 일꾼 스레드에서</summary>
+    public void ApplyEdit(Terrain.Edit e)
+    {
+        Terrain.AddEdit(e);
+        ClearGrass(e.P, e.R);
+        Task.Run(() =>
+        {
+            lock (_rebuildLock)
+                foreach (var r in RebuildAround(e.P, e.R)) Rebuilt.Enqueue(r);
         });
-        return Merge(parts.SelectMany(p => p));
     }
 
     static StaticMeshData Merge(IEnumerable<StaticMeshData> meshes)
@@ -262,6 +335,8 @@ sealed class WorldScene
 
     static void Offset(StaticMeshData m, Vector3 o) { for (var i = 0; i < m.Pos.Count; i++) m.Pos[i] += o; }
 
+    public static StaticMeshData MeshScenePublic(SdfScene s, float step) => MeshScene(s, step, null);
+
     static StaticMeshData MeshScene(SdfScene s, float step, Func<Vector3, Vector4>? color)
     {
         var lo = s.Min - new Vector3(step * 3); var hi = s.Max + new Vector3(step * 3);
@@ -286,11 +361,11 @@ sealed class WorldScene
         return d.ToArray();
     }
 
-    void Bake(StaticMeshData m, bool fullSky, int shadowSteps, float shadowMax, bool terrainOnly = false)
+    void Bake(StaticMeshData m, bool fullSky, int shadowSteps, float shadowMax, bool terrainOnly = false, bool parallel = true)
     {
         var light = new Vector4[m.VertexCount];
         Func<Vector3, float> sdf = terrainOnly ? Terrain.Sdf : OpticalSdf;
-        Parallel.For(0, m.VertexCount, v =>
+        void Vertex(int v)
         {
             var p = m.Pos[v]; var n = m.Nrm[v];
             // 오목한 곳 그늘
@@ -359,7 +434,8 @@ sealed class WorldScene
                 lamp += Math.Clamp(vis, 0, 1) * ndl * 0.8f / (dist * dist + 0.6f);
             }
             light[v] = new Vector4(ao, sun, sky, lamp);
-        });
+        }
+        if (parallel) Parallel.For(0, m.VertexCount, Vertex); else for (var v = 0; v < m.VertexCount; v++) Vertex(v);
         m.Light.Clear(); m.Light.AddRange(light);
     }
 }

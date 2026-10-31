@@ -241,6 +241,8 @@ sealed class BrowserStream : IDisposable
             #info{position:fixed;top:6px;left:8px;color:#0f0;font:11px monospace;pointer-events:none}
             #hint{position:fixed;bottom:6px;left:8px;color:#777;font:12px monospace;pointer-events:none}
             #view{position:fixed;top:6px;right:10px;color:#cfd6e4;font:13px sans-serif;pointer-events:none;text-shadow:0 0 4px #000}
+            #note{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);color:#eef2f8;font:14px sans-serif;pointer-events:none;text-shadow:0 0 5px #000;max-width:92vw;text-align:center}
+            #aim{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;border:1.5px solid rgba(255,255,255,.85);box-shadow:0 0 3px #000;pointer-events:none;display:none}
             #pick{position:fixed;left:0;right:0;bottom:9vh;display:none;justify-content:center;gap:28vw}
             #pick button{font:600 17px sans-serif;color:#e8edf5;background:rgba(20,24,32,.72);border:1px solid #8a94a8;
               border-radius:10px;padding:14px 26px;cursor:pointer;backdrop-filter:blur(4px)}
@@ -257,6 +259,8 @@ sealed class BrowserStream : IDisposable
         <div id="info">0 fps</div>
         <div id="hint"></div>
         <div id="view"></div>
+        <div id="note"></div>
+        <div id="aim"></div>
         <div id="title">조종할 사이보그를 고르세요</div>
         <div id="pick"><button data-i="0">여성형 [1]</button><button data-i="1">남성형 [2]</button></div>
         <svg class="spark" id="sparkL" viewBox="-1 -1 2 2"><path d="M0-1Q.12-.12 1 0Q.12 .12 0 1Q-.12 .12-1 0Q-.12-.12 0-1Z" fill="#eef2ff"/></svg>
@@ -276,9 +280,11 @@ sealed class BrowserStream : IDisposable
           const sel=st.state==='select'; selecting=sel;
           pick.style.display=sel?'flex':'none'; title.style.display=sel?'block':'none';
           document.querySelectorAll('.spark').forEach(s=>s.style.display=sel?'block':'none');
-          view.textContent=sel?'':st.who+' · '+st.view;
+          view.textContent=sel?'':st.who+' · '+st.view+(st.held?' · 들고 있음: '+st.held:'');
+          document.getElementById('note').textContent=sel?'':(st.note||'');
+          document.getElementById('aim').style.display=(!sel&&st.world)?'block':'none';
           hint.textContent=sel?'1·2 또는 카드로 선택 | 휠 거리 | N 스튜디오/파노라마'
-            :'클릭→마우스 캡처 | WASD 이동 · Shift 달리기 | 마우스 시점 | V 1인칭/3인칭 뒤/3인칭 앞 | 휠 거리 | C 캐릭터 선택 | N 배경 | Esc 해제';
+            :'클릭→마우스 캡처 | WASD 이동 · Shift 달리기 | 마우스 시점 | 왼쪽 클릭 파기 · 오른쪽 클릭 붓기 · E 줍기 · Q 내려놓기 | V 시점 | C 캐릭터 선택 | Esc 해제';
         }
         pick.querySelectorAll('button').forEach(b=>b.addEventListener('click',e=>{
           e.stopPropagation(); send({type:'select',button:+b.dataset.i}); c.requestPointerLock();
@@ -311,6 +317,7 @@ sealed class BrowserStream : IDisposable
         });
         document.addEventListener('pointerlockchange',()=>{locked=!!document.pointerLockElement;});
         document.addEventListener('mousemove',e=>{if(locked)send({type:'mousemove',dx:e.movementX,dy:e.movementY});});
+        document.addEventListener('contextmenu',e=>e.preventDefault());
         document.addEventListener('mousedown',e=>{if(locked)send({type:'mousedown',button:e.button,down:true});});
         document.addEventListener('mouseup',  e=>{if(locked)send({type:'mouseup',  button:e.button,down:false});});
         document.addEventListener('keydown',  e=>{

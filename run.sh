@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Dolly Forge 실행: ./run.sh
 # Godot 없음 — C# + Rust 전용 엔진.
-#   1. Rust 월드 서버 (이미 떠 있으면 그대로 쓴다)
+#   1. Rust 계정 서버 (7700) + Rust 세계 서버 (7701: 파기·붓기·존중 규칙·Rapier 물리·섹션 저장)
 #   2. C# 엔진 빌드 + 실행 (포트 7780 프레임 스트리밍)
 #   3. 엔진이 준비되면 VS Code 통합 브라우저 자동 열기
 set -euo pipefail
@@ -48,7 +48,8 @@ if listening 7780; then
 fi
 
 SERVER_PID=""
-cleanup() { [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null || true; }
+WORLD_PID=""
+cleanup() { for p in $SERVER_PID $WORLD_PID; do kill "$p" 2>/dev/null || true; done; }
 trap cleanup EXIT INT TERM
 
 # ── 1. Rust 월드 서버 ──────────────────────────────────────────────────
@@ -71,6 +72,21 @@ else
     sleep 0.1
   done
   echo "  127.0.0.1:$SERVER_PORT"
+fi
+
+# ── 1-b. Rust 세계 서버 ───────────────────────────────────────────────
+WORLD_PORT=7701
+if listening "$WORLD_PORT"; then
+  echo "  세계 서버 이미 127.0.0.1:$WORLD_PORT 에서 실행 중"
+else
+  if ! (cd world && cargo build --release --quiet) >"$LOG_DIR/world-build.log" 2>&1; then
+    echo "  세계 서버 빌드 실패 (편집 없이 걷기만 됩니다). 로그: $LOG_DIR/world-build.log" >&2
+  else
+    (cd world && exec ./target/release/dolly-world) >"$LOG_DIR/world.log" 2>&1 &
+    WORLD_PID=$!
+    for _ in $(seq 1 50); do listening "$WORLD_PORT" && break; sleep 0.1; done
+    echo "  세계 127.0.0.1:$WORLD_PORT"
+  fi
 fi
 
 # ── 2. C# 엔진 빌드 ───────────────────────────────────────────────────

@@ -44,7 +44,7 @@ sealed class GrassRenderer : IDisposable
             float keep = ga.a * (1.0 - smoothstep(u_radius * 0.3, u_radius, dist));
             if (h3 > keep * 1.15 - 0.1 || any(lessThan(guv, vec2(0.0))) || any(greaterThan(guv, vec2(1.0)))) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
             float flower = h5 < gb.a ? 1.0 : 0.0;
-            float H = mix(0.07, 0.65, gb.b) * (0.55 + 0.8 * h4) * mix(1.0, 0.4, smoothstep(u_radius * 0.5, u_radius, dist));
+            float H = mix(0.06, 0.42, gb.b) * (0.6 + 0.7 * h4) * mix(1.0, 0.4, smoothstep(u_radius * 0.5, u_radius, dist));
             if (flower > 0.5) H = max(H, 0.18) * 1.15;
             float y0 = texture(u_height, uvOf(xz, u_hmap)).r - 0.02;
 
@@ -99,7 +99,7 @@ sealed class GrassRenderer : IDisposable
 
     public unsafe GrassRenderer(GL gl, WorldScene scene)
     {
-        _gl = gl;
+        _gl = gl; _scene = scene;
         _shader = new Shader(gl, Vert, Frag);
         _vao = gl.GenVertexArray();
         _heightCount = scene.Terrain.CacheCount;
@@ -120,8 +120,18 @@ sealed class GrassRenderer : IDisposable
         return t;
     }
 
-    public void Draw(EnvRenderer env, Matrix4x4 vp, Vector3 cam, float time)
+    int _groundVersion;
+    readonly WorldScene _scene;
+
+    public unsafe void Draw(EnvRenderer env, Matrix4x4 vp, Vector3 cam, float time)
     {
+        // 파고 부은 자리의 풀이 걷히면 풀 지도를 다시 올린다
+        if (_groundVersion != _scene.GroundVersion)
+        {
+            _groundVersion = _scene.GroundVersion;
+            _gl.BindTexture(TextureTarget.Texture2D, _texA);
+            fixed (float* p = _scene.GroundA) _gl.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, (uint)WorldScene.GroundCount, (uint)WorldScene.GroundCount, PixelFormat.Rgba, PixelType.Float, p);
+        }
         _shader.Use();
         env.Bind(_shader);
         _shader.Set("u_vp", vp);
