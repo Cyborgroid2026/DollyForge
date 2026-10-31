@@ -33,6 +33,8 @@ sealed class EnvRenderer : IDisposable
     public const string EnvGlsl = """
         uniform sampler2D u_pano;
         uniform int u_env_mode;
+        // world exposure: daylight is far brighter than the studio, so the camera stops down (eye adapts indoors)
+        uniform float u_exposure;
         uniform sampler2D u_city;
         uniform int u_city_on;
         uniform sampler2D u_wall;
@@ -181,6 +183,19 @@ sealed class EnvRenderer : IDisposable
 
         vec3 envColor(vec3 ro, vec3 rd, float aa);
 
+        // outdoor sky (mode 2): morning sun in the south-east, matches WorldScene.SunDir
+        const vec3 SUN_DIR = vec3(0.55, 0.62, -0.56);
+        vec3 outdoorSky(vec3 rd) {
+            float h = rd.y;
+            vec3 zen = vec3(0.16, 0.33, 0.74), hor = vec3(0.68, 0.79, 0.93);
+            vec3 col = mix(hor, zen, pow(clamp(h, 0.0, 1.0), 0.5));
+            if (h < 0.0) col = mix(hor * 0.85, vec3(0.20, 0.23, 0.18), clamp(-h * 5.0, 0.0, 1.0));
+            float s = max(dot(rd, normalize(SUN_DIR)), 0.0);
+            col += vec3(1.0, 0.86, 0.62) * (pow(s, 6.0) * 0.22 + pow(s, 48.0) * 0.6);
+            col += vec3(30.0, 27.0, 22.0) * smoothstep(0.99955, 0.99975, s);
+            return col * u_exposure;
+        }
+
         // low-frequency studio light used for glossy reflections (large soft boxes)
         // camBack = direction from the subject toward the viewer, so the key box always sits behind the camera
         vec3 studioSoft(vec3 rd, vec3 camBack) {
@@ -198,11 +213,13 @@ sealed class EnvRenderer : IDisposable
         }
 
         vec3 envGlossy(vec3 ro, vec3 rd, vec3 camBack, float sharp) {
+            if (u_env_mode == 2) return outdoorSky(rd);
             if (u_env_mode == 1) return envColor(ro, rd, 0.03);
             return mix(studioSoft(rd, camBack), studio(ro, rd, 0.03), sharp);
         }
 
         vec3 envColor(vec3 ro, vec3 rd, float aa) {
+            if (u_env_mode == 2) return outdoorSky(rd);
             if (u_env_mode == 1) {
                 float u = atan(rd.z, rd.x) / (2.0 * PI_E) + 0.5;
                 float v = asin(clamp(rd.y, -0.9999, 0.9999)) / PI_E + 0.5;
@@ -249,7 +266,11 @@ sealed class EnvRenderer : IDisposable
     string[] _files = [];
     int      _cur   = -1;   // -1 = 스튜디오, 0.. = 파노라마
 
-    public int Mode => _cur < 0 ? 0 : 1;
+    /// <summary>세계 안(바깥 하늘)이면 2, 스튜디오 0, 파노라마 1</summary>
+    public bool Outdoor { get; set; }
+    /// <summary>세계 노출 (바깥 하늘·세계 표면에 곱한다). 프로그램이 실내/실외에 따라 부드럽게 바꾼다</summary>
+    public float Exposure { get; set; } = 1;
+    public int Mode => Outdoor ? 2 : _cur < 0 ? 0 : 1;
 
     public unsafe EnvRenderer(GL gl, string assetDir)
     {
@@ -358,6 +379,7 @@ sealed class EnvRenderer : IDisposable
         s.Set("u_matcap", unit + 3);
         s.Set("u_matcap_on", _matcapOn ? 1 : 0);
         s.Set("u_env_mode", Mode);
+        s.Set("u_exposure", Exposure);
     }
 
     unsafe void LoadPanorama(string path)
@@ -418,6 +440,7 @@ sealed class EnvRenderer : IDisposable
         _gl.Uniform1(_gl.GetUniformLocation(_prog, "u_wall_on"), _wallOn ? 1 : 0);
         _gl.ActiveTexture(TextureUnit.Texture0);
         _gl.Uniform1(_gl.GetUniformLocation(_prog, "u_env_mode"), Mode);
+        _gl.Uniform1(_gl.GetUniformLocation(_prog, "u_exposure"), Exposure);
         _gl.Uniform3(_gl.GetUniformLocation(_prog, "u_cam_pos"), camPos.X, camPos.Y, camPos.Z);
         _gl.Uniform3(_gl.GetUniformLocation(_prog, "u_fwd"),   fwd.X,   fwd.Y,   fwd.Z);
         _gl.Uniform3(_gl.GetUniformLocation(_prog, "u_right"), right.X, right.Y, right.Z);

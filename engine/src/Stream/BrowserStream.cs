@@ -56,6 +56,9 @@ sealed class BrowserStream : IDisposable
     }
 
     // 게임 상태(선택 화면/조종 중·시점)를 JSON 텍스트로 탭에 알린다
+    /// <summary>개발용: GET /debug 로 읽는 한 줄 상태 (플레이어 위치 등). 웹소켓으로는 보내지 않는다</summary>
+    public volatile string Debug = "{}";
+
     public void SetStatus(string json)
     {
         _status = json;
@@ -133,6 +136,14 @@ sealed class BrowserStream : IDisposable
             ctx.Response.ContentType = "image/jpeg";
             ctx.Response.ContentLength64 = jpg.Length;
             await ctx.Response.OutputStream.WriteAsync(jpg);
+            ctx.Response.Close();
+            return;
+        }
+        if (path == "/debug")
+        {
+            var b = Encoding.UTF8.GetBytes(Debug);
+            ctx.Response.ContentType = "application/json";
+            await ctx.Response.OutputStream.WriteAsync(b);
             ctx.Response.Close();
             return;
         }

@@ -24,6 +24,8 @@
     <Content Include="assets/studio/*.jpg;assets/studio/*.png" CopyToOutputDirectory="PreserveNewest" />
     <!-- 레퍼런스 피팅 결과 체형 (CyborgBody 가 읽는다) -->
     <Content Include="assets/body/*.json;assets/body/*.png" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 콘텐츠 팩 (재료·아이템·집 설계도): 저장소의 content/dolly 를 실행 폴더 content/dolly 로 -->
+    <Content Include="../content/dolly/**/*.json" Link="content/dolly/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- MakeHuman CC0 인체 자산 (tools/fetch-makehuman.sh 로 받음, git 제외) -->
     <Content Include="assets/makehuman/**/*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

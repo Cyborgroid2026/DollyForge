@@ -15,10 +15,16 @@ Console.WriteLine($"[engine] 여성형 {female.Mesh.Vertices.Length:N0}  남성�
 for (var pass = 0; pass < CyborgBody.SilPasses; pass++) CyborgBody.FitReferenceSilhouette(female, male);   // 윤곽을 그림 윤곽에 (정점 이동)
 CyborgBody.ApplyReferenceDetail(female, male);
 
+// ── 세계 (0장 재설계 M1): 콘텐츠 팩의 집 설계도로 평범한 방과 동네, 곡면 지형 ───────────────
+WorldScene? scene = null;
+try { scene = new WorldScene(ContentPack.Load()); }
+catch (Exception ex) { Console.Error.WriteLine($"[world] 세계를 짓지 못해 스튜디오에서 걷습니다: {ex.Message}"); }
+
 // ── GL 컨텍스트 + 스트리밍 ────────────────────────────────────────────────
 var ctx    = new GlContext(1600, 900);
 var stream = new BrowserStream();
-var world  = new World(female, male);
+var world  = new World(female, male) { Scene = scene };
+WorldRenderer? worldGfx = null;
 
 Shader?        bodyShader = null;
 EnvRenderer?   env        = null;
@@ -49,6 +55,7 @@ ctx.Window.Load += () =>
         env        = new EnvRenderer(gl, assetDir);
         floor      = new FloorRenderer(gl);
         post       = new PostFx(gl, ctx.Width, ctx.Height);
+        if (scene is not null) worldGfx = new WorldRenderer(gl, scene);
         Console.WriteLine("[engine] GL 로드 완료. N 키: 스튜디오/파노라마 전환");
     }
     catch (Exception ex) { Console.Error.WriteLine($"[engine] GL 로드 실패: {ex.Message}"); }
@@ -74,6 +81,7 @@ ctx.Window.Run(() =>
 
     world.Update(dt, stream);
     if (world.Status != lastStatus) stream.SetStatus(lastStatus = world.Status);
+    if (world.Player is { } pl) stream.Debug = FormattableString.Invariant($"{{\"x\":{pl.Pos.X:F3},\"y\":{pl.Pos.Y:F3},\"z\":{pl.Pos.Z:F3},\"camYaw\":{world.CamYaw:F4},\"camPitch\":{world.CamPitch:F4}}}");
 
     // N 키 엣지 감지 → 환경 전환
     bool nNow = world.IsDown("KeyN");
@@ -83,6 +91,11 @@ ctx.Window.Run(() =>
     if (bodyShader is null || femaleGpu is null || maleGpu is null || env is null || floor is null || post is null) return;
 
     ctx.BeginFrame();
+    env.Outdoor = world.InWorld;   // 캐릭터를 고르면 세계(바깥 하늘), 선택 화면은 스튜디오
+    post.BloomGain = world.InWorld ? 0.12f : 0.35f;
+    // 눈 적응: 바깥 햇빛은 노출을 줄이고, 집 안에 들어오면 1 초쯤에 걸쳐 연다
+    var exposureGoal = !world.InWorld ? 1f : scene!.Indoors(world.CamPos) ? 0.9f : 0.55f;
+    env.Exposure += (exposureGoal - env.Exposure) * (world.InWorld ? 1 - MathF.Exp(-dt * 3f) : 1);
 
     var aspect = (float)ctx.Width / ctx.Height;
     var fovTan = MathF.Tan(World.FovY * 0.5f);
@@ -100,6 +113,13 @@ ctx.Window.Run(() =>
     var studio   = env.Mode == 0;
     var gpus     = new[] { femaleGpu, maleGpu };
 
+    // 1-b. 세계: 지형 · 집 · 가구 · 유리
+    if (world.InWorld && worldGfx is not null && !maskMode) worldGfx.Draw(env, vp, world.CamPos);
+    // 세계에서는 해가 키 조명, 하늘이 채움빛
+    var keyLights = world.InWorld
+        ? new (Vector3 Dir, Vector3 Color)[] { (WorldScene.SunDir, new(2.4f, 2.2f, 1.9f)), (Vector3.Normalize(new(-0.3f, 1, 0.4f)), new(0.35f, 0.42f, 0.6f)), (Vector3.Normalize(new(-0.5f, 0.2f, 0.8f)), new(0.2f, 0.2f, 0.22f)) }
+        : lights;
+
     // reflection = 바닥에 비친 상: 1인칭이어도 내 몸이 바닥에 비친다
     void DrawBodies(Matrix4x4 extra, Vector3 cam, bool reflection)
     {
@@ -113,9 +133,9 @@ ctx.Window.Run(() =>
         bodyShader.Set("u_matcap_gain", 0.42f);
         bodyShader.Set("u_matcap_mix", 0.5f);   // 일러스트 스튜디오 톤 50 % + AI 크롬 구 매트캡 50 %
         bodyShader.Set("u_curv_gain", 0.1f);
-        bodyShader.Set("u_l0_dir", lights[0].Dir); bodyShader.Set("u_l0_col", lights[0].Color);
-        bodyShader.Set("u_l1_dir", lights[1].Dir); bodyShader.Set("u_l1_col", lights[1].Color);
-        bodyShader.Set("u_l2_dir", lights[2].Dir); bodyShader.Set("u_l2_col", lights[2].Color);
+        bodyShader.Set("u_l0_dir", keyLights[0].Dir); bodyShader.Set("u_l0_col", keyLights[0].Color);
+        bodyShader.Set("u_l1_dir", keyLights[1].Dir); bodyShader.Set("u_l1_col", keyLights[1].Color);
+        bodyShader.Set("u_l2_dir", keyLights[2].Dir); bodyShader.Set("u_l2_col", keyLights[2].Color);
         for (var i = 0; i < world.Actors.Length; i++)
         {
             var a = world.Actors[i];
@@ -151,6 +171,7 @@ ctx.Window.Run(() =>
 
 ctx.Dispose();
 floor?.Dispose();
+worldGfx?.Dispose();
 post?.Dispose();
 env?.Dispose();
 maleGpu?.Dispose();

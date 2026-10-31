@@ -68,16 +68,66 @@ sealed class World
     // 걷는 동작의 한 순간 (위상, 보폭): 둘 다 한 발을 내딛은 자세
     static readonly (float Phase, float Stride)[] ShowcaseStep = [(MathF.PI / 2, 0.33f), (MathF.PI / 2, 0.38f)];
 
+    /// <summary>캐릭터를 고른 뒤 들어가는 세계 (0장 재설계: 평범한 방에서 시작). 없으면 예전처럼 스튜디오 안에서 걷는다</summary>
+    public WorldScene? Scene;
+    public bool InWorld => Selected >= 0 && Scene is not null;
+    float _vy;
+    bool _grounded;
+
     public void Select(int i)
     {
         if (i < 0 || i >= Actors.Length) return;
         Selected = i;
-        // 고른 인형 하나만 방 가운데에서 -Z(도시 창 쪽)를 보며 시작
         var p = Actors[i];
-        p.Pos = Vector3.Zero;
-        p.Yaw = MathF.PI;
-        CamYaw = 0; CamPitch = -0.10f;
+        if (Scene is not null)
+        {
+            // 내 집 침실, 충전 침대 옆에서 깨어난다
+            p.Pos = Scene.Spawn; p.Yaw = Scene.SpawnYaw;
+            CamYaw = MathF.PI - p.Yaw; CamPitch = -0.12f; CamDist = 1.6f;
+            _vy = 0; _grounded = true;
+            CamPos = p.Pos + new Vector3(0, p.EyeHeight, 0);
+        }
+        else
+        {
+            // 고른 인형 하나만 방 가운데에서 -Z(도시 창 쪽)를 보며 시작
+            p.Pos = Vector3.Zero;
+            p.Yaw = MathF.PI;
+            CamYaw = 0; CamPitch = -0.10f;
+        }
         UpdateStatus();
+    }
+
+    /// <summary>
+    /// 세계 안 걷기: 중력, 그리고 몸을 세 개의 구(발목·허리·가슴 높이, 반지름 0.25 m)로 보고 거리장에서 밀어낸다.
+    /// 지형과 집·가구가 같은 곡면이라, 턱과 경사는 아래 구가 곡면을 타고 올라서며 넘는다 (블록 단위로 뛰어오르지 않는다).
+    /// </summary>
+    void WalkPhysics(Actor p, float dt)
+    {
+        const float r = 0.25f;
+        float[] heights = [0.3f, 0.95f, 1.5f];
+        _vy -= 9.81f * dt;
+        p.Pos += new Vector3(0, _vy * dt, 0);
+        var grounded = false;
+        for (var it = 0; it < 4; it++)
+            foreach (var h in heights)
+            {
+                var c = p.Pos + new Vector3(0, h, 0);
+                var d = Scene!.Sdf(c) - r;
+                if (d >= 0) continue;
+                var n = Scene.Gradient(c);
+                if (h == heights[0] && n.Y > 0.55f) { grounded = true; n = new Vector3(0, 1, 0) * n.Y + new Vector3(n.X, 0, n.Z) * 0.2f; }
+                p.Pos -= n * d;
+            }
+        // 내리막에서 땅에 붙어 걷기
+        if (!grounded && _grounded && _vy <= 0)
+        {
+            var c = p.Pos + new Vector3(0, heights[0], 0);
+            var gap = Scene!.Sdf(c) - r;
+            if (gap < 0.2f) { p.Pos -= new Vector3(0, gap, 0); grounded = true; }
+        }
+        if (grounded) _vy = MathF.Max(_vy, 0) * 0;
+        _grounded = grounded;
+        if (p.Pos.Y < -50) { p.Pos = Scene!.Spawn; _vy = 0; }
     }
 
     void Press(string code)
@@ -175,8 +225,10 @@ sealed class World
         player.Speed = wish.LengthSquared() > 0 ? walkSpeed * run : 0f;
         player.Pos  += wish * player.Speed * dt;
 
-        // 방 경계 + 다른 인형과 겹치지 않기
-        player.Pos = new Vector3(M.Clamp(player.Pos.X, lo.X + 0.4f, hi.X - 0.4f), 0, M.Clamp(player.Pos.Z, lo.Z + 0.4f, hi.Z - 0.4f));
+        if (Scene is not null) WalkPhysics(player, dt);
+        else
+            // 방 경계 + 다른 인형과 겹치지 않기
+            player.Pos = new Vector3(M.Clamp(player.Pos.X, lo.X + 0.4f, hi.X - 0.4f), 0, M.Clamp(player.Pos.Z, lo.Z + 0.4f, hi.Z - 0.4f));
 
         player.Body.Animate(dt, player.Speed);
 
@@ -198,7 +250,13 @@ sealed class World
                 var front = new Vector3(aim.X, -aim.Y, aim.Z);
                 cam = pivot + front * CamDist; LookDir = Vector3.Normalize(pivot - cam); break;
         }
-        cam = Vector3.Clamp(cam, lo + new Vector3(0.25f, 0.15f, 0.25f), hi - new Vector3(0.25f));
+        if (Scene is not null)
+        {
+            // 카메라가 벽·땅을 뚫지 않게: 머리 쪽에서 카메라 쪽으로 쏜 광선이 닿는 곳 앞에 멈춘다
+            var toCam = cam - pivot; var len = toCam.Length();
+            if (len > 1e-3f) cam = pivot + toCam / len * MathF.Max(0.15f, Scene.Raycast(pivot, toCam / len, len, 0.12f) - 0.05f);
+        }
+        else cam = Vector3.Clamp(cam, lo + new Vector3(0.25f, 0.15f, 0.25f), hi - new Vector3(0.25f));
         CamPos = Vector3.Lerp(CamPos, cam, 1 - MathF.Exp(-dt * 14f));
         if (CamView == ViewMode.ThirdFront) LookDir = Vector3.Normalize(pivot - CamPos);
     }

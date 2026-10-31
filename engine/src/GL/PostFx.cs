@@ -63,10 +63,11 @@ sealed class PostFx : IDisposable
         uniform sampler2D u_bloom;
         uniform float u_aspect;
         uniform int u_plain;
+        uniform float u_bloom_gain;
         void main() {
             vec3 c = texture(u_scene, v_uv).rgb;
             if (u_plain == 1) { frag = vec4(c, 1.0); return; }
-            c += texture(u_bloom, v_uv).rgb * 0.35;
+            c += texture(u_bloom, v_uv).rgb * u_bloom_gain;
             float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
             // split tone: cool blue in the shadows, neutral highlights
             c = mix(c * vec3(0.95, 0.99, 1.06), c, smoothstep(0.05, 0.6, l));
@@ -163,6 +164,9 @@ sealed class PostFx : IDisposable
     }
 
     /// <summary>장면 텍스처 → 후처리 결과 (OutputFbo). 창 크기가 바뀌었으면 대상도 다시 만든다.</summary>
+    /// <summary>블룸 세기: 스튜디오 0.35, 밝은 야외는 낮춰야 화면 전체가 뿌옇게 번지지 않는다</summary>
+    public float BloomGain = 0.35f;
+
     public void Apply(uint sceneTex, int w, int h, bool plain = false)
     {
         if (w != _w || h != _h) Resize(w, h);
@@ -182,6 +186,7 @@ sealed class PostFx : IDisposable
             _gl.Uniform1(_gl.GetUniformLocation(_final, "u_bloom"), 1);
             _gl.Uniform1(_gl.GetUniformLocation(_final, "u_aspect"), (float)_w / _h);
             _gl.Uniform1(_gl.GetUniformLocation(_final, "u_plain"), plain ? 1 : 0);
+            _gl.Uniform1(_gl.GetUniformLocation(_final, "u_bloom_gain"), BloomGain);
         });
         _gl.ActiveTexture(TextureUnit.Texture0);
         _gl.BindVertexArray(0);
