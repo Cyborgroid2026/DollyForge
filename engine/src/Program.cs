@@ -36,6 +36,7 @@ var            lastStatus = "";
 
 var skinBuf  = new Matrix4x4[BodyMesh.BoneCount];
 var last     = DateTime.UtcNow;
+var started  = last;
 var assetDir = Path.Combine(AppContext.BaseDirectory, "assets", "panoramas");
 // 측정용 (개발): DOLLY_MASK=1 이면 배경·바닥·후처리 없이 몸만 흰색으로 그린다 → 레퍼런스와 실루엣 비교
 // DOLLY_MASK=2: 몸을 카메라 공간 법선 색으로 (레퍼런스 Marigold 법선 지도와 형태 비교)
@@ -114,7 +115,7 @@ ctx.Window.Run(() =>
     var gpus     = new[] { femaleGpu, maleGpu };
 
     // 1-b. 세계: 지형 · 집 · 가구 · 유리
-    if (world.InWorld && worldGfx is not null && !maskMode) worldGfx.Draw(env, vp, world.CamPos);
+    if (world.InWorld && worldGfx is not null && !maskMode) worldGfx.Draw(env, vp, world.CamPos, (float)(now - started).TotalSeconds);
     // 세계에서는 해가 키 조명, 하늘이 채움빛
     var keyLights = world.InWorld
         ? new (Vector3 Dir, Vector3 Color)[] { (WorldScene.SunDir, new(2.4f, 2.2f, 1.9f)), (Vector3.Normalize(new(-0.3f, 1, 0.4f)), new(0.35f, 0.42f, 0.6f)), (Vector3.Normalize(new(-0.5f, 0.2f, 0.8f)), new(0.2f, 0.2f, 0.22f)) }
@@ -140,7 +141,7 @@ ctx.Window.Run(() =>
         {
             var a = world.Actors[i];
             if (!world.IsVisible(a)) continue;
-            if (!reflection && a == world.Player && world.CamView == World.ViewMode.FirstPerson) continue;   // 눈이 머리 안에 있다
+            if (!reflection && a == world.Player && (world.CamView == World.ViewMode.FirstPerson || world.PlayerHidden)) continue;   // 눈이 머리 안에 있다 (좁은 곳의 3인칭도)
             var model = a.Model;
             bodyShader.Set("u_model", model);
             bodyShader.Set("u_mvp",   model * extra * vp);

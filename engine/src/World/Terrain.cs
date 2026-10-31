@@ -12,13 +12,19 @@ sealed class Terrain
 {
     readonly Noise2 _roll = new(11), _hill = new(23), _detail = new(37), _patch = new(41);
     readonly ContentPack _pack;
-    public const float RoadZ = -10.5f, RoadHalf = 2.6f;
-    public static readonly float[] HouseX = [-36, -18, 0, 18, 36];   // 길가 집들의 가운데 x (내 집 = 0)
+    // 배치는 콘텐츠 팩 world.json (Rust 세계 서버가 같은 표로 구역을 판정한다)
+    static WorldLayout L => WorldLayout.Default;
+    public static float RoadZ => L.RoadZ;
+    public static float RoadHalf => L.RoadHalf;
+    public static float[] HouseX => L.HouseX;                        // 길가 집들의 가운데 x
 
     // 가까운 지역(±66 m)의 높이를 0.25 m 격자에 미리 계산해 둔다: 메시·충돌·빛 굽기가 같은 값을 빠르게 읽는다
-    const float CacheStep = 0.25f, CacheHalf = 66;
+    public const float CacheStep = 0.25f, CacheHalf = 66;
     readonly int _cn;
     readonly float[] _cache;
+    /// <summary>높이 캐시 (GPU 풀이 같은 높이를 읽는다): CacheCount² 표본, (−CacheHalf, −CacheHalf) 부터 CacheStep 간격</summary>
+    public ReadOnlySpan<float> HeightCache => _cache;
+    public int CacheCount => _cn;
 
     public Terrain(ContentPack pack)
     {
@@ -30,11 +36,15 @@ sealed class Terrain
 
     static float Smooth(float a, float b, float x) { var t = Math.Clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
 
+    /// <summary>야생의 정도 (0 = 외곽·시골 평지, 1 = 야생): 나무 숲·풀 높이가 따른다</summary>
+    public static float Wildness(float x, float z) => 1 - Flatness(x, z);
+
     /// <summary>집터·길처럼 평평해야 하는 정도 (1 = 완전히 평평)</summary>
     static float Flatness(float x, float z)
     {
-        var e = MathF.Sqrt(x * x / (120 * 120) + (z + 4) * (z + 4) / (42 * 42));
-        return 1 - Smooth(0.75f, 1.35f, e);
+        var c = L.SettledCenter; var r = L.SettledRadius;
+        var e = MathF.Sqrt((x - c.X) * (x - c.X) / (r.X * r.X) + (z - c.Y) * (z - c.Y) / (r.Y * r.Y));
+        return 1 - Smooth(L.SettledEdge.X, L.SettledEdge.Y, e);
     }
 
     public float Height(float x, float z)
@@ -84,25 +94,31 @@ sealed class Terrain
         return Vector3.Normalize(new Vector3(-g.X, 1, -g.Y));
     }
 
+    /// <summary>풀색: 노이즈 얼룩으로 마른 풀·짙은 풀이 섞인다 (땅과 풀잎이 같은 색을 쓴다)</summary>
+    public Vector3 GrassColor(float x, float z)
+    {
+        var patch = _patch.Fbm(x / 18f, z / 18f, 3);
+        return Vector3.Lerp(new Vector3(0.30f, 0.43f, 0.19f), new Vector3(0.42f, 0.44f, 0.22f), Smooth(0.1f, 0.5f, patch));
+    }
+
     /// <summary>재질 색 (rgb) + 풀의 정도 (a, 렌더가 풀 무늬를 더한다). 경계마다 부드럽게 섞는다</summary>
     public Vector4 Color(Vector3 p)
     {
         float x = p.X, z = p.Z;
-        var grass = new Vector3(0.30f, 0.43f, 0.19f);
         var soil = _pack.Color("soil", new(0.40f, 0.30f, 0.22f));
-        var gravel = _pack.Color("gravel", new(0.52f, 0.50f, 0.48f));
+        var gravel = _pack.Color("gravel", new(0.52f, 0.50f, 0.48f)) * 0.78f;   // 젖은 듯 어두운 자갈 (밝은 자갈은 햇빛에 눈처럼 보인다)
         var concrete = _pack.Color("concrete", new(0.66f, 0.65f, 0.62f));
         var asphalt = new Vector3(0.17f, 0.17f, 0.18f);
         var rock = _pack.Color("granite", new(0.55f, 0.54f, 0.52f));
         // 풀밭: 노이즈 얼룩으로 마른 풀·짙은 풀이 섞인다
-        var patch = _patch.Fbm(x / 18f, z / 18f, 3);
-        var c = Vector3.Lerp(grass, new Vector3(0.42f, 0.44f, 0.22f), Smooth(0.1f, 0.5f, patch));
+        var c = GrassColor(x, z);
         var grassAmt = 1f;
         void Mix(Vector3 col, float w, float keepGrass = 0) { c = Vector3.Lerp(c, col, w); grassAmt = MathF.Min(grassAmt, 1 - w * (1 - keepGrass)); }
         // 흙이 드러난 곳 (노이즈)
         Mix(soil, Smooth(0.35f, 0.6f, _patch.Fbm(x / 7f + 40, z / 7f, 3)) * 0.8f);
         // 시골의 밭 (길 건너): 이랑 줄무늬
-        var field = Smooth(-24, -28, z) * (1 - Smooth(-92, -96, z)) * (1 - Smooth(70, 76, MathF.Abs(x)));
+        var fz = L.FieldZ;
+        var field = Smooth(fz.Y, fz.Y - 4, z) * (1 - Smooth(fz.X + 4, fz.X, z)) * (1 - Smooth(L.FieldXHalf - 2, L.FieldXHalf + 4, MathF.Abs(x)));
         var furrow = 0.5f + 0.5f * MathF.Sin(x * MathF.Tau / 1.2f);
         Mix(Vector3.Lerp(soil * 0.8f, new Vector3(0.33f, 0.47f, 0.18f), furrow * Smooth(-40, -60, z)), field);
         // 가파른 비탈은 바위

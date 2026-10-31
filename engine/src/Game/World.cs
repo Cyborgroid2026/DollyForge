@@ -73,6 +73,8 @@ sealed class World
     public bool InWorld => Selected >= 0 && Scene is not null;
     float _vy;
     bool _grounded;
+    /// <summary>3인칭 카메라가 좁은 곳에서 머리에 붙어 몸을 그리지 않는다</summary>
+    public bool PlayerHidden { get; private set; }
 
     public void Select(int i)
     {
@@ -240,6 +242,7 @@ sealed class World
         switch (CamView)
         {
             case ViewMode.FirstPerson:
+                PlayerHidden = false;
                 cam = eye; LookDir = aim;
                 CamPos = cam;   // 1인칭은 눈에 붙어 있다 (지연 없음)
                 return;
@@ -254,7 +257,13 @@ sealed class World
         {
             // 카메라가 벽·땅을 뚫지 않게: 머리 쪽에서 카메라 쪽으로 쏜 광선이 닿는 곳 앞에 멈춘다
             var toCam = cam - pivot; var len = toCam.Length();
-            if (len > 1e-3f) cam = pivot + toCam / len * MathF.Max(0.15f, Scene.Raycast(pivot, toCam / len, len, 0.12f) - 0.05f);
+            if (len > 1e-3f)
+            {
+                var avail = Scene.Raycast(pivot, toCam / len, len, 0.12f) - 0.05f;
+                cam = pivot + toCam / len * MathF.Max(0.15f, avail);
+                // 좁은 곳(벽·문틀 바로 앞)에서 카메라가 머리에 붙으면 몸을 감추고 그 자리에서 본다: 머리 속이 보이지 않게
+                PlayerHidden = avail < 0.6f;
+            }
         }
         else cam = Vector3.Clamp(cam, lo + new Vector3(0.25f, 0.15f, 0.25f), hi - new Vector3(0.25f));
         CamPos = Vector3.Lerp(CamPos, cam, 1 - MathF.Exp(-dt * 14f));

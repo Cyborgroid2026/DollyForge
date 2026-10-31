@@ -34,6 +34,7 @@ sealed class Shader : IDisposable
 
     public void Set(string name, int v)        => _gl.Uniform1(_gl.GetUniformLocation(_prog, name), v);
     public void Set(string name, float v)      => _gl.Uniform1(_gl.GetUniformLocation(_prog, name), v);
+    public void Set(string name, Vector2 v)    => _gl.Uniform2(_gl.GetUniformLocation(_prog, name), v.X, v.Y);
     public void Set(string name, Vector3 v)    => _gl.Uniform3(_gl.GetUniformLocation(_prog, name), v.X, v.Y, v.Z);
     public void Set(string name, Vector4 v)    => _gl.Uniform4(_gl.GetUniformLocation(_prog, name), v.X, v.Y, v.Z, v.W);
     public unsafe void Set(string name, Matrix4x4 m)

@@ -2,16 +2,68 @@
   "_doc": "Dolly Forge 기본 콘텐츠 팩. 아이템 id 는 dolly:<category>/<id> 로 쓴다. 검사: python3 tools/content/validate.py",
   "namespace": "dolly",
   "version": "0.1.0",
-  "standard": {"unit_m": 0.25, "grid_mm": 125, "carry_limit_kg": 25, "edge_min_mm": {"small": 2, "medium": 3, "large": 10}, "size_class_mm": {"small_below": 150, "large_above": 1000}},
-  "joints": {"F": "고정 (볼트·용접·나사)", "R": "회전 (축·경첩)", "B": "볼 조인트", "L": "직선 (리니어)", "M": "장착·손에 쥠", "H": "걸이 (벽·천장 고정점)"},
-  "hand_processes": ["knap", "lash", "carve", "strip", "cut", "assemble", "build", "bind", "sew", "paint", "dip", "bale", "split", "beat"],
-  "locked_processes": {"electrolysis": "알루미늄 공정 해금 뒤 (전해조)", "kroll": "티타늄 공정 해금 뒤 (크롤 반응로)"},
+  "standard": {
+    "unit_m": 0.25,
+    "grid_mm": 125,
+    "carry_limit_kg": 25,
+    "edge_min_mm": {
+      "small": 2,
+      "medium": 3,
+      "large": 10
+    },
+    "size_class_mm": {
+      "small_below": 150,
+      "large_above": 1000
+    }
+  },
+  "joints": {
+    "F": "고정 (볼트·용접·나사)",
+    "R": "회전 (축·경첩)",
+    "B": "볼 조인트",
+    "L": "직선 (리니어)",
+    "M": "장착·손에 쥠",
+    "H": "걸이 (벽·천장 고정점)"
+  },
+  "hand_processes": [
+    "knap",
+    "lash",
+    "carve",
+    "strip",
+    "cut",
+    "assemble",
+    "build",
+    "bind",
+    "sew",
+    "paint",
+    "dip",
+    "bale",
+    "split",
+    "beat"
+  ],
+  "locked_processes": {
+    "electrolysis": "알루미늄 공정 해금 뒤 (전해조)",
+    "kroll": "티타늄 공정 해금 뒤 (크롤 반응로)"
+  },
   "files": {
     "materials": "materials.json",
-    "items": ["items/natural.json", "items/wood.json", "items/masonry.json", "items/metal.json", "items/tools.json", "items/workshop.json", "items/home.json", "items/farming.json", "items/animals.json", "items/mechanisms.json", "items/transport.json", "items/body.json"],
+    "items": [
+      "items/natural.json",
+      "items/wood.json",
+      "items/masonry.json",
+      "items/metal.json",
+      "items/tools.json",
+      "items/workshop.json",
+      "items/home.json",
+      "items/farming.json",
+      "items/animals.json",
+      "items/mechanisms.json",
+      "items/transport.json",
+      "items/body.json"
+    ],
     "excluded": "excluded.json",
     "biomes": "biomes.json",
     "zones": "zones.json",
-    "houses": "houses.json"
+    "houses": "houses.json",
+    "world": "world.json"
   }
 }

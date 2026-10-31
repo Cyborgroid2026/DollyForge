@@ -20,6 +20,7 @@ sealed class HouseModel
     public Vector2 Size;
     public float WallHeight;
     public SdfScene Collision = new() { Blend = 0.01f };
+    public Vector3 Brick, Roof, Floor;     // 재질 색 (렌더가 벽돌·기와·마루 무늬를 이 색에 입힌다)
 
     static readonly Vector3 Plaster = new(0.74f, 0.72f, 0.68f);
     static readonly Vector3 FrameWhite = new(0.90f, 0.90f, 0.88f);
@@ -41,6 +42,7 @@ sealed class HouseModel
         var brick = Mat("walls", new(0.62f, 0.30f, 0.22f));
         var roof = Mat("roof", new(0.70f, 0.42f, 0.30f)) * 0.75f;
         var floor = Mat("floor", new(0.55f, 0.40f, 0.25f));
+        m.Brick = brick; m.Roof = roof; m.Floor = floor;
         var concrete = pack.Color("concrete", new(0.66f, 0.65f, 0.62f));
         float W = def.Footprint.X, D = def.Footprint.Y, H = def.WallHeight, top = H + 0.15f;
         var s = m.Shell;

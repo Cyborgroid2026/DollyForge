@@ -185,6 +185,27 @@ def main():
             if s not in items: err(f"집 {hid}: 마당 시작 물건 {s} 없음")
         if spawns != 1: err(f"집 {hid}: 시작 지점이 {spawns}곳 (1곳이어야 함)")
 
+    # ── 세계 배치 (C# 엔진과 Rust 서버가 함께 읽는다) ─────────────────────────
+    if "world" in pack["files"]:
+        w = load(pack["files"]["world"])
+        if w["house"] not in houses: err(f"세계: 집 설계도 {w['house']} 없음")
+        else:
+            fw, fd = houses[w["house"]]["footprint_m"]
+            xs = sorted(w["house_x"])
+            if not 0 <= w["own_house"] < len(xs): err("세계: own_house 번호가 집 목록 밖")
+            if any(b - a < 2 * w["lot"]["x_half"] - 1e-6 for a, b in zip(xs, xs[1:])): err("세계: 집터가 서로 겹침")
+            if w["lot"]["x_half"] < -w["origin_dx"] or w["lot"]["x_half"] < fw + w["origin_dx"]: err("세계: 집터가 집보다 좁음")
+            if not (w["lot"]["z"][0] <= 0 and w["lot"]["z"][1] >= fd): err("세계: 집터가 집 깊이를 덮지 않음")
+        road = w["road"]
+        if road["z"] + road["half"] > w["lot"]["z"][0] + 1e-6: err("세계: 길이 집터를 지나감")
+        if w["field"]["z"][1] > road["z"] - road["half"]: err("세계: 밭이 길에 걸침")
+        y = w["dig"]["yields"]
+        if y not in items: err(f"세계: 파면 나오는 {y} 없음")
+        else:
+            iv = 1
+            for d in items[y]["mm"]: iv *= d / 1000
+            if abs(iv - w["dig"]["tool_volume_m3"]) > 0.1 * iv: err(f"세계: 삽 한 번 부피 {w['dig']['tool_volume_m3']} m³ 가 {y} 부피 {iv:.4f} m³ 와 다름 (흙 보존)")
+
     # ── 생물군계 ─────────────────────────────────────────────────────────
     bio = load(pack["files"]["biomes"])
     for r in bio["regions"]:

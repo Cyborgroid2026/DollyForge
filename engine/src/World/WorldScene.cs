@@ -12,14 +12,19 @@ namespace DollyForge;
 sealed class WorldScene
 {
     public static readonly Vector3 SunDir = Vector3.Normalize(new Vector3(0.55f, 0.62f, -0.56f));
-    public const int OwnHouse = 2;                 // Terrain.HouseX 의 가운데
+    public static int OwnHouse => WorldLayout.Default.OwnHouse;      // Terrain.HouseX 에서 내 집 번호
     public const float FineHalf = 64, CoarseHalf = 512;
 
     public readonly ContentPack Pack;
     public readonly Terrain Terrain;
     public readonly HouseModel House;              // 내 집 (가구 포함)
+    public readonly Flora Flora;                   // 나무 (인스턴스)
+    // 풀 지도 (GPU 풀잎이 읽는다): 원점 ±GroundHalf, GroundStep 간격, GroundCount² 표본
+    public const float GroundStep = 0.5f, GroundHalf = 64;
+    public static readonly int GroundCount = (int)(2 * GroundHalf / GroundStep) + 1;
+    public float[] GroundA = [], GroundB = [];     // A: 풀색 rgb + 풀 양,  B: 해 보임 · 하늘 보임 · 풀 키(0…1) · 꽃 확률
     public StaticMeshData TerrainFine = new(), TerrainCoarse = new(), Shell = new(), Furniture = new(), Glass = new();
-    public readonly Vector3[] HouseOrigins = Terrain.HouseX.Select(x => new Vector3(x - 6, 0, 0)).ToArray();
+    public readonly Vector3[] HouseOrigins = Terrain.HouseX.Select(x => new Vector3(x + WorldLayout.Default.OriginDx, 0, 0)).ToArray();
     public Vector3 Spawn => House.Spawn + HouseOrigins[OwnHouse];
     public float SpawnYaw => House.SpawnYaw;
 
@@ -31,6 +36,9 @@ sealed class WorldScene
         var sw = Stopwatch.StartNew();
         Pack = pack;
         Terrain = new Terrain(pack);
+        Flora = new Flora(Terrain);
+        Flora.BuildMeshes();
+        Console.WriteLine($"[world] 나무 {Flora.Trees.Count:N0} 그루 (변형 {Flora.Variants.Count}개, 정점 {Flora.Variants.Sum(v => v.Near.VertexCount):N0}) {sw.Elapsed.TotalSeconds:0.0} 초");
         var def = pack.Houses.Values.First();
         House = HouseModel.Build(pack, def, furniture: true);
         _neighbourCollide = new SdfScene { Blend = 0.01f };
@@ -48,6 +56,7 @@ sealed class WorldScene
         BuildTerrain();
         Console.WriteLine($"[world] 지형 메시·빛 {sw.Elapsed.TotalSeconds:0.0} 초");
         BuildHouse();
+        BuildGround();
         Console.WriteLine($"[world] 지형 정점 {TerrainFine.VertexCount + TerrainCoarse.VertexCount:N0} · 집 {Shell.VertexCount:N0} · 가구 {Furniture.VertexCount:N0} · {sw.Elapsed.TotalSeconds:0.0} 초");
     }
 
@@ -84,10 +93,58 @@ sealed class WorldScene
     }
 
     /// <summary>충돌용 (유리·가구 포함)</summary>
-    public float Sdf(Vector3 p) => Houses(p, Terrain.Sdf(p), false);
+    public float Sdf(Vector3 p) => Houses(p, MathF.Min(Terrain.Sdf(p), Flora.Sdf(p, false)), false);
 
     /// <summary>빛용 (유리는 빛을 막지 않는다)</summary>
-    public float OpticalSdf(Vector3 p) => Houses(p, Terrain.Sdf(p), true);
+    public float OpticalSdf(Vector3 p) => Houses(p, MathF.Min(Terrain.Sdf(p), Flora.Sdf(p, true)), true);
+
+    /// <summary>집 바닥 아래인가 (풀잎이 마루를 뚫고 나오지 않게)</summary>
+    bool UnderHouse(float x, float z, float margin)
+    {
+        foreach (var o in HouseOrigins)
+            if (x > o.X - margin && x < o.X + House.Size.X + margin && z > o.Z - margin && z < o.Z + House.Size.Y + margin) return true;
+        return false;
+    }
+
+    // ─── 풀 지도 ─────────────────────────────────────────────────────────
+
+    void BuildGround()
+    {
+        var n = GroundCount;
+        GroundA = new float[n * n * 4]; GroundB = new float[n * n * 4];
+        var lengthNoise = new Noise2(53);
+        Parallel.For(0, n, k =>
+        {
+            for (var i = 0; i < n; i++)
+            {
+                float x = -GroundHalf + i * GroundStep, z = -GroundHalf + k * GroundStep;
+                var h = Terrain.Height(x, z);
+                var p = new Vector3(x, h, z);
+                var amount = UnderHouse(x, z, 0.3f) ? 0 : Terrain.Color(p).W;
+                var g = Terrain.GrassColor(x, z);
+                // 해 그림자 (집·나무·언덕), 수관 아래는 하늘빛이 줄어든다
+                var sun = 1f; var t = 0.05f; var o = p + new Vector3(0, 0.15f, 0);
+                for (var s = 0; s < 40 && t < 120; s++)
+                {
+                    var hh = OpticalSdf(o + SunDir * t);
+                    if (hh < 0.001f) { sun = 0; break; }
+                    sun = MathF.Min(sun, 8 * hh / t);
+                    t += Math.Clamp(hh, 0.03f, 2.5f);
+                }
+                var sky = 1 - 0.65f * Flora.Cover(p);
+                // 풀 키: 집 앞뒤 마당은 깎은 잔디, 길가·들판은 무릎 아래 풀, 야생은 더 길다
+                var lawn = (1 - Smooth(42, 50, MathF.Abs(x))) * Smooth(-15, -12.5f, z) * (1 - Smooth(17, 21, z));
+                var wild = Terrain.Wildness(x, z);
+                var len = MathF.Max(0.1f, (1 - lawn) * (0.45f + 0.35f * wild) * (0.75f + 0.5f * (lengthNoise.Fbm(x / 7f, z / 7f, 2) + 0.5f)));
+                var flower = lawn > 0.5f ? 0.012f : 0.03f + 0.04f * wild;
+                var a = (k * n + i) * 4;
+                GroundA[a] = g.X; GroundA[a + 1] = g.Y; GroundA[a + 2] = g.Z; GroundA[a + 3] = amount;
+                GroundB[a] = Math.Clamp(sun, 0, 1); GroundB[a + 1] = sky; GroundB[a + 2] = Math.Clamp(len, 0, 1); GroundB[a + 3] = flower;
+            }
+        });
+    }
+
+    static float Smooth(float a, float b, float x) { var t = Math.Clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
 
     public Vector3 Gradient(Vector3 p, float e = 0.01f)
     {

@@ -13,6 +13,15 @@ sealed record FurnitureDef(string Item, Vector2 Pos, float Yaw, bool SpawnPoint,
 sealed record RoomDef(string Id, string Name, Vector2 Pos, Vector2 Size, bool Spawn, FurnitureDef[] Furniture);
 sealed record HouseDef(string Id, string Name, Vector2 Footprint, float WallHeight, Dictionary<string, string> Shell, RoomDef[] Rooms);
 
+/// <summary>세계 배치 (world.json): C# 엔진과 Rust 세계 서버가 같은 값을 읽는다</summary>
+sealed record WorldLayout(string House, float[] HouseX, int OwnHouse, float OriginDx, float LotXHalf, Vector2 LotZ,
+    float RoadZ, float RoadHalf, float FieldXHalf, Vector2 FieldZ, Vector2 SettledCenter, Vector2 SettledRadius, Vector2 SettledEdge,
+    float EditReach, float DigVolume, string DigYields)
+{
+    public static WorldLayout Default { get; set; } = new("suburb_house_a", [-36, -18, 0, 18, 36], 2, -6, 9, new(-7.9f, 16), -10.5f, 2.6f,
+        72, new(-96, -24), new(0, -4), new(120, 42), new(0.75f, 1.35f), 3, 0.015f, "soil_sack");
+}
+
 /// <summary>
 /// 콘텐츠 팩 content/dolly 를 읽는다 (실행 폴더에 복사된 것, tools/content/validate.py 로 검증된 데이터).
 /// 엔진은 집 설계도로 시작 방을 짓고, 아이템 치수로 가구를, 재료 색으로 표면을 칠한다.
@@ -22,6 +31,7 @@ sealed class ContentPack
     public readonly Dictionary<string, ContentMaterial> Materials = [];
     public readonly Dictionary<string, ContentItem> Items = [];
     public readonly Dictionary<string, HouseDef> Houses = [];
+    public WorldLayout Layout = WorldLayout.Default;
 
     public static string DefaultDir => Path.Combine(AppContext.BaseDirectory, "content", "dolly");
 
@@ -71,6 +81,20 @@ sealed class ContentPack
                 pack.Houses[h.GetProperty("id").GetString()!] = new(h.GetProperty("id").GetString()!, h.GetProperty("name").GetString()!,
                     V2(h.GetProperty("footprint_m")), h.GetProperty("wall_height_m").GetSingle(), shell, rooms);
             }
+        if (files.TryGetProperty("world", out var wf))
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, wf.GetString()!)));
+            var w = doc.RootElement;
+            static Vector2 V2(JsonElement e) => new(e[0].GetSingle(), e[1].GetSingle());
+            pack.Layout = new WorldLayout(w.GetProperty("house").GetString()!, w.GetProperty("house_x").EnumerateArray().Select(x => x.GetSingle()).ToArray(),
+                w.GetProperty("own_house").GetInt32(), w.GetProperty("origin_dx").GetSingle(),
+                w.GetProperty("lot").GetProperty("x_half").GetSingle(), V2(w.GetProperty("lot").GetProperty("z")),
+                w.GetProperty("road").GetProperty("z").GetSingle(), w.GetProperty("road").GetProperty("half").GetSingle(),
+                w.GetProperty("field").GetProperty("x_half").GetSingle(), V2(w.GetProperty("field").GetProperty("z")),
+                V2(w.GetProperty("settled").GetProperty("center")), V2(w.GetProperty("settled").GetProperty("radius")), V2(w.GetProperty("settled").GetProperty("edge")),
+                w.GetProperty("edit_reach_m").GetSingle(), w.GetProperty("dig").GetProperty("tool_volume_m3").GetSingle(), w.GetProperty("dig").GetProperty("yields").GetString()!);
+            WorldLayout.Default = pack.Layout;
+        }
         Console.WriteLine($"[content] 재료 {pack.Materials.Count} · 아이템 {pack.Items.Count} · 집 설계도 {pack.Houses.Count}");
         return pack;
     }

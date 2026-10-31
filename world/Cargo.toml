@@ -1,0 +1,9 @@
+[package]
+name = "dolly-world"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rapier3d = "0.36.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
