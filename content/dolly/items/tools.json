@@ -1,0 +1,45 @@
+{
+  "_doc": "손에 드는 도구. 여러 재료로 된 것은 parts 에 구성 부분(재료·형상·치수·채움)을 적고, 질량은 그 합이다. mm 은 전체 크기. 나무·금 곡괭이처럼 현실에서 쓸모없는 등급은 두지 않는다 (excluded.json). 도구의 성능은 날 경도(재료 mohs)와 힘으로 정해진다 (0.8 채굴).",
+  "category": "tools",
+  "items": [
+    {"id": "stone_pickaxe", "name": "돌 곡괭이", "ref": "stone pickaxe", "shape": "box", "mm": [400, 60, 850], "edge": 8, "mat": "flint", "joints": ["M"], "from": "process:knap+lash", "uses": ["dig:soft_rock"], "parts": [
+      {"mat": "flint", "shape": "box", "mm": [300, 50, 40], "fill": 0.4}, {"mat": "oak", "shape": "cyl", "mm": [35, 800]}]},
+    {"id": "iron_pickaxe", "name": "철 곡괭이", "ref": "iron pickaxe", "shape": "box", "mm": [450, 60, 900], "edge": 6, "mat": "cast_iron", "joints": ["M"], "from": "process:forge", "uses": ["dig:rock", "dig:ore"], "parts": [
+      {"mat": "cast_iron", "shape": "box", "mm": [450, 50, 40], "fill": 0.3}, {"mat": "oak", "shape": "cyl", "mm": [35, 900]}]},
+    {"id": "steel_pickaxe", "name": "강철 곡괭이", "ref": "iron pickaxe (상위)", "shape": "box", "mm": [450, 60, 900], "edge": 6, "mat": "tool_steel", "joints": ["M"], "from": "process:forge+quench", "uses": ["dig:hard_rock", "dig:ore"], "parts": [
+      {"mat": "tool_steel", "shape": "box", "mm": [450, 50, 40], "fill": 0.3}, {"mat": "oak", "shape": "cyl", "mm": [35, 900]}]},
+    {"id": "diamond_core_drill", "name": "다이아몬드 날 착암 드릴 (전동)", "ref": "diamond pickaxe", "shape": "box", "mm": [450, 120, 300], "edge": 10, "mat": "steel_s235", "joints": ["M"], "from": "process:assemble", "uses": ["dig:any_rock"], "note": "다이아몬드 곡괭이 대신 현실의 다이아몬드 날 드릴. 배터리로 돈다", "parts": [
+      {"mat": "steel_s235", "shape": "box", "mm": [300, 100, 200], "fill": 0.15}, {"mat": "steel_s235", "shape": "cyl", "mm": [50, 250], "fill": 0.4}, {"mat": "diamond", "shape": "sphere", "mm": [6]}]},
+    {"id": "stone_axe", "name": "돌도끼", "ref": "stone axe", "shape": "box", "mm": [200, 50, 600], "edge": 8, "mat": "flint", "joints": ["M"], "from": "process:knap+lash", "uses": ["chop"], "parts": [
+      {"mat": "flint", "shape": "box", "mm": [150, 40, 80], "fill": 0.5}, {"mat": "oak", "shape": "cyl", "mm": [30, 600]}]},
+    {"id": "steel_axe", "name": "강철 도끼", "ref": "iron axe", "shape": "box", "mm": [200, 40, 750], "edge": 5, "mat": "tool_steel", "joints": ["M"], "from": "process:forge+quench", "uses": ["chop", "strip"], "parts": [
+      {"mat": "tool_steel", "shape": "box", "mm": [180, 30, 100], "fill": 0.45}, {"mat": "oak", "shape": "cyl", "mm": [32, 750]}]},
+    {"id": "wooden_spade", "name": "나무 삽 (눈·곡물용)", "ref": "wooden shovel", "shape": "box", "mm": [300, 40, 1200], "edge": 10, "mat": "birch", "joints": ["M"], "from": "process:carve", "uses": ["dig:snow", "dig:grain"], "parts": [
+      {"mat": "birch", "shape": "box", "mm": [300, 300, 12]}, {"mat": "birch", "shape": "cyl", "mm": [35, 1000]}]},
+    {"id": "steel_shovel", "name": "강철 삽", "ref": "iron shovel", "shape": "box", "mm": [230, 60, 1200], "edge": 10, "mat": "steel_s235", "joints": ["M"], "from": "process:forge", "uses": ["dig:soil", "dig:sand", "dig:gravel"], "parts": [
+      {"mat": "steel_s235", "shape": "box", "mm": [230, 290, 2]}, {"mat": "oak", "shape": "cyl", "mm": [38, 1000]}]},
+    {"id": "steel_hoe", "name": "괭이", "ref": "iron hoe", "shape": "box", "mm": [180, 60, 1300], "edge": 10, "mat": "steel_s235", "joints": ["M"], "from": "process:forge", "uses": ["till"], "parts": [
+      {"mat": "steel_s235", "shape": "box", "mm": [180, 120, 3]}, {"mat": "oak", "shape": "cyl", "mm": [35, 1250]}]},
+    {"id": "sickle", "name": "낫", "ref": null, "shape": "box", "mm": [350, 30, 450], "edge": 3, "mat": "tool_steel", "joints": ["M"], "from": "process:forge+quench", "uses": ["harvest", "cut_grass"], "parts": [
+      {"mat": "tool_steel", "shape": "box", "mm": [300, 40, 2], "fill": 0.7}, {"mat": "oak", "shape": "cyl", "mm": [30, 300]}]},
+    {"id": "machete", "name": "벌채 칼", "ref": "sword (전투 대신 덤불 베기)", "shape": "box", "mm": [60, 10, 600], "edge": 3, "mat": "tool_steel", "joints": ["M"], "from": "process:forge+quench", "uses": ["cut_brush", "cut_bamboo"], "parts": [
+      {"mat": "tool_steel", "shape": "box", "mm": [50, 3, 450], "fill": 0.85}, {"mat": "oak", "shape": "box", "mm": [35, 25, 130]}]},
+    {"id": "shears", "name": "양털 가위", "ref": "shears", "shape": "box", "mm": [80, 15, 300], "edge": 3, "mat": "tool_steel", "fill": 0.12, "joints": ["M"], "from": "process:forge", "uses": ["shear_sheep", "trim_plants"]},
+    {"id": "bucket", "name": "양동이 (10 L)", "ref": "bucket", "shape": "tube", "mm": [260, 256, 280], "mat": "steel_s235", "joints": ["M", "H"], "from": "process:press", "uses": ["carry_water", "carry_milk", "carry_sand"]},
+    {"id": "fire_striker", "name": "부싯돌 점화기", "ref": "flint and steel", "shape": "box", "mm": [80, 40, 15], "edge": 3, "mat": "tool_steel", "joints": ["M"], "from": "process:forge", "uses": ["ignite"], "parts": [
+      {"mat": "tool_steel", "shape": "box", "mm": [70, 20, 5]}, {"mat": "flint", "shape": "box", "mm": [50, 30, 15], "fill": 0.6}]},
+    {"id": "fishing_rod", "name": "낚싯대 (잡았다 놓아주기)", "ref": "fishing rod", "shape": "cyl", "mm": [20, 2400], "mat": "bamboo", "fill": 0.35, "joints": ["M"], "from": "process:assemble", "uses": ["fish_watch"], "note": "물고기를 해치지 않고 놓아준다 (0.2 생명 존중)"},
+    {"id": "brush", "name": "발굴 솔", "ref": "brush", "shape": "box", "mm": [40, 30, 250], "edge": 5, "mat": "birch", "fill": 0.5, "joints": ["M"], "from": "process:assemble", "uses": ["clean", "excavate"]},
+    {"id": "spyglass", "name": "망원경", "ref": "spyglass", "shape": "tube", "mm": [45, 40, 300], "mat": "brass_c260", "joints": ["M"], "from": "process:assemble:glass_pane+brass_c260", "uses": ["look"]},
+    {"id": "compass", "name": "나침반", "ref": "compass", "shape": "cyl", "mm": [60, 15], "mat": "brass_c260", "fill": 0.35, "joints": ["M"], "from": "process:assemble", "uses": ["navigate"], "note": "현실처럼 북쪽(자북)을 가리킨다. 시작 지점을 가리키지 않는다"},
+    {"id": "pocket_clock", "name": "회중시계 (태엽)", "ref": "clock", "shape": "cyl", "mm": [50, 15], "mat": "brass_c260", "fill": 0.4, "joints": ["M"], "from": "process:assemble", "uses": ["time"]},
+    {"id": "survey_map", "name": "측량 지도", "ref": "map", "shape": "box", "mm": [420, 297, 1], "edge": 2, "mat": "paper", "joints": [], "from": "process:survey", "uses": ["navigate"], "note": "걸어 다니며 측량 책상에서 그린 만큼만 채워진다"},
+    {"id": "book", "name": "책", "ref": "book", "shape": "box", "mm": [210, 148, 25], "edge": 3, "mat": "paper", "joints": [], "from": "process:bind", "uses": ["read", "shelf"]},
+    {"id": "notebook_pen", "name": "공책과 펜", "ref": "book and quill", "shape": "box", "mm": [210, 148, 12], "edge": 3, "mat": "paper", "joints": [], "from": "process:bind", "uses": ["write"]},
+    {"id": "paper_sheet", "name": "종이 (A4 묶음 100장)", "ref": "paper", "shape": "box", "mm": [297, 210, 10], "edge": 3, "mat": "paper", "joints": [], "from": "process:pulp:sugar_cane", "uses": ["write", "map", "book"]},
+    {"id": "rope", "name": "밧줄 10 m", "ref": "lead / string", "shape": "cyl", "mm": [250, 120], "mat": "linen", "fill": 0.12, "joints": ["H"], "from": "process:twist:flax_bundle", "uses": ["tie", "lead_animal", "climb"]},
+    {"id": "name_tag", "name": "이름표", "ref": "name tag", "shape": "box", "mm": [60, 30, 2], "edge": 2, "mat": "brass_c260", "joints": ["H"], "from": "process:engrave", "uses": ["name_animal", "label"]},
+    {"id": "backpack", "name": "배낭 (30 L)", "ref": "bundle", "shape": "box", "mm": [300, 200, 500], "edge": 50, "mat": "synthetic_leather", "fill": 0.02, "joints": ["M"], "from": "process:sew", "uses": ["carry"], "note": "부피 30 L 와 무게만큼만 담긴다"},
+    {"id": "whetstone", "name": "손 숫돌", "ref": null, "shape": "box", "mm": [200, 50, 25], "edge": 3, "mat": "sandstone", "joints": [], "from": "process:stonecutter", "uses": ["sharpen"]}
+  ]
+}

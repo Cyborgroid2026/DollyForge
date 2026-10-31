@@ -1,0 +1,37 @@
+{
+  "_doc": "가장 평범한 생물군계(사계절 온대) 위의 네 지역 (0.3). 지역은 노이즈 가중치로 서서히 섞인다 (0.10 지역 경계). zone 은 zones.json 의 구역 규칙. ground 는 위에서 아래 순서의 세계 물질, trees·plants·animals 는 items 의 id.",
+  "climate": {
+    "name": "사계절 온대",
+    "latitude_deg": 37.5,
+    "day_minutes": 30,
+    "season_days": 7,
+    "seasons": [
+      {"name": "봄", "temp_c": [5, 20], "rain": 0.35},
+      {"name": "여름", "temp_c": [20, 32], "rain": 0.55},
+      {"name": "가을", "temp_c": [8, 22], "rain": 0.25},
+      {"name": "겨울", "temp_c": [-8, 5], "rain": 0.15, "snow": true}
+    ]
+  },
+  "regions": [
+    {"id": "city", "name": "도시", "zone": "city", "order": 0,
+     "features": ["높이가 제각각인 건물", "도로와 보도", "공원과 연못", "상점", "공공 작업장", "정류장"],
+     "ground": ["concrete", "soil", "rock_granite"],
+     "trees": ["log_cherry", "log_oak"], "plants": ["flowers", "grass_fern"], "animals": ["cat", "songbird", "carp"]},
+    {"id": "suburb", "name": "외곽 주택가", "zone": "neighbour_home", "order": 1,
+     "features": ["정해진 형태의 단독 주택 (houses.json)", "마당과 담장", "골목길", "작은 공원"],
+     "ground": ["grass_soil", "soil", "clay", "rock_granite"],
+     "trees": ["log_cherry", "log_birch", "log_pine"], "plants": ["flowers", "tall_flowers", "grass_fern"], "animals": ["cat", "dog", "chicken", "songbird", "squirrel", "honeybee"],
+     "spawn": "suburb_house_a"},
+    {"id": "countryside", "name": "시골", "zone": "rural_common", "order": 2,
+     "features": ["논밭", "과수원", "농가와 헛간", "목초지", "마을길", "개울"],
+     "ground": ["grass_soil", "soil", "clay", "gravel", "rock_granite"],
+     "trees": ["log_oak", "log_cherry", "bamboo_culm"], "plants": ["grass_fern", "flowers", "berries"], "animals": ["cow", "sheep", "pig", "chicken", "horse", "donkey", "goat", "dog", "honeybee", "songbird"],
+     "claimable": true},
+    {"id": "wild", "name": "야생", "zone": "wild", "order": 3,
+     "features": ["들판", "참나무·자작나무·소나무·가문비나무 숲", "강과 호수", "언덕과 바위 노출", "동굴"],
+     "ground": ["grass_soil", "forest_soil", "soil", "sand", "gravel", "clay", "rock_granite", "rock_andesite", "rock_diorite", "rock_limestone", "rock_tuff", "rock_slate"],
+     "trees": ["log_oak", "log_birch", "log_spruce", "log_pine"], "plants": ["grass_fern", "flowers", "tall_flowers", "moss_mat", "vine", "lily_pad", "mushroom", "berries"],
+     "animals": ["rabbit", "deer", "fox", "squirrel", "frog", "pond_turtle", "carp", "trout", "bat", "songbird", "honeybee", "goat"],
+     "ores": ["seam_coal", "ore_iron", "ore_copper", "ore_tin", "ore_gold", "ore_lapis", "ore_diamond", "ore_emerald", "quartz_vein", "amethyst_geode"]}
+  ]
+}

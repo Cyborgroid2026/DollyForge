@@ -1,0 +1,18 @@
+{
+  "_doc": "운송. 바퀴·레일·물의 실제 접촉과 부력으로 움직인다 (Rapier). 무거운 것(25 kg 넘는 것)을 옮기는 길이다.",
+  "category": "transport",
+  "items": [
+    {"id": "rail", "name": "레일 (1 m, 궤간 600 mm)", "ref": "rail", "shape": "box", "mm": [700, 1000, 120], "edge": 5, "mat": "steel_s235", "fill": 0.035, "joints": ["F"], "from": "process:roll+assemble", "uses": ["track"], "note": "협궤 600 mm. 침목 포함"},
+    {"id": "powered_rail", "name": "전동 레일 (1 m)", "ref": "powered rail", "shape": "box", "mm": [700, 1000, 120], "edge": 5, "mat": "steel_s235", "fill": 0.04, "joints": ["F"], "from": "process:assemble", "uses": ["track", "propel"], "electrical": {"V": 24, "W": 200}, "note": "레일 사이 선형 모터가 차량을 민다"},
+    {"id": "detector_rail", "name": "감지 레일 (1 m)", "ref": "detector rail", "shape": "box", "mm": [700, 1000, 120], "edge": 5, "mat": "steel_s235", "fill": 0.036, "joints": ["F"], "from": "process:assemble", "uses": ["track", "detect"], "electrical": {"V": 12}},
+    {"id": "rail_switch", "name": "선로 전환기", "ref": "activator rail", "shape": "box", "mm": [1400, 2000, 150], "edge": 10, "mat": "steel_s235", "fill": 0.03, "joints": ["F"], "from": "process:assemble", "uses": ["track", "branch"], "electrical": {"V": 24}},
+    {"id": "rail_cart", "name": "레일 차량", "ref": "minecart", "shape": "box", "mm": [1100, 800, 700], "edge": 20, "mat": "steel_s235", "fill": 0.012, "joints": ["F", "R"], "from": "process:assemble", "uses": ["ride", "carry"], "payload_kg": 200},
+    {"id": "cargo_cart", "name": "화물 차량 (뚜껑 상자)", "ref": "chest minecart", "shape": "box", "mm": [1100, 800, 900], "edge": 20, "mat": "steel_s235", "fill": 0.014, "joints": ["F", "R"], "from": "process:assemble", "uses": ["carry"], "payload_kg": 300, "capacity_l": 400},
+    {"id": "motor_cart", "name": "전동 레일 차량", "ref": "furnace minecart", "shape": "box", "mm": [1200, 800, 800], "edge": 20, "mat": "steel_s235", "fill": 0.016, "joints": ["F", "R"], "from": "process:assemble", "uses": ["pull_carts"], "electrical": {"V": 24, "W": 500}},
+    {"id": "wheelbarrow", "name": "외바퀴 수레", "ref": null, "shape": "box", "mm": [1500, 650, 700], "edge": 20, "mat": "steel_s235", "fill": 0.006, "joints": ["M"], "from": "process:assemble", "uses": ["carry"], "payload_kg": 100, "capacity_l": 85},
+    {"id": "boat_wood", "name": "나무 보트", "ref": "boat", "shape": "box", "mm": [2800, 1200, 500], "edge": 100, "mat": "oak", "fill": 0.035, "joints": ["F"], "from": "process:assemble", "uses": ["ride_water"], "payload_kg": 250},
+    {"id": "raft_bamboo", "name": "대나무 뗏목", "ref": "bamboo raft", "shape": "box", "mm": [2500, 1500, 150], "edge": 30, "mat": "bamboo", "fill": 0.1, "joints": ["F"], "from": "process:lash", "uses": ["ride_water"], "payload_kg": 200},
+    {"id": "saddle", "name": "안장", "ref": "saddle", "shape": "box", "mm": [600, 500, 300], "edge": 50, "mat": "synthetic_leather", "fill": 0.05, "joints": ["M"], "from": "process:sew", "uses": ["ride_horse"]},
+    {"id": "pack_saddle", "name": "짐 안장", "ref": "chest (당나귀에)", "shape": "box", "mm": [700, 600, 400], "edge": 50, "mat": "synthetic_leather", "fill": 0.03, "joints": ["M"], "from": "process:sew", "uses": ["pack_animal"], "capacity_l": 60}
+  ]
+}

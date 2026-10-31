@@ -1,0 +1,16 @@
+{
+  "_doc": "캐릭터를 꾸미고 발전시키는 부품. 갑옷은 싸움이 아니라 몸 외장판이다: 마모를 줄이고 모양을 바꾼다. 외장판은 몸의 연속 곡면 위에 얹혀 경계 없이 녹아든다 (0.10 인형의 몸). 몸 모듈(표준·HD·LITE)과 관절·구동기는 공용 코어(godot/src/Core/Cyborg.cs)의 정의를 쓴다.",
+  "category": "body",
+  "items": [
+    {"id": "plating_polymer", "name": "폴리머 외장판 (소체 기본)", "ref": "leather armor", "shape": "box", "mm": [500, 350, 300], "edge": 50, "mat": "polymer_composite", "fill": 0.012, "joints": ["M"], "from": "process:press", "uses": ["body_plating"], "wear_factor": 1.0},
+    {"id": "plating_mesh", "name": "강철 사슬 메시 외장", "ref": "chainmail armor", "shape": "box", "mm": [500, 350, 300], "edge": 50, "mat": "steel_s235", "fill": 0.002, "joints": ["M"], "from": "process:forge+assemble", "uses": ["body_plating"], "wear_factor": 0.7},
+    {"id": "plating_steel", "name": "강철 외장판", "ref": "iron armor", "shape": "box", "mm": [500, 350, 300], "edge": 50, "mat": "steel_s235", "fill": 0.0035, "joints": ["M"], "from": "process:press", "uses": ["body_plating"], "wear_factor": 0.5},
+    {"id": "plating_titanium", "name": "티타늄 외장판", "ref": "diamond armor (현실의 최상급 외장)", "shape": "box", "mm": [500, 350, 300], "edge": 50, "mat": "ti6al4v", "fill": 0.004, "joints": ["M"], "from": "process:press:titanium_plate", "uses": ["body_plating"], "wear_factor": 0.3},
+    {"id": "head_cover", "name": "머리 덮개", "ref": "helmet", "shape": "sphere", "mm": [240], "mat": "polymer_composite", "fill": 0.03, "joints": ["M"], "from": "process:press", "uses": ["body_plating"], "note": "얼굴 없는 달걀형 머리를 그대로 덮는다 (얼굴·눈 표현 없음)"},
+    {"id": "wingsuit_glider", "name": "윙슈트 글라이더", "ref": "elytra", "shape": "box", "mm": [1800, 300, 1200], "edge": 30, "mat": "linen", "fill": 0.002, "joints": ["M"], "from": "process:sew", "uses": ["glide"], "note": "실제 활공 비율(약 2.5 : 1)로 미끄러지듯 내려온다. 스스로 떠오르지 않는다", "glide_ratio": 2.5},
+    {"id": "body_coating", "name": "몸 도장 (세라믹 코팅)", "ref": "dyed leather armor", "shape": "cyl", "mm": [80, 150], "mat": "polymer_composite", "fill": 0.6, "joints": [], "from": "process:dye", "uses": ["body_color"], "variants": "16 염료 색. 몸 전체를 한 색으로 덮어 색 경계를 만들지 않는다"},
+    {"id": "gold_coating", "name": "금 도금", "ref": "golden armor (장식으로)", "shape": "box", "mm": [80, 80, 1], "edge": 2, "mat": "gold", "fill": 0.001, "joints": [], "from": "process:beat:gold_leaf", "uses": ["body_color"], "note": "무른 금은 외장이 아니라 장식 도금"},
+    {"id": "jet_thruster_jt250", "name": "손목 제트 추력기 JT-250", "ref": null, "shape": "cyl", "mm": [110, 300], "mat": "ti6al4v", "fill": 0.2, "joints": ["M"], "from": "buy", "uses": ["thrust"], "mass_kg": 2.6, "note": "4장 비행 (ATE 장착 기기)"},
+    {"id": "attitude_headset", "name": "헤드셋형 자세 안정기 HS-G", "ref": null, "shape": "box", "mm": [200, 180, 80], "edge": 20, "mat": "polymer_composite", "fill": 0.12, "joints": ["M"], "from": "buy", "uses": ["stabilize"], "mass_kg": 0.45}
+  ]
+}

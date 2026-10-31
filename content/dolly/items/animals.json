@@ -1,0 +1,33 @@
+{
+  "_doc": "현실의 순한 동물과 해치지 않고 얻는 산물. 동물은 아이템이 아니라 세계의 생명이다 (shape animal, mass_kg 는 다 자란 개체의 대표값). 잡거나 해치는 일은 없다 (0.2 생명 존중). regions 는 사는 지역 (biomes.json).",
+  "category": "animals",
+  "items": [
+    {"id": "cow", "name": "소", "ref": "cow", "shape": "animal", "mass_kg": 600, "regions": ["countryside"], "products": ["milk_bottle"], "behaviour": "무리, 풀 뜯기, 쉬기"},
+    {"id": "sheep", "name": "양", "ref": "sheep", "shape": "animal", "mass_kg": 70, "regions": ["countryside"], "products": ["wool_fleece"], "behaviour": "무리, 풀 뜯기. 털은 가위로 깎고 다시 자란다"},
+    {"id": "pig", "name": "돼지", "ref": "pig", "shape": "animal", "mass_kg": 110, "regions": ["countryside"], "products": [], "behaviour": "진흙 목욕, 땅 파기. 함께 사는 동물"},
+    {"id": "chicken", "name": "닭", "ref": "chicken", "shape": "animal", "mass_kg": 2.5, "regions": ["countryside", "suburb"], "products": ["egg", "feather_bundle"], "behaviour": "모이 쪼기, 저녁에 횃대로"},
+    {"id": "horse", "name": "말", "ref": "horse", "shape": "animal", "mass_kg": 500, "regions": ["countryside"], "products": [], "rideable": true, "behaviour": "무리. 안장을 얹고 탈 수 있다 (인형 질량 포함 120 kg 까지 무리 없이)"},
+    {"id": "donkey", "name": "당나귀", "ref": "donkey", "shape": "animal", "mass_kg": 250, "regions": ["countryside"], "products": [], "rideable": true, "pack_kg": 50, "behaviour": "짐 나르기"},
+    {"id": "goat", "name": "염소", "ref": "goat", "shape": "animal", "mass_kg": 50, "regions": ["countryside", "wild"], "products": ["milk_bottle"], "behaviour": "언덕 오르기"},
+    {"id": "rabbit", "name": "토끼", "ref": "rabbit", "shape": "animal", "mass_kg": 2, "regions": ["wild", "countryside"], "products": [], "behaviour": "풀밭, 굴"},
+    {"id": "deer", "name": "고라니", "ref": null, "shape": "animal", "mass_kg": 12, "regions": ["wild"], "products": [], "behaviour": "숲 가장자리, 새벽·해 질 녘"},
+    {"id": "fox", "name": "여우", "ref": "fox", "shape": "animal", "mass_kg": 6, "regions": ["wild"], "products": [], "behaviour": "밤에 움직임, 사람(사이보그)을 피함"},
+    {"id": "squirrel", "name": "청설모", "ref": null, "shape": "animal", "mass_kg": 0.3, "regions": ["wild", "suburb"], "products": [], "behaviour": "나무 타기"},
+    {"id": "cat", "name": "고양이", "ref": "cat", "shape": "animal", "mass_kg": 4, "regions": ["suburb", "city"], "products": [], "companion": true, "behaviour": "길고양이. 친해지면 집에 온다"},
+    {"id": "dog", "name": "개", "ref": "wolf (길들인 개)", "shape": "animal", "mass_kg": 25, "regions": ["suburb", "countryside"], "products": [], "companion": true, "behaviour": "함께 걷기"},
+    {"id": "honeybee", "name": "꿀벌 (군집)", "ref": "bee", "shape": "animal", "mass_kg": 2, "regions": ["countryside", "wild", "suburb"], "products": ["honey_jar", "beeswax_block"], "behaviour": "꽃가루 옮기기 → 작물·꽃이 잘 자람"},
+    {"id": "frog", "name": "개구리", "ref": "frog", "shape": "animal", "mass_kg": 0.03, "regions": ["wild"], "products": [], "behaviour": "연못가, 비 오는 밤에 운다"},
+    {"id": "pond_turtle", "name": "남생이", "ref": "turtle", "shape": "animal", "mass_kg": 1, "regions": ["wild"], "products": [], "behaviour": "연못, 햇볕 쬐기"},
+    {"id": "carp", "name": "잉어", "ref": "cod / tropical fish (민물고기로)", "shape": "animal", "mass_kg": 3, "regions": ["wild", "city"], "products": [], "behaviour": "강·연못·공원 연못"},
+    {"id": "trout", "name": "송어", "ref": "salmon", "shape": "animal", "mass_kg": 2, "regions": ["wild"], "products": [], "behaviour": "맑은 개울"},
+    {"id": "bat", "name": "박쥐", "ref": "bat", "shape": "animal", "mass_kg": 0.02, "regions": ["wild"], "products": [], "behaviour": "동굴, 해 질 녘 사냥 비행"},
+    {"id": "songbird", "name": "참새·박새", "ref": null, "shape": "animal", "mass_kg": 0.02, "regions": ["suburb", "city", "wild", "countryside"], "products": ["feather_bundle"], "behaviour": "아침에 운다, 빠진 깃털"},
+
+    {"id": "milk_bottle", "name": "우유 병 (1 L)", "ref": "milk bucket", "shape": "cyl", "mm": [90, 230], "mat": "milk", "fill": 0.68, "joints": [], "from": "animal:cow / animal:goat", "uses": ["casein_glue", "trade"], "note": "사이보그는 마시지 않는다. 카제인 접착제·거래용"},
+    {"id": "wool_fleece", "name": "양털 뭉치", "ref": "wool (깎은 털)", "shape": "box", "mm": [400, 300, 150], "edge": 50, "mat": "wool", "fill": 0.05, "joints": [], "from": "animal:sheep", "uses": ["spin", "felt"]},
+    {"id": "egg", "name": "달걀", "ref": "egg", "shape": "sphere", "mm": [50], "mat": "eggshell_food", "joints": [], "from": "animal:chicken", "uses": ["trade", "tempera_paint"]},
+    {"id": "feather_bundle", "name": "깃털 한 줌", "ref": "feather", "shape": "box", "mm": [200, 100, 50], "edge": 20, "mat": "feather", "joints": [], "from": "animal:chicken / animal:songbird", "uses": ["quill", "stuffing"]},
+    {"id": "honey_jar", "name": "꿀 병 (500 g)", "ref": "honey bottle", "shape": "cyl", "mm": [80, 100], "mat": "honey", "fill": 0.7, "joints": [], "from": "animal:honeybee", "uses": ["trade", "sweetener"]},
+    {"id": "beeswax_block", "name": "밀랍 덩이", "ref": "honeycomb", "shape": "box", "mm": [120, 80, 50], "edge": 10, "mat": "beeswax", "joints": [], "from": "animal:honeybee", "uses": ["candle", "wax_copper", "polish"]}
+  ]
+}

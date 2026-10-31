@@ -1,0 +1,22 @@
+{
+  "_doc": "금속 재료. 주괴는 녹는점에 닿는 가마·용광로에서만 나온다 (0.8 제련). 진행 단계: 구리·청동 → 철·강철 → 알루미늄 → 티타늄.",
+  "category": "metal",
+  "items": [
+    {"id": "copper_ingot", "name": "구리 주괴", "ref": "copper ingot", "shape": "box", "mm": [150, 50, 30], "edge": 4, "mat": "copper", "joints": [], "from": "process:smelt:copper_ore_lump", "uses": ["wire", "sheet", "bronze"]},
+    {"id": "tin_ingot", "name": "주석 주괴", "ref": null, "shape": "box", "mm": [120, 40, 25], "edge": 4, "mat": "tin", "joints": [], "from": "process:smelt:tin_ore_lump", "uses": ["bronze", "solder"]},
+    {"id": "bronze_ingot", "name": "청동 주괴", "ref": null, "shape": "box", "mm": [150, 50, 30], "edge": 4, "mat": "bronze", "joints": [], "from": "process:alloy:copper+tin", "uses": ["bell", "bearing", "cast"]},
+    {"id": "iron_bloom", "name": "철 주괴 (선철)", "ref": "iron ingot", "shape": "box", "mm": [200, 60, 40], "edge": 5, "mat": "cast_iron", "joints": [], "from": "process:blast_furnace:iron_ore_lump+charcoal", "uses": ["forge", "cast", "steel"]},
+    {"id": "iron_bit", "name": "쇳조각", "ref": "iron nugget", "shape": "box", "mm": [20, 15, 8], "edge": 2, "mat": "cast_iron", "joints": [], "from": "process:cut", "uses": ["scrap", "fastener"]},
+    {"id": "steel_bar", "name": "강철 봉 Ø20", "ref": "iron ingot → 봉", "shape": "cyl", "mm": [20, 1000], "mat": "steel_s235", "joints": ["F", "R"], "from": "process:forge", "uses": ["frame", "axle", "tool"]},
+    {"id": "steel_plate", "name": "강판 500 × 500 × 3", "ref": "block of iron → 판", "shape": "box", "mm": [500, 500, 3], "edge": 3, "mat": "steel_s235", "joints": ["F"], "from": "process:press", "uses": ["panel", "plating"]},
+    {"id": "steel_angle", "name": "강철 앵글 40 × 40 × 4", "ref": null, "shape": "box", "mm": [40, 40, 1000], "edge": 3, "mat": "steel_s235", "fill": 0.19, "joints": ["F"], "from": "process:roll", "uses": ["frame", "shelf"]},
+    {"id": "copper_sheet", "name": "동판 500 × 500 × 1", "ref": "block of copper → 판", "shape": "box", "mm": [500, 500, 1], "edge": 3, "mat": "copper", "joints": ["F", "H"], "from": "process:roll", "uses": ["roof", "panel", "decor"], "note": "비·습기에 녹청이 핀다 (0.8). 밀랍을 바르면 멈춘다"},
+    {"id": "copper_pipe", "name": "동관 Ø22", "ref": null, "shape": "tube", "mm": [22, 20, 1000], "mat": "copper", "joints": ["F"], "from": "process:draw", "uses": ["plumbing", "heat"]},
+    {"id": "gold_ingot", "name": "금 주괴 (소)", "ref": "gold ingot", "shape": "box", "mm": [80, 30, 15], "edge": 3, "mat": "gold", "joints": [], "from": "process:smelt:gold_ore_lump", "uses": ["contact", "plating", "decor"]},
+    {"id": "gold_leaf", "name": "금박", "ref": null, "shape": "box", "mm": [80, 80, 1], "edge": 2, "mat": "gold", "fill": 0.0001, "joints": [], "from": "process:beat", "uses": ["decor", "body_coating"]},
+    {"id": "aluminium_ingot", "name": "알루미늄 주괴", "ref": null, "shape": "box", "mm": [200, 60, 40], "edge": 5, "mat": "al6061_t6", "joints": [], "from": "process:electrolysis", "uses": ["profile", "cast"], "note": "전기 분해 공정 해금 뒤"},
+    {"id": "aluminium_profile", "name": "알루미늄 프로파일 2020", "ref": null, "shape": "box", "mm": [20, 20, 1000], "edge": 3, "mat": "al6061_t6", "fill": 0.42, "joints": ["F", "L"], "from": "process:extrude", "uses": ["frame", "machine"], "note": "지금 카탈로그(Catalog.cs)의 프로파일과 같은 규격"},
+    {"id": "titanium_ingot", "name": "티타늄 주괴", "ref": null, "shape": "box", "mm": [200, 60, 40], "edge": 5, "mat": "ti6al4v", "joints": [], "from": "process:kroll", "uses": ["body", "forge"], "note": "마지막 공정 단계"},
+    {"id": "titanium_plate", "name": "티타늄 판 500 × 500 × 2", "ref": null, "shape": "box", "mm": [500, 500, 2], "edge": 3, "mat": "ti6al4v", "joints": ["F"], "from": "process:roll", "uses": ["body", "plating"]}
+  ]
+}

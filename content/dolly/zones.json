@@ -1,0 +1,21 @@
+{
+  "_doc": "존중 규칙 (0.5). 서버가 모든 편집 요청을 이 표로 판정한다. 값: allow = 누구나, owner = 그 구역·물건의 주인, invited = 주인 + 초대받은 이, own_placed = 내가 놓은 것만, anchors = 규격 고정점에만, public = 공용 시설만, deny = 아무도. 밖(야생)은 예외로 자유롭다.",
+  "actions": ["dig", "build", "place", "open", "enter"],
+  "zones": [
+    {"id": "home_shell", "name": "내 집 골격 (벽·지붕·바닥·문틀)", "dig": "deny", "build": "deny", "place": "deny", "open": "deny", "enter": "invited"},
+    {"id": "home_interior", "name": "내 집 안·마당", "dig": "own_placed", "build": "anchors", "place": "invited", "open": "owner", "enter": "invited"},
+    {"id": "neighbour_home", "name": "이웃의 집·마당", "dig": "deny", "build": "deny", "place": "deny", "open": "deny", "enter": "invited"},
+    {"id": "city", "name": "도시 건물·도로·공원", "dig": "deny", "build": "deny", "place": "deny", "open": "public", "enter": "allow"},
+    {"id": "rural_common", "name": "시골 공용지", "dig": "deny", "build": "deny", "place": "deny", "open": "deny", "enter": "allow"},
+    {"id": "claim", "name": "내 농지 (신청한 구역)", "dig": "invited", "build": "invited", "place": "invited", "open": "owner", "enter": "allow"},
+    {"id": "wild", "name": "야생 (밖)", "dig": "allow", "build": "allow", "place": "allow", "open": "owner", "enter": "allow", "note": "예외 구역. 땅은 누구의 것도 아니다. 남이 놓은 물건은 그 사람 것이다"}
+  ],
+  "ownership": {
+    "every_placed_part_remembers_owner": true,
+    "others_assemblies_in_wild": "가져가거나 분해하지 않는다 (owner)",
+    "invite": "집·농지 주인이 다른 사이보그를 초대하면 invited 권한을 얻는다",
+    "claim_size_m": [16, 16],
+    "claim_limit_per_player": 4,
+    "nature_recovery": {"dug_wild_heals_days": 28, "abandoned_claim_to_meadow_days": 56}
+  }
+}

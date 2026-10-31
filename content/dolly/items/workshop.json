@@ -1,0 +1,22 @@
+{
+  "_doc": "가공 설비. 3×3 제작 격자 대신 실제 공정을 맡는다 (0.8). 무거운 설비는 들지 못하고 수레·여럿이 옮긴다. heat_c 는 도달할 수 있는 최고 온도.",
+  "category": "workshop",
+  "items": [
+    {"id": "workbench", "name": "작업대", "ref": "crafting table", "shape": "box", "mm": [1500, 750, 900], "edge": 10, "mat": "oak", "fill": 0.08, "joints": ["F", "H"], "from": "process:assemble", "uses": ["assemble", "saw", "drill"], "process": ["saw", "drill", "carve", "assemble", "bind", "sew"]},
+    {"id": "kiln", "name": "벽돌 가마", "ref": "furnace", "shape": "box", "mm": [900, 900, 1200], "edge": 20, "mat": "clay_brick", "fill": 0.45, "joints": ["F"], "from": "process:build:clay_brick", "uses": ["fire_brick", "charcoal", "smelt_copper"], "heat_c": 1150, "process": ["kiln", "furnace", "glaze", "cast", "smelt", "alloy"]},
+    {"id": "blast_furnace", "name": "용광로", "ref": "blast furnace", "shape": "box", "mm": [1200, 1200, 2500], "edge": 30, "mat": "clay_brick", "fill": 0.5, "joints": ["F"], "from": "process:build:clay_brick+steel_plate", "uses": ["smelt_iron"], "heat_c": 1600, "process": ["blast_furnace", "smelt"]},
+    {"id": "drying_rack", "name": "건조 선반", "ref": "smoker (먹지 않으니 말리기로)", "shape": "box", "mm": [1200, 500, 1800], "edge": 10, "mat": "spruce", "fill": 0.04, "joints": ["F"], "from": "process:assemble", "uses": ["dry:mud_brick", "dry:hay", "dry:herb"], "process": ["dry"]},
+    {"id": "campfire", "name": "모닥불 자리", "ref": "campfire", "shape": "cyl", "mm": [800, 300], "mat": "granite", "fill": 0.25, "joints": [], "from": "process:build:rubble_granite", "uses": ["light", "warm", "signal_smoke"], "heat_c": 900},
+    {"id": "stonecutter", "name": "석재 톱 (전동)", "ref": "stonecutter", "shape": "box", "mm": [900, 600, 900], "edge": 10, "mat": "steel_s235", "fill": 0.06, "joints": ["F"], "from": "process:assemble", "uses": ["cut_stone"], "process": ["stonecutter", "split"]},
+    {"id": "grindstone", "name": "숫돌 바퀴", "ref": "grindstone", "shape": "box", "mm": [700, 400, 900], "edge": 10, "mat": "sandstone", "fill": 0.25, "joints": ["F", "R"], "from": "process:assemble", "uses": ["sharpen", "grind"], "note": "인챈트 제거가 아니라 날 세우기"},
+    {"id": "anvil", "name": "모루", "ref": "anvil", "shape": "box", "mm": [600, 200, 300], "edge": 10, "mat": "cast_iron", "fill": 0.5, "joints": ["F"], "from": "process:cast", "uses": ["forge"], "process": ["forge", "beat", "quench"], "note": "수리 마법이 아니라 단조 받침"},
+    {"id": "smithing_table", "name": "대장 작업대", "ref": "smithing table", "shape": "box", "mm": [1200, 700, 850], "edge": 10, "mat": "oak", "fill": 0.12, "joints": ["F"], "from": "process:assemble", "uses": ["forge_finish", "engrave"], "process": ["engrave", "draw"]},
+    {"id": "lathe", "name": "선반 (금속 가공)", "ref": null, "shape": "box", "mm": [1500, 600, 1200], "edge": 10, "mat": "cast_iron", "fill": 0.12, "joints": ["F"], "from": "process:assemble", "uses": ["turn", "thread"], "process": ["turn", "roll", "press", "extrude"]},
+    {"id": "loom", "name": "베틀", "ref": "loom", "shape": "box", "mm": [1200, 900, 1300], "edge": 10, "mat": "oak", "fill": 0.04, "joints": ["F"], "from": "process:assemble", "uses": ["weave", "pattern"], "process": ["weave", "twist"]},
+    {"id": "survey_desk", "name": "측량 책상", "ref": "cartography table", "shape": "box", "mm": [1200, 800, 800], "edge": 10, "mat": "birch", "fill": 0.08, "joints": ["F"], "from": "process:assemble", "uses": ["draw_map"], "process": ["survey"]},
+    {"id": "composter", "name": "퇴비통", "ref": "composter", "shape": "box", "mm": [800, 800, 900], "edge": 15, "mat": "spruce", "fill": 0.1, "joints": ["F"], "from": "process:assemble", "uses": ["compost"], "process": ["compost"]},
+    {"id": "cauldron", "name": "주철 가마솥", "ref": "cauldron", "shape": "tube", "mm": [600, 580, 500], "mat": "cast_iron", "joints": ["F"], "from": "process:cast", "uses": ["boil", "dye_bath", "store_water"], "process": ["boil", "dye", "pulp"]},
+    {"id": "sieve", "name": "체", "ref": null, "shape": "box", "mm": [600, 600, 150], "edge": 10, "mat": "spruce", "fill": 0.08, "joints": [], "from": "process:assemble", "uses": ["sieve:gravel", "sieve:soil"], "process": ["sieve"]},
+    {"id": "maintenance_table", "name": "정비 수술대", "ref": null, "shape": "box", "mm": [2000, 800, 860], "edge": 15, "mat": "steel_s235", "fill": 0.02, "joints": ["F"], "from": "buy", "uses": ["body_module_swap", "repair"], "note": "지금 게임의 정비 수술대 (4장 몸 개조)"}
+  ]
+}

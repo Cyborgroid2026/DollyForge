@@ -1,0 +1,43 @@
+{
+  "_doc": "집과 동네를 꾸미는 부품. 집 골격(벽·지붕·바닥)은 정해진 설계도라 이 목록에 없다 (houses.json). 문·창·가구·조명·장식은 집 안의 규격 고정점(H)이나 바닥에 놓는다 (0.5 존중 규칙).",
+  "category": "home",
+  "items": [
+    {"id": "door_wood", "name": "나무 문", "ref": "oak door", "shape": "box", "mm": [900, 40, 2100], "edge": 10, "mat": "oak", "fill": 0.55, "joints": ["R", "H"], "from": "process:saw+assemble", "uses": ["door"]},
+    {"id": "door_steel", "name": "철문", "ref": "iron door", "shape": "box", "mm": [900, 45, 2100], "edge": 10, "mat": "steel_s235", "fill": 0.08, "joints": ["R", "H"], "from": "process:press+assemble", "uses": ["door", "lock"]},
+    {"id": "hatch_wood", "name": "나무 덧문", "ref": "trapdoor", "shape": "box", "mm": [750, 750, 35], "edge": 4, "mat": "spruce", "fill": 0.7, "joints": ["R", "H"], "from": "process:saw+assemble", "uses": ["hatch", "shutter"]},
+    {"id": "hatch_steel", "name": "철 덧문", "ref": "iron trapdoor", "shape": "box", "mm": [750, 750, 30], "edge": 4, "mat": "steel_s235", "fill": 0.1, "joints": ["R", "H"], "from": "process:press+assemble", "uses": ["hatch"]},
+    {"id": "fence_wood", "name": "나무 울타리 (2 m)", "ref": "fence", "shape": "box", "mm": [2000, 60, 1000], "edge": 10, "mat": "spruce", "fill": 0.12, "joints": ["F"], "from": "process:saw+assemble", "uses": ["fence", "pasture"]},
+    {"id": "fence_gate", "name": "울타리 문", "ref": "fence gate", "shape": "box", "mm": [1000, 60, 1000], "edge": 5, "mat": "spruce", "fill": 0.15, "joints": ["R", "F"], "from": "process:saw+assemble", "uses": ["gate"]},
+    {"id": "iron_grille", "name": "철창 / 방범창", "ref": "iron bars", "shape": "box", "mm": [1000, 20, 1000], "edge": 3, "mat": "steel_s235", "fill": 0.08, "joints": ["F", "H"], "from": "process:forge+assemble", "uses": ["window_guard", "railing"]},
+    {"id": "ladder", "name": "사다리 (3 m)", "ref": "ladder", "shape": "box", "mm": [450, 60, 3000], "edge": 10, "mat": "spruce", "fill": 0.12, "joints": ["H"], "from": "process:saw+assemble", "uses": ["climb"]},
+    {"id": "stair_wood", "name": "나무 계단 한 단", "ref": "oak stairs", "shape": "box", "mm": [1000, 280, 180], "edge": 5, "mat": "oak", "fill": 0.3, "joints": ["F"], "from": "process:saw", "uses": ["stairs"]},
+    {"id": "handrail", "name": "난간", "ref": null, "shape": "box", "mm": [2000, 50, 900], "edge": 10, "mat": "oak", "fill": 0.08, "joints": ["F", "H"], "from": "process:saw+assemble", "uses": ["railing"]},
+    {"id": "window_frame", "name": "창문 (창틀 + 판유리)", "ref": "glass pane (창)", "shape": "box", "mm": [1200, 80, 1200], "edge": 10, "mat": "oak", "fill": 0.14, "joints": ["R", "H"], "from": "process:assemble", "uses": ["window"], "parts": [
+      {"mat": "oak", "shape": "box", "mm": [1200, 80, 1200], "fill": 0.08}, {"mat": "soda_lime_glass", "shape": "box", "mm": [1100, 5, 1100]}]},
+    {"id": "scaffold_bamboo", "name": "대나무 비계", "ref": "scaffolding", "shape": "box", "mm": [1000, 1000, 2000], "edge": 30, "mat": "bamboo", "fill": 0.006, "joints": ["F"], "from": "process:lash", "uses": ["climb", "build_support"]},
+    {"id": "charging_bed", "name": "충전 침대", "ref": "bed", "shape": "box", "mm": [2000, 1000, 450], "edge": 30, "mat": "oak", "joints": ["F"], "from": "buy / process:assemble", "uses": ["rest", "charge", "wake_point"], "note": "쉬면 에너지가 차고 깨어날 자리가 된다 (0.8). 밤을 건너뛰지 않는다", "parts": [
+      {"mat": "oak", "shape": "box", "mm": [2000, 1000, 300], "fill": 0.08}, {"mat": "polymer_composite", "shape": "box", "mm": [1950, 950, 150], "fill": 0.12}, {"mat": "copper", "shape": "box", "mm": [300, 200, 50], "fill": 0.2}]},
+    {"id": "desk", "name": "책상", "ref": null, "shape": "box", "mm": [1200, 600, 750], "edge": 10, "mat": "oak", "fill": 0.06, "joints": ["F"], "from": "process:assemble", "uses": ["furniture", "work"]},
+    {"id": "chair", "name": "의자", "ref": null, "shape": "box", "mm": [450, 480, 900], "edge": 10, "mat": "oak", "fill": 0.05, "joints": ["F"], "from": "process:assemble", "uses": ["sit"]},
+    {"id": "wardrobe", "name": "옷장", "ref": null, "shape": "box", "mm": [1000, 600, 2000], "edge": 10, "mat": "birch", "fill": 0.05, "joints": ["F", "H"], "from": "process:assemble", "uses": ["store_plating", "store_devices"]},
+    {"id": "bookshelf", "name": "책장", "ref": "bookshelf", "shape": "box", "mm": [900, 300, 1800], "edge": 10, "mat": "oak", "fill": 0.1, "joints": ["F", "H"], "from": "process:assemble", "uses": ["store_books", "decor"]},
+    {"id": "crate_wood", "name": "나무 상자 (200 L)", "ref": "chest", "shape": "box", "mm": [900, 500, 500], "edge": 8, "mat": "pine", "fill": 0.1, "joints": ["F", "R"], "from": "process:assemble", "uses": ["store"], "capacity_l": 200, "note": "부피 200 L 와 바닥이 버티는 무게만큼만 담긴다. 놓은 사람만 연다"},
+    {"id": "barrel", "name": "나무통 (150 L)", "ref": "barrel", "shape": "cyl", "mm": [560, 850], "mat": "oak", "fill": 0.12, "joints": ["F"], "from": "process:assemble", "uses": ["store", "water"], "capacity_l": 150},
+    {"id": "lectern", "name": "독서대", "ref": "lectern", "shape": "box", "mm": [500, 450, 1150], "edge": 10, "mat": "oak", "fill": 0.06, "joints": ["F"], "from": "process:assemble", "uses": ["read"]},
+    {"id": "lantern", "name": "랜턴 (밀랍초)", "ref": "lantern", "shape": "box", "mm": [130, 130, 250], "edge": 10, "mat": "steel_s235", "fill": 0.04, "joints": ["H"], "from": "process:assemble", "uses": ["light"], "light_lm": 12},
+    {"id": "electric_lamp_home", "name": "전등 (LED 9 W)", "ref": "redstone lamp / glowstone (현실의 전등)", "shape": "cyl", "mm": [120, 200], "mat": "soda_lime_glass", "fill": 0.08, "joints": ["H"], "from": "buy", "uses": ["light"], "light_lm": 806, "note": "mechanisms 의 전원·스위치로 켠다"},
+    {"id": "torch", "name": "횃불", "ref": "torch", "shape": "cyl", "mm": [40, 500], "mat": "pine", "joints": ["H"], "from": "process:assemble:dowel+beeswax", "uses": ["light", "ignite"], "light_lm": 100, "note": "실제로 탄다: 약 30분 뒤 꺼진다"},
+    {"id": "candle", "name": "밀랍초", "ref": "candle", "shape": "cyl", "mm": [25, 150], "mat": "beeswax", "joints": [], "from": "process:dip:beeswax", "uses": ["light", "decor"], "light_lm": 12, "variants": "16 염료 색"},
+    {"id": "carpet", "name": "양모 카펫", "ref": "carpet", "shape": "box", "mm": [2000, 1500, 10], "edge": 3, "mat": "wool", "fill": 0.18, "joints": [], "from": "process:weave", "uses": ["floor", "decor"], "variants": "16 염료 색"},
+    {"id": "felt_bolt", "name": "양모 펠트 원단", "ref": "wool", "shape": "cyl", "mm": [150, 1500], "mat": "wool", "fill": 0.3, "joints": [], "from": "process:weave", "uses": ["sew", "upholstery"], "variants": "16 염료 색"},
+    {"id": "banner", "name": "깃발", "ref": "banner", "shape": "box", "mm": [900, 10, 1800], "edge": 3, "mat": "linen", "fill": 0.03, "joints": ["H"], "from": "process:weave+dye", "uses": ["decor", "mark_claim"]},
+    {"id": "painting", "name": "캔버스 그림", "ref": "painting", "shape": "box", "mm": [800, 30, 600], "edge": 3, "mat": "linen", "fill": 0.12, "joints": ["H"], "from": "process:paint", "uses": ["decor"]},
+    {"id": "picture_frame", "name": "액자", "ref": "item frame", "shape": "box", "mm": [400, 30, 500], "edge": 3, "mat": "oak", "fill": 0.12, "joints": ["H"], "from": "process:assemble", "uses": ["display"]},
+    {"id": "record_player", "name": "전축", "ref": "jukebox", "shape": "box", "mm": [450, 350, 150], "edge": 15, "mat": "oak", "fill": 0.18, "joints": ["F"], "from": "buy", "uses": ["music"]},
+    {"id": "vinyl_record", "name": "LP 음반", "ref": "music disc", "shape": "cyl", "mm": [300, 2], "mat": "pvc", "joints": [], "from": "buy", "uses": ["music"]},
+    {"id": "bell_bronze", "name": "청동 종", "ref": "bell", "shape": "cyl", "mm": [300, 350], "mat": "bronze", "fill": 0.2, "joints": ["H", "R"], "from": "process:cast:bronze_ingot", "uses": ["signal", "decor"]},
+    {"id": "signboard", "name": "현판 / 표지판", "ref": "sign", "shape": "box", "mm": [600, 25, 300], "edge": 5, "mat": "pine", "joints": ["H", "F"], "from": "process:carve", "uses": ["label", "mark_claim"]},
+    {"id": "mannequin_stand", "name": "몸 거치대", "ref": "armor stand", "shape": "box", "mm": [600, 600, 1900], "edge": 20, "mat": "steel_s235", "fill": 0.006, "joints": ["F"], "from": "process:assemble", "uses": ["display_plating", "store_modules"]},
+    {"id": "sponge", "name": "천연 해면", "ref": "sponge", "shape": "box", "mm": [250, 150, 120], "edge": 30, "mat": "sponge_natural", "joints": [], "from": "buy", "uses": ["absorb_water", "clean"], "note": "제 무게의 약 25배 물만 머금는다. 물을 지우지 않는다"}
+  ]
+}
