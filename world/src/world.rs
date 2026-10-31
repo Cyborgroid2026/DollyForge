@@ -307,13 +307,13 @@ impl World {
     /// 내 집은 가구까지, 이웃 집은 유리만 (집 기준 좌표, origins 로 옮긴다)
     pub fn set_houses(&mut self, h: &Value) {
         let floats = |v: &Value| -> Vec<f32> { v.as_array().into_iter().flatten().map(|x| x.as_f64().unwrap_or(0.0) as f32).collect() };
-        let v = floats(&h["shell"]["v"]);
-        let idx: Vec<u32> = h["shell"]["i"].as_array().into_iter().flatten().map(|x| x.as_u64().unwrap_or(0) as u32).collect();
-        if v.len() < 9 || idx.len() < 3 {
-            return;
-        }
-        let verts: Vec<Vector> = v.chunks_exact(3).map(|c| Vector::new(c[0], c[1], c[2])).collect();
-        let tris: Vec<[u32; 3]> = idx.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
+        let mesh = |m: &Value| -> Option<(Vec<Vector>, Vec<[u32; 3]>)> {
+            let v = floats(&m["v"]);
+            let i: Vec<u32> = m["i"].as_array()?.iter().map(|x| x.as_u64().unwrap_or(0) as u32).collect();
+            (v.len() >= 9 && i.len() >= 3).then(|| (v.chunks_exact(3).map(|c| Vector::new(c[0], c[1], c[2])).collect(), i.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()))
+        };
+        let Some(own_shell) = mesh(&h["shell"]) else { return };
+        let other_shell = mesh(&h["shell_other"]).unwrap_or_else(|| own_shell.clone());
         let boxes = |k: &str| -> Vec<Vec<f32>> { h[k].as_array().into_iter().flatten().map(floats).filter(|b| b.len() == 6).collect() };
         let (own, other) = (boxes("own"), boxes("other"));
         for c in self.houses.drain(..) {
@@ -322,7 +322,8 @@ impl World {
         let own_i = self.pack.layout.own_house;
         for (i, o) in h["origins"].as_array().into_iter().flatten().enumerate() {
             let at = v3([0, 1, 2].map(|k| o[k].as_f64().unwrap_or(0.0) as f32));
-            match ColliderBuilder::trimesh(verts.clone(), tris.clone()) {
+            let (verts, tris) = if i == own_i { own_shell.clone() } else { other_shell.clone() };
+            match ColliderBuilder::trimesh(verts, tris) {
                 Ok(b) => self.houses.push(self.phys.colliders.insert(b.translation(at).friction(0.6).build())),
                 Err(e) => eprintln!("[world] 집 {i} 충돌 곡면 오류: {e:?}"),
             }
@@ -331,7 +332,14 @@ impl World {
                 self.houses.push(self.phys.colliders.insert(c));
             }
         }
-        println!("[world] 집 충돌: {}채 · 골격 삼각형 {} · 내 집 가구·유리 상자 {} · 이웃 유리 {}", h["origins"].as_array().map_or(0, |a| a.len()), tris.len(), own.len(), other.len());
+        println!(
+            "[world] 집 충돌: {}채 · 골격 삼각형 {} (이웃 {}) · 내 집 가구·유리 상자 {} · 이웃 유리 {}",
+            h["origins"].as_array().map_or(0, |a| a.len()),
+            own_shell.1.len(),
+            other_shell.1.len(),
+            own.len(),
+            other.len()
+        );
     }
 
     /// 엔진이 보낸 땅 높이장 + 나무 줄기. 지금까지의 편집을 높이장에 반영해 충돌체로 만든다
@@ -697,7 +705,8 @@ impl World {
                     return Self::deny_msg("drop", "들고 있는 것이 없다".into());
                 };
                 let p = p3(&m["p"]);
-                let v = zones::judge(&self.pack, player, Action::Place, p, self);
+                // 물건이 차지하는 공간으로 판정 (얇은 판의 가운데는 마루에 거의 닿아 있다)
+                let v = zones::judge(&self.pack, player, Action::Place, [p[0], p[1] + 0.1, p[2]], self);
                 if !v.ok {
                     return Self::deny(&v, "place", p);
                 }
@@ -706,7 +715,11 @@ impl World {
                 for part in &shape.parts {
                     let pp = pose * pose_of(part.p, part.q);
                     let sh = self.geo(&part.item).shape(0.01);
-                    if let Some((c, _)) = self.phys.intersect_shape(pp, sh.as_ref(), QueryFilter::only_fixed()).next() {
+                    // 집 곡면은 거리장을 몇 cm 간격으로 뽑은 것이라 모서리가 조금 깎여 있다: 3 cm 넘게 파묻힐 때만 걸린 것으로 본다
+                    let deep = self.phys.intersect_shape(pp, sh.as_ref(), QueryFilter::only_fixed()).find(|(_, co)| {
+                        query::contact(&pp, sh.as_ref(), co.position(), co.shape(), 0.0).ok().flatten().is_some_and(|ct| ct.dist < -0.03)
+                    });
+                    if let Some((c, _)) = deep {
                         let what = if self.ground.as_ref().is_some_and(|g| g.collider == Some(c)) {
                             "땅"
                         } else if self.houses.contains(&c) {
@@ -742,7 +755,7 @@ impl World {
         if self.bodies[&a_id].owner != player {
             return Self::deny_msg("join", "남이 놓은 물건은 그 사람 것이다 (존중)".into());
         }
-        let v = zones::judge(&self.pack, player, Action::Place, aim.to_array(), self);
+        let v = zones::judge(&self.pack, player, Action::Place, (aim + Vector::new(0.0, 0.1, 0.0)).to_array(), self);
         if !v.ok {
             return Self::deny(&v, "join", aim.to_array());
         }

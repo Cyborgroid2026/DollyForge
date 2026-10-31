@@ -97,7 +97,7 @@ sealed class WorldLink : IDisposable
     /// <summary>처음 인사: 서버의 Rapier 가 쓸 땅 높이장(가까운 ±64 m, 0.5 m)과 나무 줄기, 집 충돌 곡면</summary>
     string Hello()
     {
-        var (shell, ownBoxes, otherBoxes) = _scene.CollisionShapes();
+        var (ownShell, otherShell, ownBoxes, otherBoxes) = _scene.CollisionShapes();
         static object M(StaticMeshData m) => new
         {
             v = m.Pos.SelectMany(p => new[] { MathF.Round(p.X, 3), MathF.Round(p.Y, 3), MathF.Round(p.Z, 3) }).ToArray(),
@@ -118,7 +118,7 @@ sealed class WorldLink : IDisposable
             .Where(t => MathF.Abs(t.Pos.X) < WorldScene.GroundHalf && MathF.Abs(t.Pos.Z) < WorldScene.GroundHalf)
             .Select(t => { var v = _scene.Flora.Variants[t.Variant]; return new[] { t.Pos.X, t.Pos.Y, t.Pos.Z, v.TrunkR * t.Scale, (v.TrunkTop + 1) * t.Scale }; })
             .ToArray();
-        var houses = new { origins = _scene.HouseOrigins.Select(A).ToArray(), shell = M(shell), own = ownBoxes, other = otherBoxes };
+        var houses = new { origins = _scene.HouseOrigins.Select(A).ToArray(), shell = M(ownShell), shell_other = M(otherShell), own = ownBoxes, other = otherBoxes };
         return JsonSerializer.Serialize(new { t = "hello", player = _player, ground = new { origin = new[] { o, o }, step, n, h }, trees, houses });
     }
 

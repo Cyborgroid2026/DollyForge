@@ -57,6 +57,48 @@ static class Parts
         };
     }
 
+    /// <summary>
+    /// 놓일 때의 기본 자세 (서버 world.rs rest_rotation 과 같은 생각): 가구는 서 있고, 판·봉·각재·조립체는 가장 낮게 눕는다
+    /// </summary>
+    public static Quaternion Rest(ContentPack pack, AssemblyDef a)
+    {
+        if (a.Parts.Length == 1 && pack.Items.TryGetValue(a.Parts[0].Item, out var it) && it.Category is "home" or "workshop") return Quaternion.Identity;
+        // 세 가지 눕힘 중 높이가 가장 낮은 것 (같으면 그대로)
+        Quaternion[] options = [Quaternion.Identity, Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI / 2), Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI / 2)];
+        float Height(Quaternion q)
+        {
+            float lo = float.MaxValue, hi = float.MinValue;
+            foreach (var p in a.Parts)
+            {
+                var m = Matrix4x4.CreateFromQuaternion(p.Q) * Matrix4x4.CreateTranslation(p.P) * Matrix4x4.CreateFromQuaternion(q);
+                var h = Half(pack, p.Item);
+                var e = MathF.Abs(m.M12) * h.X + MathF.Abs(m.M22) * h.Y + MathF.Abs(m.M32) * h.Z;
+                lo = MathF.Min(lo, m.M42 - e); hi = MathF.Max(hi, m.M42 + e);
+            }
+            return hi - lo;
+        }
+        return options.MinBy(q => Height(q) + (q == Quaternion.Identity ? -1e-4f : 0));
+    }
+
+    /// <summary>가장 가까운 90° 단위 자세 (24가지): 회전 행렬의 각 열을 가장 가까운 축으로 (서버 snap_rotation 과 같다)</summary>
+    public static Quaternion Snap90(Quaternion q)
+    {
+        var m = Matrix4x4.CreateFromQuaternion(q);
+        Vector3[] cols = [new(m.M11, m.M12, m.M13), new(m.M21, m.M22, m.M23), new(m.M31, m.M32, m.M33)];
+        var used = new bool[3]; var outv = new Vector3[3];
+        static float Comp(Vector3 v, int k) => k == 0 ? v.X : k == 1 ? v.Y : v.Z;
+        foreach (var c in Enumerable.Range(0, 3).OrderByDescending(c => MathF.Max(MathF.Abs(cols[c].X), MathF.Max(MathF.Abs(cols[c].Y), MathF.Abs(cols[c].Z)))))
+        {
+            var best = Enumerable.Range(0, 3).Where(k => !used[k]).MaxBy(k => MathF.Abs(Comp(cols[c], k)));
+            used[best] = true;
+            var s = MathF.Sign(Comp(cols[c], best)); if (s == 0) s = 1;
+            outv[c] = best == 0 ? new(s, 0, 0) : best == 1 ? new(0, s, 0) : new(0, 0, s);
+        }
+        if (Vector3.Dot(Vector3.Cross(outv[0], outv[1]), outv[2]) < 0) outv[2] = -outv[2];
+        var r = new Matrix4x4(outv[0].X, outv[0].Y, outv[0].Z, 0, outv[1].X, outv[1].Y, outv[1].Z, 0, outv[2].X, outv[2].Y, outv[2].Z, 0, 0, 0, 0, 1);
+        return Quaternion.Normalize(Quaternion.CreateFromRotationMatrix(r));
+    }
+
     /// <summary>둥근 모서리 반지름 (충돌·시선 판정용 근사)</summary>
     public static float Round(ContentPack pack, string item)
     {
@@ -98,6 +140,7 @@ static class Parts
     sealed class Field
     {
         readonly (SdfScene Scene, Matrix4x4 Inv, Vector3 C, float Rad, int G)[] _parts;
+        readonly float[] _metal;           // 금속 부품 = 1 (렌더가 주변을 비춘다)
         readonly float[] _groupK;
         readonly float _betweenK;
         readonly int _groups;
@@ -113,14 +156,16 @@ static class Parts
             foreach (var j in a.Joints)
             {
                 var def = pack.Joins.GetValueOrDefault(j.Method);
-                if (def?.Render == "fillet") { root[Root(j.A)] = Root(j.B); weldK = def.FilletMm / 1000f; }
-                else if (def is not null) seamK = def.FilletMm / 1000f;
+                // 다항식 smin 은 k/4 만큼 부풀어 오른다: 필렛 반지름 r 이 보이려면 k ≈ 4r (접합부의 골이 둥글게 차오른다)
+                if (def?.Render == "fillet") { root[Root(j.A)] = Root(j.B); weldK = def.FilletMm / 1000f * 4; }
+                else if (def is not null) seamK = def.FilletMm / 1000f * 4;
             }
             var ids = Enumerable.Range(0, n).Select(Root).Distinct().ToList();
             _groups = ids.Count;
             _groupK = ids.Select(r => Enumerable.Range(0, n).Count(i => Root(i) == r) > 1 ? weldK : 0f).ToArray();
             _betweenK = a.Joints.Length > 0 ? seamK : 0;
             _parts = new (SdfScene, Matrix4x4, Vector3, float, int)[n];
+            _metal = a.Parts.Select(p => pack.Items.TryGetValue(p.Item, out var it) && pack.Materials.TryGetValue(it.Mat, out var mt) && mt.Kind == "metal" ? 1f : 0f).ToArray();
             for (var i = 0; i < n; i++)
             {
                 var p = a.Parts[i];
@@ -142,17 +187,20 @@ static class Parts
             return MathF.Min(a, b) - h * h * k * 0.25f;
         }
 
-        public float Eval(Vector3 p, out Vector3 color, out float seam)
+        public float Eval(Vector3 p, out Vector3 color, out float seam) => Eval(p, out color, out seam, out _);
+
+        public float Eval(Vector3 p, out Vector3 color, out float seam, out float metal)
         {
             Span<float> gd = stackalloc float[_groups];
             gd.Fill(1e9f);
-            color = new Vector3(0.5f); var best = 1e9f;
-            foreach (var (sc, inv, c, rad, g) in _parts)
+            color = new Vector3(0.5f); var best = 1e9f; metal = 0;
+            for (var i = 0; i < _parts.Length; i++)
             {
+                var (sc, inv, c, rad, g) = _parts[i];
                 var bound = Vector3.Distance(p, c) - rad;
                 if (bound > gd[g] + 0.02f && bound > best + 0.02f) continue;
                 var d = sc.EvalColor(Vector3.Transform(p, inv), out var col, out _);
-                if (d < best) { best = d; color = col; }
+                if (d < best) { best = d; color = col; metal = _metal[i]; }
                 gd[g] = SMin(gd[g], d, _groupK[g]);
             }
             float d1 = 1e9f, d2 = 1e9f, total = 1e9f;
@@ -178,7 +226,7 @@ static class Parts
 
     /// <summary>
     /// 조립체 메시 (조립체 기준 좌표). 간격은 가장 얇은 부분의 1/5 (1.5–12 mm), 겉넓이가 크면 정점 수를 맞추려고 넓힌다.
-    /// 빛: x = 스스로 가린 그늘(AO), y·z·w = 1 (해·하늘·전등은 렌더가 물건 자리마다 곱한다)
+    /// 빛: x = 스스로 가린 그늘(AO), y·z·w = 1 (해·하늘·전등은 렌더가 물건 자리마다 곱한다). 색 a = 금속(1)
     /// </summary>
     public static StaticMeshData Mesh(ContentPack pack, AssemblyDef a)
     {
@@ -189,10 +237,10 @@ static class Parts
             p => f.Normal(p, step * 0.5f),
             p =>
             {
-                f.Eval(p, out var c, out var seam);
+                f.Eval(p, out var c, out var seam, out var metal);
                 // 머리카락 이음선: 두 무리의 거리가 거의 같은 곳 (맞닿은 경계) — 정점 간격에 맞춘 폭
                 var line = a.Joints.Length > 0 ? 1 - Smooth(0.15f * step, 0.9f * step, seam) : 0;
-                return new Vector4(c * (1 - 0.6f * line), 0);
+                return new Vector4(c * (1 - 0.6f * line), metal);   // a = 금속
             });
         var size = MathF.Max(0.02f, MathF.Min(f.Hi.X - f.Lo.X, MathF.Min(f.Hi.Y - f.Lo.Y, f.Hi.Z - f.Lo.Z)));
         var hs = new[] { 0.06f, 0.15f, 0.3f, 0.6f }.Select(x => x * MathF.Min(size, 0.25f)).ToArray();
@@ -202,7 +250,7 @@ static class Parts
             var p = mesh.Pos[v]; var n = mesh.Nrm[v];
             var occ = 0f; var w = 1f;
             foreach (var h in hs) { occ += w * MathF.Max(0, h - f.Eval(p + n * h)) / h; w *= 0.6f; }
-            light[v] = new Vector4(Math.Clamp(1 - occ * 0.5f, 0.2f, 1), 1, 1, 1);
+            light[v] = new Vector4(Math.Clamp(1 - occ * 0.35f, 0.4f, 1), 1, 1, 1);
         });
         mesh.Light.AddRange(light);
         return mesh;

@@ -217,13 +217,15 @@ sealed class WorldRenderer : IDisposable
             float ndl = max(dot(n, u_sun), 0.0);
             float leaf = 0.0;
             if (u_kind == 0) {
-                if (v_col.a > 1.5) { frag = vec4(tonemap(base * 3.5 * u_exposure), 1.0); return; }      // glowing lamp shade
-                float grass = clamp(v_col.a, 0.0, 1.0);
-                if (grass > 0.0) {
-                    float g1 = vnoise(v_world.xz * 0.35), g2 = vnoise(v_world.xz * 2.7), g3 = vnoise(v_world.xz * 11.0);
-                    base *= mix(1.0, 0.78 + 0.32 * g1 + 0.14 * g2 + 0.10 * g3, grass);
-                    base = mix(base, base * vec3(1.08, 1.04, 0.80), grass * smoothstep(0.55, 0.9, g2) * 0.6);
-                    base *= mix(1.0, 0.74, grass);       // the turf seen from afar: shaded blade roots, matches the blade field at its fade ring
+                if (u_instanced != 2) {                    // things keep their meshed colour (a = metal)
+                    if (v_col.a > 1.5) { frag = vec4(tonemap(base * 3.5 * u_exposure), 1.0); return; }      // glowing lamp shade
+                    float grass = clamp(v_col.a, 0.0, 1.0);
+                    if (grass > 0.0) {
+                        float g1 = vnoise(v_world.xz * 0.35), g2 = vnoise(v_world.xz * 2.7), g3 = vnoise(v_world.xz * 11.0);
+                        base *= mix(1.0, 0.78 + 0.32 * g1 + 0.14 * g2 + 0.10 * g3, grass);
+                        base = mix(base, base * vec3(1.08, 1.04, 0.80), grass * smoothstep(0.55, 0.9, g2) * 0.6);
+                        base *= mix(1.0, 0.74, grass);       // the turf seen from afar: shaded blade roots, matches the blade field at its fade ring
+                    }
                 }
             } else if (u_kind == 1) {
                 // material by colour: the shell mesh carries the content-pack colours of brick, roof and floor
@@ -283,7 +285,17 @@ sealed class WorldRenderer : IDisposable
                     + vec3(0.30, 0.26, 0.20) * ao * (0.3 + 0.7 * skyv) * (0.5 - 0.5 * n.y)
                     + vec3(2.6, 2.1, 1.5) * lamp * ao;
             }
+            if (u_instanced == 2) lit += vec3(0.34, 0.29, 0.22) * (1.0 - skyv) * ao * 0.55;   // things indoors: warm light bounced off the room
             vec3 col = base * lit * u_exposure;
+            if (u_instanced == 2 && v_col.a > 0.5) {
+                // metal parts: mostly what they mirror (sky through the windows indoors), a sharp sun glint, a little diffuse
+                vec3 R = reflect(-V, n);
+                float fr = 0.55 + 0.45 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
+                vec3 room = vec3(0.30, 0.28, 0.25) * u_exposure * (0.5 + 2.0 * lamp);      // indoors it mirrors the room, not the sky
+                vec3 env = mix(room, envColor(v_world, R, 0.02), clamp(skyv * 1.2 - 0.2, 0.0, 1.0)) * ao + vec3(2.6, 2.1, 1.5) * lamp * 0.25 * u_exposure;
+                float glint = pow(max(dot(R, u_sun), 0.0), 80.0) * sunv;
+                col = base * lit * 0.3 * u_exposure + base * env * fr + base * sunCol * glint * 1.5 * u_exposure;
+            }
             if (u_ghost.a > 0.0) {
                 float rim = pow(1.0 - max(dot(n, V), 0.0), 2.0);
                 frag = vec4(tonemap(mix(col, u_ghost.rgb, 0.45 + 0.4 * rim)), u_ghost.a);

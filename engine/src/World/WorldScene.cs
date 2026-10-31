@@ -105,25 +105,27 @@ sealed class WorldScene
     /// <summary>놓인 물건을 빼고 (물건을 놓을 자리 검사)</summary>
     public float StaticSdf(Vector3 p) => Houses(p, MathF.Min(Terrain.Sdf(p), Flora.Sdf(p, false)), false);
 
-    (StaticMeshData Shell, float[][] Own, float[][] Other)? _collision;
+    (StaticMeshData OwnShell, StaticMeshData OtherShell, float[][] Own, float[][] Other)? _collision;
 
     /// <summary>
-    /// 세계 서버 Rapier 에 보낼 집 충돌 모양 (집 기준 좌표): 골격(벽·바닥·천장·지붕, 문·창 개구부로 깎인 곡면)은 화면과 같은 거리장을 8 cm 간격으로 뽑은 삼각형,
+    /// 세계 서버 Rapier 에 보낼 집 충돌 모양 (집 기준 좌표): 골격(벽·바닥·천장·지붕, 문·창 개구부로 깎인 곡면)은 화면과 같은 거리장을 뽑은 삼각형
+    /// (내 집은 5 cm 간격: 벽 밑동까지 물건을 붙여 놓을 수 있게, 들어가지 못하는 이웃 집은 10 cm),
     /// 붙박이 가구·문짝·유리는 기본형 상자 [cx, cy, cz, hx, hy, hz] (모두 축에 맞는 상자). 내 집은 가구까지, 이웃 집은 유리만.
     /// </summary>
-    public (StaticMeshData Shell, float[][] Own, float[][] Other) CollisionShapes()
+    public (StaticMeshData OwnShell, StaticMeshData OtherShell, float[][] Own, float[][] Other) CollisionShapes()
     {
         if (_collision is { } c) return c;
         var sw = Stopwatch.StartNew();
         var shell = new SdfScene { Blend = House.Shell.Blend };
         foreach (var p in House.Shell.Adds) shell.Add(p);
         shell.Subs.AddRange(House.Shell.Subs);
-        var mesh = SurfaceNets.MeshSparse(shell.Eval, shell.Min - new Vector3(0.2f), shell.Max + new Vector3(0.2f), 0.08f, _ => Vector3.UnitY, _ => Vector4.Zero);
+        StaticMeshData M(float step) => SurfaceNets.MeshSparse(shell.Eval, shell.Min - new Vector3(0.2f), shell.Max + new Vector3(0.2f), step, _ => Vector3.UnitY, _ => Vector4.Zero);
+        var mesh = M(0.05f); var coarse = M(0.1f);
         static float[] Box(SdfPrim p) => [p.Center.X, p.Center.Y, p.Center.Z, (p.AabbMax.X - p.AabbMin.X) / 2, (p.AabbMax.Y - p.AabbMin.Y) / 2, (p.AabbMax.Z - p.AabbMin.Z) / 2];
         var glass = House.Glass.Select(Box).ToArray();
         var own = House.Furniture.Where(f => f.Item is not ("carpet" or "electric_lamp_home")).SelectMany(f => f.Scene.Adds).Select(Box).Concat(glass).ToArray();
-        c = (mesh, own, glass);
-        Console.WriteLine($"[world] 집 충돌: 골격 삼각형 {mesh.Idx.Count / 3:N0} · 가구·유리 상자 {own.Length} ({sw.Elapsed.TotalSeconds:0.0} 초)");
+        c = (mesh, coarse, own, glass);
+        Console.WriteLine($"[world] 집 충돌: 골격 삼각형 {mesh.Idx.Count / 3:N0} (이웃 {coarse.Idx.Count / 3:N0}) · 가구·유리 상자 {own.Length} ({sw.Elapsed.TotalSeconds:0.0} 초)");
         _collision = c;
         return c;
     }

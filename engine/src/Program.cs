@@ -6,6 +6,9 @@ if (args.Length > 0 && args[0] == "--fit") { CyborgBody.FitCli(args); return; }
 // ── 레퍼런스와 형태 비교 (개발): dolly-engine --refnormals 출력폴더 [--nodetail]
 if (args.Length > 0 && args[0] == "--refnormals") { CyborgBody.RefNormalsCli(args); return; }
 
+// ── 부품 조립체 메시 검사 (개발): dolly-engine --parts 아이템[+아이템…] [결합] — 부품을 위로 쌓아 잇고 메시의 정점 수·색·법선을 본다
+if (args.Length > 0 && args[0] == "--parts") { PartsCli(args); return; }
+
 // ── 인형 빌드 ─────────────────────────────────────────────────────────────
 Console.WriteLine("[engine] 캐릭터 메시 빌드 중…");
 var female = CyborgBody.Build(0);
@@ -26,10 +29,18 @@ var stream = new BrowserStream();
 var world  = new World(female, male) { Scene = scene };
 // 세계 서버 (Rust, world/): 파기·붓기·물건 물리·존중 규칙의 권한
 var link   = scene is not null ? new WorldLink(scene) : null;
+Quaternion? pickedTurn = null;                        // 주우려는 물건이 놓여 있던 자세
 if (link is not null && scene is not null)
 {
     scene.Bodies = () => link.Solids;                 // 걷기 물리·시선이 놓인 물건에도 닿는다
-    link.HeldChanged += world.ResetHeldTurn;
+    // 주운 물건은 놓여 있던 자세(90° 단위)를 내가 보는 방향 기준으로 그대로 든다. 모르면 기본 자세 (판·봉은 눕힌다)
+    link.HeldChanged += () =>
+    {
+        world.HeldTurn = link.Held is not { } h ? Quaternion.Identity
+            : pickedTurn is { } q && world.Player is { } me ? Quaternion.Normalize(Quaternion.Conjugate(YawTurn(me)) * Parts.Snap90(q))
+            : Parts.Rest(scene.Pack, h);
+        pickedTurn = null;
+    };
 }
 Placement? place = null;                              // 들고 있는 것을 놓을 자리 (미리보기·Q)
 WorldRenderer? worldGfx = null;
@@ -98,7 +109,7 @@ ctx.Window.Run(() =>
         world.SetHud(heldName, link.Note);
     }
     if (world.Status != lastStatus) stream.SetStatus(lastStatus = world.Status);
-    if (world.Player is { } pl) stream.Debug = FormattableString.Invariant($"{{\"x\":{pl.Pos.X:F3},\"y\":{pl.Pos.Y:F3},\"z\":{pl.Pos.Z:F3},\"camYaw\":{world.CamYaw:F4},\"camPitch\":{world.CamPitch:F4},\"held\":{System.Text.Json.JsonSerializer.Serialize(world.Held)},\"note\":{System.Text.Json.JsonSerializer.Serialize(world.Note)},\"bodies\":{link?.Bodies.Count ?? 0},\"aim\":{(link?.Raycast(world.CamPos, world.LookDir, 6) is { } ah ? ah.Id : -1)},\"place\":{(place is not { } pv ? "null" : FormattableString.Invariant($"[{pv.P.X:F3},{pv.P.Y:F3},{pv.P.Z:F3},{(pv.Valid ? 1 : 0)}]"))},\"things\":{ThingsJson()},\"edits\":{scene?.Terrain.EditCount ?? 0}}}");
+    if (world.Player is { } pl) stream.Debug = FormattableString.Invariant($"{{\"x\":{pl.Pos.X:F3},\"y\":{pl.Pos.Y:F3},\"z\":{pl.Pos.Z:F3},\"camYaw\":{world.CamYaw:F4},\"camPitch\":{world.CamPitch:F4},\"held\":{System.Text.Json.JsonSerializer.Serialize(world.Held)},\"note\":{System.Text.Json.JsonSerializer.Serialize(world.Note)},\"view\":\"{world.CamView}\",\"bodies\":{link?.Bodies.Count ?? 0},\"aim\":{(link?.Raycast(world.CamPos, world.LookDir, 6) is { } ah ? ah.Id : -1)},\"place\":{(place is not { } pv ? "null" : FormattableString.Invariant($"[{pv.P.X:F3},{pv.P.Y:F3},{pv.P.Z:F3},{(pv.Valid ? 1 : 0)}]"))},\"things\":{ThingsJson()},\"edits\":{scene?.Terrain.EditCount ?? 0}}}");
 
     // N 키 엣지 감지 → 환경 전환
     bool nNow = world.IsDown("KeyN");
@@ -244,13 +255,16 @@ static (Vector3 C, Vector3 H) ShapeBox(WorldScene scene, AssemblyDef a, Matrix4x
     return ((lo + hi) * 0.5f, (hi - lo) * 0.5f);
 }
 
-/// <summary>손에 든 것의 자세: 내가 보는 쪽을 90° 단위로 맞추고 (앞이 나를 보게), R·T 로 돌린 만큼</summary>
-Quaternion HeldRotation(Actor holder)
+/// <summary>내가 보는 쪽을 90° 단위로 맞춘 세로축 회전 (물건의 앞이 나를 보게)</summary>
+static Quaternion YawTurn(Actor holder)
 {
     var f = holder.Facing;
     var yaw = MathF.Round(MathF.Atan2(f.X, f.Z) / (MathF.PI / 2)) * (MathF.PI / 2) + MathF.PI;
-    return Quaternion.Normalize(Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw) * world.HeldTurn);
+    return Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw);
 }
+
+/// <summary>손에 든 것의 자세: 보는 쪽 회전 × R·T 로 돌린 만큼</summary>
+Quaternion HeldRotation(Actor holder) => Quaternion.Normalize(YawTurn(holder) * world.HeldTurn);
 
 /// <summary>
 /// 놓을 자리: 시선이 닿은 면(손이 닿는 3 m 안)에 조립체의 경계 상자가 맞닿게 놓는다. 부품 상자 안쪽 점들이 벽·땅·다른 물건 밖이어야 놓을 수 있다.
@@ -325,6 +339,7 @@ void HandleGestures(WorldLink link, WorldScene scene)
                 break;
             }
             case World.Gesture.Pickup:
+                pickedTurn = aimed is { } pa && link.Bodies.TryGetValue(pa.Id, out var pb) ? pb.Q : null;
                 link.Pickup(aimed?.Id, player.Pos + new Vector3(0, 0.3f, 0), world.EyePos);
                 break;
             case World.Gesture.Drop:
@@ -340,6 +355,35 @@ void HandleGestures(WorldLink link, WorldScene scene)
                 break;
         }
     }
+}
+
+static void PartsCli(string[] args)
+{
+    var pack = ContentPack.Load();
+    var items = args[1].Split('+');
+    var method = args.Length > 2 ? args[2] : "weld";
+    var y = 0f; var parts = new List<string>();
+    var json = new System.Text.StringBuilder("{\"parts\":[");
+    for (var i = 0; i < items.Length; i++)
+    {
+        var h = Parts.Half(pack, items[i]);
+        if (i > 0) y += h.Y;
+        parts.Add(FormattableString.Invariant($"{{\"item\":\"{items[i]}\",\"p\":[0.03,{y},0.01],\"q\":[0,0,0,1]}}"));
+        y += h.Y;
+    }
+    json.Append(string.Join(",", parts)).Append("],\"joints\":[");
+    json.Append(string.Join(",", Enumerable.Range(1, items.Length - 1).Select(i => $"{{\"a\":{i - 1},\"b\":{i},\"method\":\"{method}\"}}"))).Append("]}");
+    var a = AssemblyDef.Parse(System.Text.Json.JsonDocument.Parse(json.ToString()).RootElement);
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    var m = Parts.Mesh(pack, a);
+    Console.WriteLine($"[parts] {args[1]} ({method}): 정점 {m.VertexCount:N0} · 삼각형 {m.Idx.Count / 3:N0} · {sw.Elapsed.TotalSeconds:0.00} 초");
+    var cols = m.Col.GroupBy(c => (MathF.Round(c.X, 2), MathF.Round(c.Y, 2), MathF.Round(c.Z, 2), c.W)).OrderByDescending(g => g.Count()).Take(5);
+    foreach (var g in cols) Console.WriteLine($"  색 {g.Key} × {g.Count()}");
+    var up = m.Nrm.Where((n, i) => m.Pos[i].Y > y - 0.002f).ToList();
+    Console.WriteLine($"  윗면 정점 {up.Count} · 법선 y 평균 {(up.Count > 0 ? up.Average(n => n.Y) : 0):0.000} · 최소 {(up.Count > 0 ? up.Min(n => n.Y) : 0):0.000}");
+    var bad = Enumerable.Range(0, m.VertexCount).Where(i => m.Pos[i].Y > y - 0.002f && m.Nrm[i].Y < 0.98f && MathF.Abs(m.Pos[i].X - 0.03f) < 0.4f && MathF.Abs(m.Pos[i].Z - 0.01f) < 0.05f).Take(8);
+    foreach (var i in bad) Console.WriteLine(FormattableString.Invariant($"  기운 법선 {m.Pos[i].X:F4},{m.Pos[i].Y:F4},{m.Pos[i].Z:F4} → {m.Nrm[i].X:F3},{m.Nrm[i].Y:F3},{m.Nrm[i].Z:F3}"));
+    Console.WriteLine($"  그늘(AO) 평균 {m.Light.Average(l => l.X):0.000} · 최소 {m.Light.Min(l => l.X):0.000}");
 }
 
 readonly record struct Placement(Vector3 P, Quaternion Q, bool Valid);

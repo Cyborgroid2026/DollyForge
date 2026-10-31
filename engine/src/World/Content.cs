@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace DollyForge;
 
 /// <summary>콘텐츠 팩 재료 (렌더에 필요한 것만: 색·밀도)</summary>
-sealed record ContentMaterial(string Id, string Name, float Density, Vector3 Color);
+sealed record ContentMaterial(string Id, string Name, float Density, Vector3 Color, string Kind);
 
 /// <summary>콘텐츠 팩 아이템: 형상과 실제 치수(mm)</summary>
 sealed record ContentItem(string Id, string Name, string Category, string Shape, float[] Mm, float Edge, string Mat);
@@ -52,7 +52,8 @@ sealed class ContentPack
             {
                 var c = m.GetProperty("color");
                 pack.Materials[m.GetProperty("id").GetString()!] = new(m.GetProperty("id").GetString()!, m.GetProperty("name").GetString()!,
-                    m.GetProperty("density").GetSingle(), new Vector3(c[0].GetSingle(), c[1].GetSingle(), c[2].GetSingle()));
+                    m.GetProperty("density").GetSingle(), new Vector3(c[0].GetSingle(), c[1].GetSingle(), c[2].GetSingle()),
+                    m.TryGetProperty("kind", out var k) ? k.GetString()! : "other");
             }
 
         foreach (var rel in files.GetProperty("items").EnumerateArray())
